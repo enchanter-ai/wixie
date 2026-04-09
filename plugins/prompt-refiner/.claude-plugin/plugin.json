@@ -1,0 +1,14 @@
+{
+  "name": "prompt-refiner",
+  "description": "Improves existing prompts — re-techniques, re-formats for target model, fixes weaknesses, preserves intent.",
+  "version": "1.0.0",
+  "author": { "name": "enchanted-plugins" },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "prompt-optimization",
+    "refactoring",
+    "model-fitting"
+  ],
+  "skills": ["./skills/prompt-improver/"]
+}

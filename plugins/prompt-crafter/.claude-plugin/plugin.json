@@ -1,0 +1,15 @@
+{
+  "name": "prompt-crafter",
+  "description": "Reforges raw prompts into technique-optimized, model-fitted enchantments. 16 techniques, 10+ model profiles, automatic scoring.",
+  "version": "1.0.0",
+  "author": { "name": "enchanted-plugins" },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "prompting",
+    "model-fitting",
+    "technique-selection",
+    "self-evaluation"
+  ],
+  "skills": ["./skills/prompt-enchanter/"]
+}

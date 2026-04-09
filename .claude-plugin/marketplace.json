@@ -1,0 +1,24 @@
+{
+  "name": "flux",
+  "owner": {
+    "name": "enchanted-plugins"
+  },
+  "metadata": {
+    "description": "Reforges raw prompts into technique-optimized, model-fitted enchantments. 16 techniques, 10+ model profiles, automatic scoring.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "prompt-crafter",
+      "source": "./plugins/prompt-crafter",
+      "description": "Creates technique-optimized, model-fitted prompts from task descriptions with explained reasoning and quality scoring.",
+      "category": "prompt-engineering"
+    },
+    {
+      "name": "prompt-refiner",
+      "source": "./plugins/prompt-refiner",
+      "description": "Improves existing prompts — diagnoses weaknesses, re-selects techniques, adapts format, preserves intent.",
+      "category": "prompt-engineering"
+    }
+  ]
+}
