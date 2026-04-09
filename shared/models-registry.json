@@ -1,0 +1,409 @@
+{
+  "last_updated": "2026-04-09",
+  "model_count": 39,
+  "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
+  "models": {
+    "claude-opus-4-6": {
+      "family": "Claude 4.x",
+      "display_name": "Claude Opus 4.6",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "extended-thinking",
+      "cot_approach": "Built-in. Use 'think thoroughly' + effort parameter. Do NOT use 'think step by step'.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Avoid aggressive language (MUST/CRITICAL) — causes overtriggering"
+    },
+    "claude-sonnet-4-6": {
+      "family": "Claude 4.x",
+      "display_name": "Claude Sonnet 4.6",
+      "context_window": 200000,
+      "format": "xml",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helps. Use 'think thoroughly before responding'.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Avoid aggressive language — causes overtriggering"
+    },
+    "claude-haiku-4-5": {
+      "family": "Claude 4.x",
+      "display_name": "Claude Haiku 4.5",
+      "context_window": 200000,
+      "format": "xml",
+      "reasoning": "standard",
+      "cot_approach": "Keep simple and direct. Less capable at complex reasoning chains.",
+      "few_shot": "2-3 short examples in <example> tags",
+      "key_constraint": "Keep prompts simple — less capable reasoning"
+    },
+    "gpt-4.1": {
+      "family": "GPT-4.x",
+      "display_name": "GPT-4.1",
+      "context_window": 1000000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit 'Think step by step' needed — does NOT default to reasoning.",
+      "few_shot": "Separate # Examples section with input/output pairs",
+      "key_constraint": "Follows instructions LITERALLY — implicit intent is ignored. Use sandwich method."
+    },
+    "gpt-4o": {
+      "family": "GPT-4.x",
+      "display_name": "GPT-4o",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit 'Think step by step' helpful.",
+      "few_shot": "Separate # Examples section with input/output pairs",
+      "key_constraint": "Multimodal — handles image inputs natively"
+    },
+    "gpt-5": {
+      "family": "GPT-5.x",
+      "display_name": "GPT-5",
+      "context_window": 1000000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Improved reasoning but explicit CoT still helps on complex tasks.",
+      "few_shot": "Separate # Examples section",
+      "key_constraint": "Check current docs for updated limits"
+    },
+    "o1": {
+      "family": "o-series",
+      "display_name": "o1",
+      "context_window": 200000,
+      "format": "minimal",
+      "reasoning": "reasoning-native",
+      "cot_approach": "BUILT-IN. Do NOT add CoT. It HURTS performance.",
+      "few_shot": "AVOID — zero-shot outperforms few-shot",
+      "key_constraint": "Use developer messages, not system messages"
+    },
+    "o3": {
+      "family": "o-series",
+      "display_name": "o3",
+      "context_window": 200000,
+      "format": "minimal",
+      "reasoning": "reasoning-native",
+      "cot_approach": "BUILT-IN. Do NOT add CoT. It HURTS performance.",
+      "few_shot": "AVOID — zero-shot outperforms few-shot",
+      "key_constraint": "Use developer messages. Add 'Formatting re-enabled' if markdown needed."
+    },
+    "o4-mini": {
+      "family": "o-series",
+      "display_name": "o4-mini",
+      "context_window": 200000,
+      "format": "minimal",
+      "reasoning": "reasoning-native",
+      "cot_approach": "BUILT-IN. Do NOT add CoT. It HURTS performance.",
+      "few_shot": "AVOID — zero-shot outperforms few-shot",
+      "key_constraint": "Use developer messages. reasoning_effort param controls depth."
+    },
+    "gemini-2.5-pro": {
+      "family": "Gemini",
+      "display_name": "Gemini 2.5 Pro",
+      "context_window": 1000000,
+      "format": "xml-or-markdown",
+      "reasoning": "standard",
+      "cot_approach": "'Plan before responding' for complex tasks. Add self-critique.",
+      "few_shot": "ALWAYS REQUIRED — Google's explicit guidance",
+      "key_constraint": "Temperature MUST stay at 1.0. Consistency in formatting mandatory."
+    },
+    "gemini-2.5-flash": {
+      "family": "Gemini",
+      "display_name": "Gemini 2.5 Flash",
+      "context_window": 1000000,
+      "format": "xml-or-markdown",
+      "reasoning": "standard",
+      "cot_approach": "'Plan before responding' for complex tasks.",
+      "few_shot": "ALWAYS REQUIRED",
+      "key_constraint": "Temperature MUST stay at 1.0. Fast but less capable than Pro."
+    },
+    "gemini-3": {
+      "family": "Gemini",
+      "display_name": "Gemini 3",
+      "context_window": 1000000,
+      "format": "xml-or-markdown",
+      "reasoning": "standard",
+      "cot_approach": "Thinking mode available — treat as reasoning-native when enabled.",
+      "few_shot": "ALWAYS REQUIRED",
+      "key_constraint": "Temperature MUST stay at 1.0."
+    },
+    "llama-4": {
+      "family": "Llama",
+      "display_name": "Llama 4",
+      "context_window": 128000,
+      "format": "special-tokens",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helps. 'Let's work through this step by step.'",
+      "few_shot": "2-4 examples with clear delimiters",
+      "key_constraint": "Wrong special tokens silently degrade output"
+    },
+    "llama-3": {
+      "family": "Llama",
+      "display_name": "Llama 3",
+      "context_window": 128000,
+      "format": "special-tokens",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helps.",
+      "few_shot": "2-4 examples with clear delimiters",
+      "key_constraint": "Context varies by deployment (8K-128K). Be more explicit than Claude/GPT."
+    },
+    "mistral-large": {
+      "family": "Mistral",
+      "display_name": "Mistral Large",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "Less precise instruction following — avoid subtle instructions"
+    },
+    "mixtral": {
+      "family": "Mistral",
+      "display_name": "Mixtral",
+      "context_window": 32000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "MoE model — fast but may show inconsistency"
+    },
+    "deepseek-r1": {
+      "family": "DeepSeek",
+      "display_name": "DeepSeek R1",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "BUILT-IN. Do NOT add explicit CoT. Reasoning is internal.",
+      "few_shot": "2-3 examples helpful for format calibration",
+      "key_constraint": "Reasoning-native model. Treat like o-series for technique selection. Strong at math and analysis."
+    },
+    "deepseek-v3": {
+      "family": "DeepSeek",
+      "display_name": "DeepSeek V3",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful. 'Think step by step' works well.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "MoE architecture. Strong at code and analysis. Markdown format preferred."
+    },
+
+    "grok-2": {
+      "family": "Grok (xAI)",
+      "display_name": "Grok 2",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "xAI API. Less restrictive content policies. Integrated with X/Twitter."
+    },
+    "grok-3": {
+      "family": "Grok (xAI)",
+      "display_name": "Grok 3",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful. May have reasoning mode — verify.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "xAI flagship. Verify current specs — may have reasoning variant."
+    },
+
+    "qwen-2.5": {
+      "family": "Qwen (Alibaba)",
+      "display_name": "Qwen 2.5",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "Open-weight. Strong multilingual (especially CJK). Multiple sizes: 0.5B-72B."
+    },
+    "qwen-2.5-coder": {
+      "family": "Qwen (Alibaba)",
+      "display_name": "Qwen 2.5 Coder",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful for complex code tasks.",
+      "few_shot": "2-3 code examples recommended",
+      "key_constraint": "Code-specialized. Open-weight. Top-tier on code benchmarks."
+    },
+    "qwq-32b": {
+      "family": "Qwen (Alibaba)",
+      "display_name": "QwQ 32B",
+      "context_window": 32000,
+      "format": "markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "BUILT-IN. Do NOT add explicit CoT.",
+      "few_shot": "AVOID — zero-shot outperforms few-shot",
+      "key_constraint": "Reasoning model similar to o1. Open-weight 32B. Treat like o-series."
+    },
+
+    "command-r-plus": {
+      "family": "Cohere",
+      "display_name": "Command R+",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "Strong at RAG workflows. Native citation/grounding. Enterprise-focused."
+    },
+
+    "jamba-1.5": {
+      "family": "AI21 (Jamba)",
+      "display_name": "Jamba 1.5",
+      "context_window": 256000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "SSM-Transformer hybrid (Mamba). 256K context. Efficient long-context processing."
+    },
+
+    "amazon-nova-pro": {
+      "family": "Amazon Nova",
+      "display_name": "Amazon Nova Pro",
+      "context_window": 300000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "AWS Bedrock. Multimodal (text, image, video). 300K context."
+    },
+
+    "phi-4": {
+      "family": "Phi (Microsoft)",
+      "display_name": "Phi-4",
+      "context_window": 16000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful. Strong reasoning for its size.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "14B params. Punches above weight class at math/reasoning. Open-weight."
+    },
+
+    "yi-lightning": {
+      "family": "Yi (01.AI)",
+      "display_name": "Yi Lightning",
+      "context_window": 16000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "Fast inference. Chinese/English bilingual. Open-weight versions available."
+    },
+
+    "codestral": {
+      "family": "Mistral",
+      "display_name": "Codestral",
+      "context_window": 32000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful for complex code tasks.",
+      "few_shot": "2-3 code examples with clear input/output",
+      "key_constraint": "Mistral's code-specialized 22B. 80+ languages. Fill-in-the-middle support."
+    },
+
+    "sonar-pro": {
+      "family": "Perplexity",
+      "display_name": "Sonar Pro",
+      "context_window": 128000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Not applicable — search-augmented, not raw reasoning.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Always web-grounded with citations. Not a standalone LLM — search-augmented wrapper."
+    },
+
+    "dall-e-3": {
+      "family": "OpenAI (Image Gen)",
+      "display_name": "DALL-E 3",
+      "context_window": 4000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Natural language prompts (not keyword lists). No negative prompts. Content policy restrictions."
+    },
+    "midjourney-v6": {
+      "family": "Midjourney",
+      "display_name": "Midjourney v6",
+      "context_window": 60,
+      "format": "descriptors",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Discord/web. Params: --ar, --v, --style raw, --chaos, --no. Front-load important terms."
+    },
+    "stable-diffusion-3.5": {
+      "family": "Stability AI",
+      "display_name": "Stable Diffusion 3.5",
+      "context_window": 75,
+      "format": "descriptors",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Open-weight. Requires negative prompt. Weight syntax: (term:1.5). LoRA support."
+    },
+    "flux-1-pro": {
+      "family": "Black Forest Labs",
+      "display_name": "Flux 1 Pro",
+      "context_window": 77,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "From ex-Stability AI founders. Strong text rendering. Natural language prompts preferred over keywords."
+    },
+    "ideogram-2": {
+      "family": "Ideogram",
+      "display_name": "Ideogram 2",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Best-in-class text rendering in images. Strong at typography and logos."
+    },
+    "imagen-3": {
+      "family": "Google (Imagen)",
+      "display_name": "Imagen 3",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Vertex AI and Gemini integration. Photorealistic quality. Google's flagship image model."
+    },
+
+    "runway-gen3": {
+      "family": "Runway",
+      "display_name": "Runway Gen-3 Alpha",
+      "context_window": 500,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Text/image-to-video. Industry leader for creative video. API available."
+    },
+
+    "elevenlabs": {
+      "family": "ElevenLabs",
+      "display_name": "ElevenLabs",
+      "context_window": 5000,
+      "format": "plain-text",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Premium TTS/voice cloning. Most natural-sounding synthesis. Multilingual. API available."
+    },
+    "suno-v4": {
+      "family": "Suno",
+      "display_name": "Suno v4",
+      "context_window": 3000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Text-to-music. Full songs with vocals. Prompt: lyrics + genre/style description."
+    }
+  }
+}
