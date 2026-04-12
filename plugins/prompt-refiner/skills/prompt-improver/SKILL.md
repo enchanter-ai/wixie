@@ -126,46 +126,72 @@ Always present the refined prompt inside a fenced code block (` ``` `).
 
 Save the refined prompt as a folder inside `${CLAUDE_PLUGIN_ROOT}/../../prompts/`. Append `-v<N>` to the folder name if a previous version exists (e.g., `invoice-extractor-v2`).
 
-After saving, update `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json` — update the existing entry with new scores, version, and refined timestamp. Create the file if it does not exist.
+#### Delivery steps (execute ALL in order — do NOT skip any step)
 
-```
-prompts/<prompt-name>/
-├── prompt.<format>       # The refined prompt
-├── report.html             # Refinement Report (see below)
-├── metadata.json         # Machine-readable metadata + runtime config
-└── tests.json            # Test cases (update or keep from previous version)
+1. **Create/reuse the folder:** `mkdir -p ${CLAUDE_PLUGIN_ROOT}/../../prompts/<prompt-name>`
+
+2. **Save the refined prompt file:** Write `prompt.<format>` into the folder.
+
+3. **Run token count on the refined prompt:**
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
-**metadata.json:**
+4. **Run self-eval on the refined prompt:**
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+```
+
+5. **Save metadata.json** with before/after scores and `"mode": "refine"`:
 ```json
 {
-  "created": "<ISO 8601 timestamp>",
+  "created": "<original creation timestamp>",
+  "refined": "<ISO 8601 timestamp now>",
   "task": "<one-line task description>",
   "target_model": "<model ID>",
   "task_domain": "<domain>",
   "format": "<prompt format>",
   "mode": "refine",
-  "techniques_added": ["<technique>"],
-  "techniques_removed": ["<technique>"],
-  "techniques_kept": ["<technique>"],
+  "techniques": ["<final techniques>"],
+  "techniques_avoided": ["<avoided>"],
   "tokens": {
-    "original": <number>,
-    "refined": <number>,
-    "context_window": <number>,
-    "usage_percent": <number>
+    "original": "<before token count>",
+    "refined": "<from token-count output>",
+    "context_window": "<from token-count output>",
+    "usage_percent": "<from token-count output>"
   },
   "scores": {
     "before": { "clarity": 0, "completeness": 0, "efficiency": 0, "model_fit": 0, "failure_resilience": 0, "overall": 0 },
     "after": { "clarity": 0, "completeness": 0, "efficiency": 0, "model_fit": 0, "failure_resilience": 0, "overall": 0 }
   },
-  "version": <number>
+  "status": "pass | needs_improvement",
+  "version": "<incremented version>",
+  "config": {
+    "temperature": "<recommended>",
+    "max_tokens": "<recommended>",
+    "stop_sequences": [],
+    "system_prompt": "<true/false>"
+  }
 }
 ```
 
-**report.html** — Generated PDF report. After saving `metadata.json`, run:
-```
+6. **Update or keep tests.json** — add new test cases if refinement changed behavior.
+
+7. **Generate report.pdf** (do NOT write the report manually):
+```bash
 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder-path>
 ```
-This reads `metadata.json` and generates a formatted PDF with before/after scores, techniques, and config.
 
-**If the user says "just give me the prompt":** Output refined prompt only, no report.
+8. **Update index.json:** Read `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json`, update the entry for this prompt, write it back.
+
+#### Final folder contents
+
+```
+prompts/<prompt-name>/
+├── prompt.<format>       # The refined prompt
+├── metadata.json         # Before/after scores, config
+├── tests.json            # Regression test cases
+└── report.pdf            # Generated audit report (dark theme, single page)
+```
+
+**If the user says "just give me the prompt":** Output refined prompt only, no folder.

@@ -140,19 +140,23 @@ After the code block, save the prompt as a **folder** inside `${CLAUDE_PLUGIN_RO
 
 After saving the prompt folder, update `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json` — append an entry with the prompt's name, task, target model, domain, format, overall score, version, timestamps, and relative path. Create the file if it does not exist.
 
-#### Folder structure
+#### Delivery steps (execute ALL in order — do NOT skip any step)
 
+1. **Create the folder:** `mkdir -p ${CLAUDE_PLUGIN_ROOT}/../../prompts/<prompt-name>`
+
+2. **Save the prompt file:** Write `prompt.<format>` into the folder. Use `.md` for Markdown, `.xml` for XML-tagged, `.json` for JSON, `.txt` for plain text or image-gen.
+
+3. **Run token count:** Execute this command and note the output:
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
-prompts/<prompt-name>/
-├── prompt.<format>       # The prompt (.md, .xml, .json, or .txt)
-├── report.html             # Enchantment Report (see below)
-├── metadata.json         # Machine-readable metadata + runtime config
-└── tests.json            # Test cases for regression testing
+
+4. **Run self-eval:** Execute this command and note the scores:
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
 ```
 
-**prompt.\<format\>** — The actual prompt. Use `.md` for Markdown, `.xml` for XML-tagged, `.json` for JSON, `.txt` for plain text or image-gen.
-
-**metadata.json** — Generate this file with the following structure:
+5. **Save metadata.json:** Write this file with real values from steps 3-4:
 ```json
 {
   "created": "<ISO 8601 timestamp>",
@@ -163,43 +167,54 @@ prompts/<prompt-name>/
   "techniques": ["<technique 1>", "<technique 2>"],
   "techniques_avoided": ["<technique>"],
   "tokens": {
-    "estimated": <number>,
-    "context_window": <number>,
-    "usage_percent": <number>
+    "estimated": "<from token-count output>",
+    "context_window": "<from token-count output>",
+    "usage_percent": "<from token-count output>"
   },
   "scores": {
-    "clarity": <number>,
-    "completeness": <number>,
-    "efficiency": <number>,
-    "model_fit": <number>,
-    "failure_resilience": <number>,
-    "overall": <number>
+    "clarity": "<from self-eval>",
+    "completeness": "<from self-eval>",
+    "efficiency": "<from self-eval>",
+    "model_fit": "<from self-eval>",
+    "failure_resilience": "<from self-eval>",
+    "overall": "<from self-eval>"
   },
   "status": "pass | needs_improvement",
   "version": 1,
   "config": {
-    "temperature": "<recommended temperature for this prompt>",
+    "temperature": "<recommended for this domain/model>",
     "max_tokens": "<recommended max output tokens>",
     "stop_sequences": [],
-    "system_prompt": "<true if this prompt should be used as a system prompt>"
+    "system_prompt": "<true if system prompt, false otherwise>"
   }
 }
 ```
 
-**tests.json** — Array of test cases for regression testing. Generate 3-5 test cases covering:
-- A typical input that should produce findings
-- A clean input that should produce no findings
-- An edge case input (empty, wrong format, ambiguous)
-
-Each test case has: `name`, `input`, `expected_contains` (array of strings the output should contain), and `tags`.
-
-**report.html** — Generated PDF report. After saving `metadata.json`, run:
+6. **Save tests.json:** Generate 3-5 test cases:
+```json
+[
+  { "name": "<test-name>", "input": "<sample input>", "expected_contains": ["<string>"], "tags": ["<tag>"] }
+]
 ```
+Cover: typical input, clean/no-issue input, and an edge case (empty, malformed).
+
+7. **Generate report.pdf:** Execute this command (do NOT write the report manually):
+```bash
 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder-path>
 ```
-This reads `metadata.json` and generates a formatted PDF with summary, techniques, scores, and config.
+This generates a dark-themed single-page PDF audit report. Do NOT create report.html, report.md, or report.pdf yourself — the script handles it.
 
-Run `${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py` on the prompt to populate the token fields in `metadata.json` before generating the report.
+8. **Update index.json:** Read `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json`, append an entry for this prompt, and write it back.
+
+#### Final folder contents
+
+```
+prompts/<prompt-name>/
+├── prompt.<format>       # The prompt
+├── metadata.json         # Machine-readable metadata + config
+├── tests.json            # Regression test cases
+└── report.pdf            # Generated audit report (dark theme, single page)
+```
 
 **If the user says "just give me the prompt" or "skip the report":** Generate prompt only, save only the prompt file (no folder). Respect this preference for the rest of the session.
 
