@@ -1,6 +1,6 @@
 {
   "last_updated": "2026-04-09",
-  "model_count": 40,
+  "model_count": 47,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -362,6 +362,76 @@
       "cot_approach": "Not applicable.",
       "few_shot": "Not applicable",
       "key_constraint": "Best-in-class text rendering in images. Strong at typography and logos."
+    },
+    "nano-banana": {
+      "family": "Nano Banana",
+      "display_name": "Nano Banana",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Image gen model available on use.ai, Higgsfield, and others. Natural language prompts. Supports style presets."
+    },
+    "nano-banana-2": {
+      "family": "Nano Banana",
+      "display_name": "Nano Banana 2",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Updated version of Nano Banana. Improved coherence and quality. Natural language prompts."
+    },
+    "nano-banana-pro": {
+      "family": "Nano Banana",
+      "display_name": "Nano Banana Pro",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Pro tier of Nano Banana. Higher fidelity output. Available across use.ai, Higgsfield, and similar platforms."
+    },
+    "seedream-4.5": {
+      "family": "ByteDance (Seed)",
+      "display_name": "Seedream 4.5",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "ByteDance Seed image gen. DiT architecture. Strong bilingual (Chinese/English) prompt understanding. High aesthetic quality."
+    },
+    "flux-2-pro": {
+      "family": "Black Forest Labs",
+      "display_name": "FLUX.2 Pro",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Successor to Flux 1 Pro. Improved coherence, text rendering, prompt adherence. API-accessible. Natural language prompts."
+    },
+    "flux-2-flex": {
+      "family": "Black Forest Labs",
+      "display_name": "FLUX.2 Flex",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Flex variant optimized for image-to-image, inpainting, and control conditioning. Versatile input modes."
+    },
+    "flux-2-max": {
+      "family": "Black Forest Labs",
+      "display_name": "FLUX.2 Max",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Top-tier Flux variant. Highest output fidelity and largest model. Best quality at cost of speed."
     },
     "imagen-3": {
       "family": "Google (Imagen)",
