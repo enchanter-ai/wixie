@@ -261,51 +261,99 @@ prompts/<prompt-name>/
 
 ## Phase 4: Repeat Until Perfection
 
-This phase loops automatically. Do NOT deliver a prompt that isn't production-ready.
+This phase has TWO modes depending on domain. Check the task domain and execute the matching mode.
 
-### Loop steps:
+---
 
-**Step A — Score the prompt:**
+### Mode A: Text Prompts (coding, analysis, agent, conversational, data-extraction, decision-making, creative-writing)
+
+**Fully autonomous.** Loop without user input until the prompt is production-ready. Do NOT ask the user for permission to iterate — just do it.
+
+**Loop (up to 100 iterations):**
+
+1. **Score:**
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
 ```
 
-**Step B — Save all artifacts** (delivery steps 1-8 above). This generates report.pdf.
+2. **Check exit condition:**
+   - Overall ≥ 9 AND all axes ≥ 7 AND zero CRITICAL findings → **DEPLOY. Exit loop.**
+   - Score unchanged for 3 consecutive iterations → **Plateau reached. Exit loop.**
+   - User says "stop" or "good enough" → **Exit loop.**
 
-**Step C — Read the verdict from report.pdf output.** The report-gen script prints findings and verdict to stdout. Check:
-- Is the verdict **DEPLOY** (overall ≥ 9, zero critical warnings)?
-- Are ALL axes ≥ 7?
-- Are there zero CRITICAL findings in the audit?
+3. **If not exiting, fix the prompt:**
+   - Read each finding from the scorer output.
+   - Apply the specific fix for each:
 
-**Step D — If YES to all of Step C:** The prompt is production-ready. Deliver to the user. Exit the loop.
+   | Finding | Fix |
+   |---|---|
+   | Low Clarity | Rewrite with imperative verbs. Shorten sentences >40 words. Remove hedge words. |
+   | Low Completeness | Add missing: role, output format, constraints, examples. |
+   | Low Efficiency | Remove filler phrases. Deduplicate instructions. Strip examples of repeated boilerplate. |
+   | Low Model Fit | Restructure format for target model. Add/remove CoT. Fix few-shot. |
+   | Low Failure Resilience | Add fallback instructions, edge case handling, input validation. |
+   | Format mismatch | Switch to target model's preferred format (XML/Markdown/minimal). |
+   | Missing few-shot | Add 2-3 diverse examples. |
+   | CoT conflict | Remove CoT for reasoning-native models. Add for standard models. |
+   | Conflicting instructions | Identify the contradiction and remove one side. |
+   | Vague role | Replace "helpful assistant" with a specific domain expert. |
+   | No output format | Add explicit format specification section. |
 
-**Step E — If NO to any of Step C:** Fix the prompt automatically:
+   - Overwrite `prompt.<format>` with the improved version.
+   - Go back to step 1.
 
-1. Read the findings from the report. Each CRITICAL and WARNING tells you exactly what's wrong.
-2. For each finding, apply the fix:
-   - **Format mismatch** → restructure the prompt for the target model
-   - **Missing few-shot** → add 2-3 examples
-   - **CoT conflict** → remove or add CoT based on model type
-   - **Low Clarity** → rewrite with imperative verbs, shorten long sentences
-   - **Low Completeness** → add missing role, format, constraints, or examples
-   - **Low Efficiency** → remove filler phrases, deduplicate instructions
-   - **Low Model Fit** → switch format to match model preference
-   - **Low Failure Resilience** → add edge case handling, fallbacks, validation
-   - **No output format** → add explicit format instructions
-   - **Conflicting instructions** → remove the contradiction
-   - **Vague role** → replace with specific domain expert
-3. Save the improved prompt. Overwrite `prompt.<format>`.
-4. **Go back to Step A.** Re-score, re-generate report, re-check verdict.
+4. **Progress updates (every 10 iterations):**
+   Show: `"Iteration 30/100 — Overall: 8.2→8.7. Fixing: Efficiency (repeated 5-grams in constraints section)..."`
+   Do NOT show updates every single iteration — it clutters the output.
 
-### Loop limits:
-- **Maximum 5 iterations.** If the prompt still isn't DEPLOY after 5 rounds, deliver what you have and tell the user which axes remain below threshold and why.
-- **Show iteration count** to the user: "Iteration 2/5 — Clarity improved from 6 to 8, still fixing Failure Resilience..."
-- **Never silently loop.** Each iteration, briefly tell the user what you fixed and what's left.
+5. **On exit, save all artifacts** (delivery steps 1-8) and generate report.pdf.
 
-### Exit conditions (any one triggers delivery):
-- Verdict is DEPLOY (all axes ≥ 7, overall ≥ 9, zero criticals)
-- User says "stop", "good enough", or "deliver it"
-- Maximum 5 iterations reached
+---
+
+### Mode B: Image Prompts (image-gen)
+
+**Collaborative with user.** You cannot see generated images — the user must be your eyes. Force the user through a feedback loop. Do NOT let them accept a prompt without trying it first.
+
+**Setup:** Save the initial prompt and artifacts (delivery steps 1-8).
+
+**Then enter the visual refinement loop:**
+
+1. **Present the prompt** to the user in a code block. Tell them:
+   ```
+   Copy this prompt into [target model/platform].
+   Generate the image, then tell me:
+   1. What looks WRONG? (colors off, composition bad, style wrong, missing elements)
+   2. What looks RIGHT? (keep these aspects)
+   3. Rate it 1-10
+   ```
+
+2. **Wait for user feedback.** Do NOT proceed without it.
+
+3. **When user responds, evaluate their rating:**
+   - Rating ≥ 9 → **User is satisfied. Save final prompt. Exit loop.**
+   - Rating < 9 → Continue to step 4.
+
+4. **Adjust the prompt based on feedback:**
+   - "Colors are off" → Adjust color descriptors. Be more specific (hex codes, named colors).
+   - "Style is wrong" → Strengthen style keywords. Add negative descriptors if model supports them.
+   - "Missing elements" → Add the missing element with specific placement description.
+   - "Composition is bad" → Add explicit layout instructions (centered, rule of thirds, foreground/background).
+   - "Too realistic" / "Too cartoon" → Shift style descriptors toward the desired aesthetic.
+   - "Elements are merged wrong" → Separate the descriptions more clearly. Describe spatial relationships.
+
+5. **Present the revised prompt.** Go back to step 1.
+
+**Rules:**
+- **No iteration limit.** Keep going until the user rates ≥ 9 or says "done" / "good enough."
+- **Show what you changed** each iteration: "Adjusted: strengthened pixel art style, added explicit hex colors, removed 'glowing' (caused smooth gradients in your output)."
+- **Learn from feedback patterns.** If the user says "too smooth" twice, aggressively add anti-smoothing descriptors on every subsequent iteration.
+- **Never skip the feedback step.** Even if you think the prompt is perfect, the model's output is the only ground truth.
+- **Track iteration history.** After 5+ iterations, summarize: "We've tried 7 versions. Consistent issues: [X]. Consistent wins: [Y]. Recommendation: try a different model."
+
+**Exit conditions:**
+- User rates ≥ 9
+- User says "done", "good enough", "perfect", "ship it"
+- User wants to try a different model (restart with new model, keep learned preferences)
 
 ---
 

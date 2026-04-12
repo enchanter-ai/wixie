@@ -216,24 +216,35 @@ prompts/<prompt-name>/
 
 ## Phase 4: Repeat Until Perfection
 
-After delivery steps complete, check the report verdict. If the prompt isn't production-ready, loop automatically.
+Two modes based on domain. Check and execute the matching one.
 
-### Loop:
+### Mode A: Text Prompts (all domains except image-gen)
 
-**A. Check verdict** from report-gen output:
-- Verdict is **DEPLOY**? (overall ≥ 9, all axes ≥ 7, zero criticals)
-- If YES → deliver to user. Done.
-- If NO → continue to B.
+**Fully autonomous.** Loop without user input. Up to 100 iterations.
 
-**B. Fix automatically:**
-1. Read the CRITICAL and WARNING findings from the report.
-2. Apply each fix to the prompt (format, techniques, clarity, completeness, resilience).
-3. Overwrite `prompt.<format>` with the improved version.
-4. Re-run delivery steps 3-7 (token count, self-eval, metadata, tests, report).
-5. Go back to A.
+1. Score the refined prompt via self-eval.
+2. Check: overall ≥ 9, all axes ≥ 7, zero criticals → **DEPLOY. Exit.**
+3. Score unchanged 3 consecutive iterations → **Plateau. Exit.**
+4. Otherwise: read findings, apply fixes (see fix table in prompt-crafter SKILL.md), overwrite prompt, go to 1.
+5. Progress update every 10 iterations.
+6. On exit, save all artifacts (delivery steps 3-8) and generate report.pdf.
 
-### Rules:
-- **Max 5 iterations.** If still not DEPLOY after 5, deliver what you have with explanation.
-- **Show progress:** "Iteration 2/5 — fixed Clarity (6→8), working on Failure Resilience..."
-- **Never loop silently.** Brief update each round.
-- **User can exit anytime** with "stop", "good enough", or "deliver it".
+### Mode B: Image Prompts (image-gen)
+
+**Collaborative.** You cannot see images. Force the user through a feedback loop.
+
+1. Present the refined prompt in a code block. Ask the user to:
+   - Generate the image with their chosen model/platform
+   - Report what looks wrong, what looks right, and rate 1-10
+2. Wait for feedback. Do NOT proceed without it.
+3. Rating ≥ 9 → Save final prompt. **Exit.**
+4. Rating < 9 → Adjust based on feedback:
+   - Colors off → adjust color descriptors, add hex codes
+   - Style wrong → strengthen/shift style keywords
+   - Missing elements → add with explicit placement
+   - Composition bad → add layout instructions
+   - Elements merged wrong → separate descriptions, clarify spatial relationships
+5. Present revised prompt. Go to 1.
+6. No iteration limit. Keep going until user rates ≥ 9 or says "done."
+7. Show what changed each round.
+8. After 5+ iterations, summarize patterns and suggest trying a different model if issues persist.
