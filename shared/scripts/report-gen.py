@@ -155,8 +155,8 @@ def analyze_prompt(meta, registry, prompt_dir=None):
         tl = prompt_text.lower()
 
         # Conflicting instructions
-        has_concise = any(w in tl for w in ["concise", "brief", "short", "minimal"])
-        has_detailed = any(w in tl for w in ["detailed", "comprehensive", "thorough", "in-depth", "elaborate"])
+        has_concise = any(w in tl for w in ["be concise", "be brief", "keep it short", "keep responses short"])
+        has_detailed = any(w in tl for w in ["be detailed", "be comprehensive", "in-depth analysis", "elaborate on"])
         if has_concise and has_detailed:
             warnings.append("Conflicting instructions: prompt asks for both concise AND detailed output. The model will guess which to follow.")
 
@@ -167,7 +167,7 @@ def analyze_prompt(meta, registry, prompt_dir=None):
             warnings.append("Role is too vague ('helpful assistant'). Use a specific domain expert role for better output quality.")
 
         # No output format
-        has_format = any(w in tl for w in ["output format", "respond in", "return as", "format:", "json", "xml", "markdown", "structured"])
+        has_format = any(w in tl for w in ["output format", "respond in", "return as", "format:", "json", "xml", "markdown", "structured", "<output_format>", "<format>", "output_format"])
         if not has_format and domain not in ("image-gen", "creative-writing"):
             warnings.append("No output format specified. Model output will be inconsistent across runs. Add explicit format instructions.")
 
