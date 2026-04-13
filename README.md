@@ -121,22 +121,15 @@ Refine anytime with `/refine`. Every step is autonomous.
 
 ## Install
 
+One command. All 6 plugins.
+
 ```
 /plugin marketplace add enchanted-plugins/flux
-/plugin install prompt-crafter@flux
 ```
 
-Full suite:
-```
-/plugin install prompt-crafter@flux
-/plugin install prompt-refiner@flux
-/plugin install convergence-engine@flux
-/plugin install prompt-tester@flux
-/plugin install prompt-harden@flux
-/plugin install prompt-translate@flux
-```
+That's it. Browse `/plugin` → Discover to install any plugin.
 
-Or one-liner:
+Or via shell:
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/enchanted-plugins/flux/main/install.sh)
 ```
