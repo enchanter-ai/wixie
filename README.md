@@ -108,7 +108,7 @@ Wrote the perfect Claude prompt. Now the team needs GPT-4.1. One command: `/tran
 
 ```
   Create          Optimize         Test           Harden          Translate
-  /enchant    →   /converge    →   /test-prompt → /harden     →  /translate-prompt
+  /create     →   /converge    →   /test-prompt → /harden     →  /translate-prompt
   ┌─────────┐    ┌───────────┐    ┌───────────┐  ┌───────────┐  ┌──────────────┐
   │ Crafter │───▶│Convergence│───▶│  Tester   │─▶│ Hardener  │─▶│  Translator  │
   │  (Opus) │    │ (Sonnet)  │    │ (Sonnet)  │  │ (Sonnet)  │  │  (Sonnet)    │
@@ -140,7 +140,7 @@ bash <(curl -s https://raw.githubusercontent.com/enchanted-plugins/flux/main/ins
 
 | Plugin | Command | What | Agent |
 |--------|---------|------|-------|
-| prompt-crafter | `/enchant` | Creates production-ready prompts | reviewer (Haiku) |
+| prompt-crafter | `/create` | Creates production-ready prompts | reviewer (Haiku) |
 | prompt-refiner | `/refine` | Improves existing prompts | reviewer (Haiku) |
 | convergence-engine | `/converge` | 100-iteration autonomous optimizer | optimizer (Sonnet) + reviewer (Haiku) |
 | prompt-tester | `/test-prompt` | Runs test assertions, pass/fail | executor (Sonnet) |
@@ -162,132 +162,47 @@ The **PDF audit report** includes: quality score bars, 8 binary assertion result
 
 ## The Science Behind Flux
 
-Every Flux engine is built on a formal mathematical model. These aren't marketing abstractions — they're the actual algorithms running under the hood.
+Every Flux engine is built on a formal mathematical model. Full derivations in [`docs/science/README.md`](docs/science/README.md).
 
-### Engine 1: Gauss Convergence Method (Standard Deviation Minimization)
+### Engine 1: Gauss Convergence Method
 
-The Convergence Engine treats prompt quality as a minimization problem. Given a prompt `P` and a scoring function `S: P → ℝ⁵` mapping to 5 quality axes, define the deviation from perfection:
+$$\sigma(P) = \sqrt{\frac{\sum_{i=1}^{5}(S_i(P) - 10)^2}{5}} \qquad P_{n+1} = T_{k^*}(P_n) \text{ where } k^* = \underset{i}{\operatorname{argmin}}\ S_i(P_n)$$
 
-```
-σ(P) = √(Σᵢ (Sᵢ(P) - 10)² / 5)
+Accept $P_{n+1}$ only if $\sigma(P_{n+1}) < \sigma(P_n)$. Auto-revert on regression. Converge when $\sigma < 0.45$. Knowledge accumulates: $\mathcal{K}_n = \mathcal{K}_{n-1} \cup \{(k^*, \Delta\sigma, \text{outcome})\}$.
 
-where Sᵢ ∈ {Clarity, Completeness, Efficiency, ModelFit, Resilience}
-```
+### Engine 2: Boolean Satisfiability Overlay
 
-Each iteration applies a transformation `T_k` targeting the weakest axis `argmin(Sᵢ)`:
+$$\text{DEPLOY}(P) \iff \sigma(P) < \tau \;\wedge\; \bigwedge_{j=1}^{8} A_j(P)$$
 
-```
-P_{n+1} = T_k(P_n)   where k = argmin_i(Sᵢ(P_n))
+8 binary predicates (has_role, has_task, has_format, has_constraints, has_edge_cases, no_hedges, no_filler, has_structure) overlaid on continuous scoring. SAT-first, then optimize.
 
-Accept P_{n+1} only if σ(P_{n+1}) < σ(P_n)     — auto-revert on regression
-Converge when σ(P) < 0.45  (equivalent to all axes ≥ 9)
-Plateau when σ(P_n) = σ(P_{n-1}) = σ(P_{n-2})   — 3-step stagnation detection
-```
+### Engine 3: Cross-Domain Adaptation
 
-The hypothesis log `H = {(k, ΔS, outcome)}` persists across sessions, enabling the engine to skip transformations that previously failed on similar prompts.
+$$T: (P, M_s) \to (P', M_t) \quad \text{s.t.} \quad \text{Semantic}(P') = \text{Semantic}(P) \;\wedge\; \text{Techniques}(P') \cap \text{AntiPatterns}(M_t) = \emptyset$$
 
-**Novel contribution:** Hypothesis-driven prompt optimization with regression protection and cross-session learning.
+Constraint-preserving prompt transformation across 64 models: $P' = \mathcal{A}_{M_t} \circ \mathcal{T}_{M_t} \circ \mathcal{F}_{M_s \to M_t}(P)$.
 
-### Engine 2: Binary Assertion Framework (Boolean Satisfiability)
+### Engine 4: Adversarial Robustness
 
-Quality scoring alone is insufficient — a prompt can score 9/10 overall while missing a critical component. The assertion framework defines 8 boolean predicates that must ALL hold:
+$$\Omega(P) = \frac{|\{k : \delta(P, \alpha(c_k)) = \text{RESIST}\}|}{|\mathcal{C}|} \qquad P_{\text{hardened}} = \underset{P'}{\operatorname{argmax}}\ \Omega(P') \;\text{s.t.}\; S(P') \geq S(P) - \varepsilon$$
 
-```
-DEPLOY(P) ⟺ σ(P) < threshold ∧ ∀j ∈ {1..8}: Aⱼ(P) = TRUE
+Zero-sum game across 12 attack classes. OWASP LLM Top 10 coverage. Quality-preserving defense injection.
 
-where:
-  A₁(P) = has_role(P)         — prompt defines persona
-  A₂(P) = has_task(P)         — prompt defines objective
-  A₃(P) = has_format(P)       — prompt specifies output structure
-  A₄(P) = has_constraints(P)  — prompt has guardrails
-  A₅(P) = has_edge_cases(P)   — prompt handles failure modes
-  A₆(P) = ¬has_hedges(P)      — no uncertainty language
-  A₇(P) = ¬has_filler(P)      — no verbose padding
-  A₈(P) = has_structure(P)    — markup/formatting present
-```
+### Engine 5: Static-Dynamic Dual Verification
 
-This is formally a conjunction of boolean satisfiability constraints overlaid on the continuous optimization. The engine resolves unsatisfied predicates first, then optimizes the continuous score.
+$$\text{VERIFIED}(P) \iff \sigma(P) < \tau \;\wedge\; \text{PassRate}(P, \mathcal{T}) = 1.0$$
 
-**Novel contribution:** Hybrid SAT + continuous optimization for prompt quality verification.
+Bridges structure analysis (scoring) with behavioral testing (assertions against real output).
 
-### Engine 3: Model Fit (Cross-Domain Adaptation Function)
+### Engine 6: Gauss Accumulation (Self-Learning)
 
-Prompt translation between models is formalized as a structure-preserving transformation. Given source model `M_s` and target model `M_t`, define:
+$$\mathcal{K}_n = \mathcal{K}_{n-1} \cup \{(k^*, \Delta\sigma, \text{outcome})\} \qquad \text{Skip } k \text{ if revert\_rate}(k) > 0.5$$
 
-```
-T: (P, M_s) → (P', M_t)
-
-subject to:
-  Semantic(P') = Semantic(P)          — intent preservation
-  Format(P') ∈ Preferred(M_t)        — format compliance
-  Techniques(P') ∩ AntiPatterns(M_t) = ∅   — no harmful techniques
-  ∀ examples ∈ P: Content(examples) preserved, Structure(examples) adapted
-```
-
-The 64-model registry `R` provides the constraint set per model: `R(M) = {format, reasoning, cot_approach, few_shot, key_constraint}`. Translation applies a sequence of format converters `F`, technique selectors `T`, and model-specific adapters `A`:
-
-```
-P' = A_{M_t} ∘ T_{M_t} ∘ F_{M_s→M_t}(P)
-```
-
-**Novel contribution:** Constraint-preserving prompt transformation across 64 model architectures with automatic anti-pattern avoidance.
-
-### Engine 4: Adversarial Robustness (Game-Theoretic Security)
-
-Prompt hardening is modeled as a two-player zero-sum game between an attacker `α` and the prompt's defense `δ`:
-
-```
-For each attack class cₖ ∈ {injection, override, extraction, ...}:
-
-  α(cₖ) → input_adversarial       — attacker crafts optimal input
-  δ(P, input_adversarial) → {RESIST, VULNERABLE}
-
-Security score:  Ω(P) = |{k : δ(P, α(cₖ)) = RESIST}| / |C|
-```
-
-The hardening function `H` adds defense instructions that maximize `Ω` without degrading the primary quality score:
-
-```
-P_hardened = argmax_{P'} Ω(P')  subject to  S(P') ≥ S(P) - ε
-```
-
-12 attack classes cover OWASP LLM Top 10 vectors. The red-team agent plays `α`, the prompt acts as `δ`.
-
-**Novel contribution:** Formal game-theoretic prompt security testing with quality-preserving defense injection.
-
-### Engine 5: Test Verification (Assertion-Based Runtime Validation)
-
-The tester formalizes prompt quality as observable behavior, not static analysis. For a prompt `P` and test suite `T = {(input_i, expected_i)}`:
-
-```
-PassRate(P, T) = |{i : ∀s ∈ expected_i, s ⊆ Output(P, input_i)}| / |T|
-
-VERIFIED(P) ⟺ PassRate(P, T) = 1.0
-```
-
-This closes the loop between static scoring (Engine 1) and runtime behavior — a prompt can score 9.4/10 on structure but fail 40% of test cases if the domain logic is wrong.
-
-**Novel contribution:** Static-dynamic dual verification bridging prompt structure analysis with behavioral testing.
-
-### Engine 6: Self-Learning Persistence (Knowledge Accumulation)
-
-The convergence engine accumulates knowledge across sessions via `learnings.md`:
-
-```
-K_n = K_{n-1} ∪ {(hypothesis_n, transformation_n, Δσ_n, outcome_n)}
-
-Strategy selection for iteration n+1:
-  Prioritize transformations where historical Δσ > 0
-  Skip transformations where historical outcome = "reverted" for similar σ profile
-```
-
-Over multiple sessions, the engine builds a prompt-specific optimization policy — it learns which fixes work for which types of prompts and avoids repeating failed strategies.
-
-**Novel contribution:** Cross-session prompt optimization policy learning with hypothesis-outcome persistence.
+Cross-session learning in `learnings.json`. Strategy success rates, pattern detection, persistent plateau identification. The engine gets smarter with every session.
 
 ---
 
-*These formal models are implemented in `shared/scripts/convergence.py`, `shared/scripts/self-eval.py`, and the agent definitions across all 6 plugins. The mathematics runs — it's not documentation-only.*
+*Full derivations with proofs: [`docs/science/README.md`](docs/science/README.md). The math runs as code in `shared/scripts/`.*
 
 ## vs Everything Else
 
