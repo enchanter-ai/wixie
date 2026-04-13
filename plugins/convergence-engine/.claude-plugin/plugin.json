@@ -1,0 +1,16 @@
+{
+  "name": "convergence-engine",
+  "description": "Autonomous prompt perfection engine. Iterates up to 100 times, fixing the weakest axis each round until DEPLOY verdict. Multi-agent: convergence + reviewer.",
+  "version": "1.0.0",
+  "author": { "name": "enchanted-plugins" },
+  "license": "MIT",
+  "keywords": [
+    "convergence",
+    "optimization",
+    "self-improvement",
+    "multi-agent",
+    "prompt-quality"
+  ],
+  "skills": ["./skills/converge/"],
+  "agents": "./agents/"
+}
