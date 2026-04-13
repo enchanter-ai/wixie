@@ -4,21 +4,27 @@
     "name": "enchanted-plugins"
   },
   "metadata": {
-    "description": "Reforges raw prompts into technique-optimized, model-fitted enchantments. 16 techniques, 10+ model profiles, automatic scoring.",
-    "version": "1.0.0"
+    "description": "Prompt engineering marketplace with multi-agent convergence pipeline. 16 techniques, 64 models, autonomous perfection.",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "prompt-crafter",
       "source": "./plugins/prompt-crafter",
-      "description": "Creates technique-optimized, model-fitted prompts from task descriptions with explained reasoning and quality scoring.",
+      "description": "Creates production-ready prompts with technique selection, model fitting, and multi-agent convergence pipeline.",
       "category": "prompt-engineering"
     },
     {
       "name": "prompt-refiner",
       "source": "./plugins/prompt-refiner",
-      "description": "Improves existing prompts — diagnoses weaknesses, re-selects techniques, adapts format, preserves intent.",
+      "description": "Improves existing prompts with diagnosis, convergence engine, and multi-agent review.",
       "category": "prompt-engineering"
+    },
+    {
+      "name": "convergence-engine",
+      "source": "./plugins/convergence-engine",
+      "description": "Standalone prompt optimizer. Iterates up to 100 times with multi-agent review. Use on any prompt.",
+      "category": "optimization"
     }
   ]
 }

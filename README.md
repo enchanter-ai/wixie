@@ -21,12 +21,25 @@ The prompting techniques that make one model sing make another one choke.
 
 ## What Flux Does
 
-Give it a vague idea or an underperforming prompt. It reads your intent, selects from 16 prompting techniques, adapts the format to your target model, and iterates until the prompt is production-ready.
+Give it a vague idea or an underperforming prompt. Three agents take over:
 
-You get back:
-1. **A production-ready prompt** — not a draft, not a template
-2. **A PDF audit report** — techniques applied, model warnings, quality scores, verdict
-3. **Convergence guarantee** — the engine loops up to 100 times until DEPLOY or plateau
+1. **Crafter** reads your intent, selects techniques, generates the prompt
+2. **Convergence Engine** iterates up to 100 times autonomously — fixing clarity, completeness, model fit — until DEPLOY
+3. **Reviewer** validates the result against the model registry and scores
+
+No permission prompts. No manual iteration. You describe the task, Flux delivers a production-ready prompt with a PDF audit report.
+
+```
+You: "I need a prompt for Claude Opus to analyze stocks"
+
+Flux: [scans context → asks 3 questions → selects techniques]
+      [generates prompt → launches convergence agent]
+      [iteration 1: 7.9 → iteration 2: 8.9 → iteration 3: 9.1 → DEPLOY]
+      [reviewer validates → APPROVED]
+      [saves prompt.xml + metadata.json + tests.json + report.pdf]
+
+Done. 9.1/10. Production-ready. 4 iterations. Zero manual fixes.
+```
 
 ## The Convergence Engine
 
@@ -76,6 +89,7 @@ Full suite:
 ```
 /plugin install prompt-crafter@flux
 /plugin install prompt-refiner@flux
+/plugin install convergence-engine@flux
 ```
 
 Or manually:
@@ -83,12 +97,13 @@ Or manually:
 bash <(curl -s https://raw.githubusercontent.com/enchanted-plugins/flux/main/install.sh)
 ```
 
-## 2 Plugins, 16 Techniques, 64 Models
+## 3 Plugins, 5 Agents, 64 Models
 
-| Plugin | What |
-|--------|------|
-| prompt-crafter | Creates new prompts — technique selection + model fitting + convergence |
-| prompt-refiner | Improves existing prompts — diagnoses weaknesses, preserves intent |
+| Plugin | What | Agents |
+|--------|------|--------|
+| prompt-crafter | Creates new prompts with full pipeline | convergence + reviewer |
+| prompt-refiner | Improves existing prompts, preserves intent | convergence + reviewer |
+| convergence-engine | Standalone optimizer — use on any prompt | optimizer + reviewer |
 
 ### Supported Models
 
