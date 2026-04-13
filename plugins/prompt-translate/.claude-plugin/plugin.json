@@ -1,0 +1,10 @@
+{
+  "name": "prompt-translate",
+  "description": "Converts prompts between models — Claude to GPT, GPT to Gemini, etc. Re-selects techniques, adapts format, preserves intent. Uses the 64-model registry.",
+  "version": "1.0.0",
+  "author": { "name": "enchanted-plugins" },
+  "license": "MIT",
+  "keywords": ["translation", "adaptation", "cross-model", "model-conversion", "portability"],
+  "skills": ["./skills/translate/"],
+  "agents": "./agents/"
+}
