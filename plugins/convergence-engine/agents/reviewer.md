@@ -3,7 +3,7 @@ name: reviewer
 description: >
   Validates prompt folder after optimization. Checks files, metadata,
   score freshness, format-model alignment, test coverage.
-model: opus
+model: haiku
 context: fork
 allowed-tools: Bash(python *) Read
 ---

@@ -3,7 +3,7 @@ name: optimizer
 description: >
   Background optimization agent. Runs convergence.py, updates artifacts,
   validates results. Fully autonomous — no user interaction.
-model: opus
+model: sonnet
 context: fork
 allowed-tools: Bash(python *) Read Write Edit
 ---

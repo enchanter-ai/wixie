@@ -4,7 +4,7 @@ description: >
   Background agent that validates a completed prompt folder against
   metadata and registry. Runs after convergence completes. Reports
   APPROVED or lists specific fixes needed.
-model: opus
+model: haiku
 context: fork
 allowed-tools: Bash(python *) Read
 ---

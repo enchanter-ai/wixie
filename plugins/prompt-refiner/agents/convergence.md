@@ -4,7 +4,7 @@ description: >
   Background agent that runs the Convergence Engine on a refined prompt.
   Iterates up to 100 times to reach DEPLOY verdict. Spawned by
   prompt-improver after refinement.
-model: opus
+model: sonnet
 context: fork
 allowed-tools: Bash(python *) Read Write Edit
 ---

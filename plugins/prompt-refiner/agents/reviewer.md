@@ -3,7 +3,7 @@ name: reviewer
 description: >
   Background agent that validates a refined prompt folder. Same checks
   as the crafter's reviewer. Runs after convergence completes.
-model: opus
+model: haiku
 context: fork
 allowed-tools: Bash(python *) Read
 ---

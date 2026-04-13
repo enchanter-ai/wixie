@@ -5,7 +5,7 @@ description: >
   Iterates up to 100 times to reach DEPLOY verdict. Runs autonomously
   without user interaction. Spawned by prompt-enchanter after initial
   prompt generation.
-model: opus
+model: sonnet
 context: fork
 allowed-tools: Bash(python *) Read Write Edit
 ---
