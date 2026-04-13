@@ -10,41 +10,27 @@ These aren't abstractions. Every formula maps to running code.
 
 ### F1. Gauss Convergence Method
 
-**Problem:** Given a prompt $P$, minimize its deviation from ideal quality across $N$ dimensions.
-
-**Formulation:**
-
-Let $S: P \to \mathbb{R}^5$ be a scoring function mapping prompts to 5 quality axes. Define the Gauss deviation:
+**Problem:** Given a prompt $P$, minimize its deviation from ideal quality across 5 dimensions.
 
 $$\sigma(P) = \sqrt{\frac{\sum_{i=1}^{5}(S_i(P) - 10)^2}{5}}$$
 
-At each iteration $n$, select transformation $T_k$ targeting the weakest axis:
+At each iteration $n$, select transformation targeting the weakest axis:
 
-$$k^* = \underset{i}{\operatorname{argmin}}\ S_i(P_n)$$
+$$k^\ast = \arg\min_i S_i(P_n)$$
 
-$$P_{n+1} = T_{k^*}(P_n)$$
+$$P_{n+1} = T_{k^\ast}(P_n)$$
 
-**Acceptance criterion (regression protection):**
+**Regression protection:**
 
 $$\text{Accept } P_{n+1} \iff \sigma(P_{n+1}) < \sigma(P_n)$$
 
-$$\text{Revert } P_{n+1} = P_n \text{ otherwise}$$
+**Convergence:**
 
-**Convergence conditions:**
+$$\text{DEPLOY: } \sigma(P) < 0.45 \quad \text{PLATEAU: } \sigma(P_n) = \sigma(P_{n-1}) = \sigma(P_{n-2}) \quad \text{MAX: } n \geq 100$$
 
-$$\text{DEPLOY: } \sigma(P) < 0.45 \quad (\text{all axes} \geq 9.0)$$
+**Knowledge accumulation:**
 
-$$\text{PLATEAU: } \sigma(P_n) = \sigma(P_{n-1}) = \sigma(P_{n-2})$$
-
-$$\text{MAX: } n \geq 100$$
-
-**Knowledge accumulation (Gauss Accumulation):**
-
-$$\mathcal{K}_n = \mathcal{K}_{n-1} \cup \{(k^*, \Delta\sigma, \text{outcome})\}$$
-
-Strategy selection at iteration $n+1$:
-- Skip $k$ if historical $\text{revert\_rate}(k) > 0.5$
-- Prioritize $k$ if historical $\overline{\Delta\sigma}(k) > 0$
+$$K_n = K_{n-1} \cup \lbrace(k^\ast, \Delta\sigma, \text{outcome})\rbrace$$
 
 **Implementation:** `shared/scripts/convergence.py`
 
@@ -52,84 +38,56 @@ Strategy selection at iteration $n+1$:
 
 ### F2. Boolean Satisfiability Overlay
 
-**Problem:** Continuous scoring can miss categorical failures. A prompt scoring 9.0 overall may lack a role definition entirely.
+**Problem:** Continuous scoring can miss categorical failures.
 
-**Formulation:**
+Define 8 boolean predicates $A_j: P \to$ TRUE, FALSE:
 
-Define 8 boolean predicates $A_j: P \to \{\text{TRUE}, \text{FALSE}\}$:
+$$\text{DEPLOY}(P) \iff \sigma(P) < \tau \ \wedge \ \bigwedge_{j=1}^{8} A_j(P)$$
 
-$$\text{DEPLOY}(P) \iff \sigma(P) < \tau \;\wedge\; \bigwedge_{j=1}^{8} A_j(P)$$
-
-where:
-
-| $j$ | $A_j$ | Predicate |
-|-----|-------|-----------|
-| 1 | `has_role` | Prompt defines persona |
-| 2 | `has_task` | Prompt defines objective |
-| 3 | `has_format` | Prompt specifies output structure |
-| 4 | `has_constraints` | Prompt has guardrails |
-| 5 | `has_edge_cases` | Prompt handles failure modes |
-| 6 | $\neg$`has_hedges` | No uncertainty language |
-| 7 | $\neg$`has_filler` | No verbose padding |
-| 8 | `has_structure` | Markup present |
-
-This is a conjunction of SAT constraints overlaid on continuous optimization. The engine resolves unsatisfied predicates FIRST, then optimizes the continuous score.
+| $j$ | Predicate | Check |
+|-----|-----------|-------|
+| 1 | has role | Prompt defines persona |
+| 2 | has task | Prompt defines objective |
+| 3 | has format | Specifies output structure |
+| 4 | has constraints | Has guardrails |
+| 5 | has edge cases | Handles failure modes |
+| 6 | no hedges | No uncertainty language |
+| 7 | no filler | No verbose padding |
+| 8 | has structure | Markup present |
 
 **Implementation:** `run_assertions()` in `shared/scripts/convergence.py`
 
 ---
 
-### F3. Cross-Domain Adaptation (Model Translation)
+### F3. Cross-Domain Adaptation
 
-**Problem:** Transform a prompt optimized for model $M_s$ into equivalent quality for model $M_t$ while preserving semantic intent.
-
-**Formulation:**
+**Problem:** Transform a prompt for model $M_s$ into equivalent quality for $M_t$.
 
 $$T: (P, M_s) \to (P', M_t)$$
 
-Subject to:
-
-$$\text{Semantic}(P') = \text{Semantic}(P)$$
-
-$$\text{Format}(P') \in \text{Preferred}(M_t)$$
-
-$$\text{Techniques}(P') \cap \text{AntiPatterns}(M_t) = \emptyset$$
-
-The 64-model registry $\mathcal{R}$ provides per-model constraints:
-
-$$\mathcal{R}(M) = \{\text{format}, \text{reasoning}, \text{cot}, \text{few\_shot}, \text{constraint}\}$$
+$$\text{Semantic}(P') = \text{Semantic}(P) \quad \wedge \quad \text{Techniques}(P') \cap \text{AntiPatterns}(M_t) = \emptyset$$
 
 Translation applies a composition:
 
-$$P' = \mathcal{A}_{M_t} \circ \mathcal{T}_{M_t} \circ \mathcal{F}_{M_s \to M_t}(P)$$
+$$P' = A_{M_t} \circ T_{M_t} \circ F_{M_s \to M_t}(P)$$
+
+The 64-model registry provides per-model constraints: format, reasoning type, CoT approach, few-shot requirement, key constraint.
 
 **Implementation:** `plugins/prompt-translate/skills/translate/SKILL.md`
 
 ---
 
-### F4. Adversarial Robustness (Game Theory)
+### F4. Adversarial Robustness
 
-**Problem:** Determine if a prompt resists adversarial inputs that attempt to override its behavior.
+**Problem:** Determine if a prompt resists adversarial inputs.
 
-**Formulation (two-player zero-sum game):**
-
-$$\text{Players: Attacker } \alpha, \text{ Defender } \delta(P)$$
-
-$$\text{Action space: } \mathcal{C} = \{c_1, \ldots, c_{12}\}$$
-
-For each attack class $c_k$:
-
-$$\alpha(c_k) \to x_{\text{adversarial}}$$
-
-$$\delta(P, x_{\text{adversarial}}) \to \{\text{RESIST}, \text{VULNERABLE}\}$$
-
-Security score:
-
-$$\Omega(P) = \frac{|\{k : \delta(P, \alpha(c_k)) = \text{RESIST}\}|}{|\mathcal{C}|}$$
+$$\Omega(P) = \frac{|\lbrace k : \delta(P, \alpha(c_k)) = \text{RESIST}\rbrace|}{|C|}$$
 
 Hardening maximizes security without degrading quality:
 
-$$P_{\text{hardened}} = \underset{P'}{\operatorname{argmax}}\ \Omega(P') \quad \text{s.t.} \quad S(P') \geq S(P) - \varepsilon$$
+$$P_{\text{hardened}} = \arg\max_{P'} \Omega(P') \quad \text{s.t.} \quad S(P') \geq S(P) - \varepsilon$$
+
+12 attack classes cover OWASP LLM Top 10 vectors.
 
 **Implementation:** `plugins/prompt-harden/skills/harden/SKILL.md`
 
@@ -137,19 +95,11 @@ $$P_{\text{hardened}} = \underset{P'}{\operatorname{argmax}}\ \Omega(P') \quad \
 
 ### F5. Static-Dynamic Dual Verification
 
-**Problem:** Static analysis (scoring) and dynamic behavior (actual output) can diverge.
+**Problem:** Static analysis and dynamic behavior can diverge.
 
-**Formulation:**
+$$\text{VERIFIED}(P) \iff \sigma(P) < \tau \ \wedge \ \text{PassRate}(P, T) = 1.0$$
 
-$$\text{Static: } \sigma(P) < \tau$$
-
-$$\text{Dynamic: } \text{PassRate}(P, \mathcal{T}) = 1.0$$
-
-$$\text{VERIFIED}(P) \iff \text{Static}(P) \wedge \text{Dynamic}(P)$$
-
-where:
-
-$$\text{PassRate}(P, \mathcal{T}) = \frac{|\{i : \forall s \in E_i,\ s \subseteq \text{Output}(P, x_i)\}|}{|\mathcal{T}|}$$
+$$\text{PassRate}(P, T) = \frac{|\lbrace i : \forall s \in E_i,\ s \subseteq \text{Output}(P, x_i)\rbrace|}{|T|}$$
 
 **Implementation:** `plugins/prompt-tester/skills/test-runner/SKILL.md`
 
@@ -159,25 +109,17 @@ $$\text{PassRate}(P, \mathcal{T}) = \frac{|\{i : \forall s \in E_i,\ s \subseteq
 
 ### A1. Hidden Markov Drift Detection
 
-**Problem:** Detect when an AI agent enters an unproductive loop without false positives.
+**Problem:** Detect unproductive loops without false positives.
 
-**Formulation:**
+Hidden states: PRODUCTIVE, READ LOOP, EDIT REVERT, TEST FAIL
 
-Hidden states: $\mathcal{S} = \{\text{PRODUCTIVE}, \text{READ\_LOOP}, \text{EDIT\_REVERT}, \text{TEST\_FAIL}\}$
+$$P(\text{read loop}) = 1 \quad \text{if} \quad \text{count}(\text{read}(f, h)) \geq 3 \ \wedge \ \nexists\ \text{write}(f)$$
 
-Observable events: $\mathcal{O} = \{\text{read}(f, h),\ \text{write}(f, h),\ \text{bash}(\text{cmd}, \text{exit})\}$
+$$P(\text{edit revert}) = 1 \quad \text{if} \quad h(\text{write}_n(f)) = h(\text{write}_{n-2}(f))$$
 
-Transition detection:
+$$P(\text{test fail}) = 1 \quad \text{if} \quad \text{count}(\text{bash}(\text{cmd}, \text{exit} \neq 0)) \geq 3$$
 
-$$P(\text{READ\_LOOP}) = \mathbb{1}\left[\sum_{t} \mathbb{1}[\text{read}(f, h)_t] \geq 3 \;\wedge\; \nexists\ \text{write}(f, h')_t\right]$$
-
-$$P(\text{EDIT\_REVERT}) = \mathbb{1}\left[h(\text{write}_n(f)) = h(\text{write}_{n-2}(f))\right]$$
-
-$$P(\text{TEST\_FAIL}) = \mathbb{1}\left[\sum_{t} \mathbb{1}[\text{bash}(\text{cmd}, \text{exit} \neq 0)_t] \geq 3\right]$$
-
-Cooldown:
-
-$$\text{Alert}(t) = \mathbb{1}\left[P(\text{drift}) = 1 \;\wedge\; t - t_{\text{last}} > \tau_{\text{cooldown}}\right]$$
+Cooldown: $\text{Alert}(t) = 1 \iff P(\text{drift}) = 1 \ \wedge \ t - t_{\text{last}} > \tau$
 
 **Implementation:** `plugins/context-guard/hooks/post-tool-use/detect-drift.sh`
 
@@ -185,19 +127,11 @@ $$\text{Alert}(t) = \mathbb{1}\left[P(\text{drift}) = 1 \;\wedge\; t - t_{\text{
 
 ### A2. Linear Runway Forecasting
 
-**Problem:** Predict how many productive turns remain before context compaction.
+**Problem:** Predict turns remaining before compaction.
 
-**Formulation:**
+$$\hat{\mu} = \frac{1}{N}\sum_{i=1}^{N} \text{tokens}_i \qquad \text{runway} = \left\lfloor\frac{\text{remaining}}{\hat{\mu}}\right\rfloor$$
 
-$$\hat{\mu} = \frac{1}{N}\sum_{i=1}^{N} \text{tokens}_{i}$$
-
-$$\text{runway} = \left\lfloor\frac{\text{window} - \text{used}}{\hat{\mu}}\right\rfloor$$
-
-Confidence interval:
-
-$$CI = t_{\alpha/2} \cdot \frac{s}{\sqrt{N}}$$
-
-$$\text{runway} \in \left[\left\lfloor\frac{\text{remaining}}{\hat{\mu} + CI}\right\rfloor,\ \left\lfloor\frac{\text{remaining}}{\hat{\mu} - CI}\right\rfloor\right]$$
+$$\text{CI} = t_{\alpha/2} \cdot \frac{s}{\sqrt{N}}$$
 
 | Runway | Action |
 |--------|--------|
@@ -212,28 +146,17 @@ $$\text{runway} \in \left[\left\lfloor\frac{\text{remaining}}{\hat{\mu} + CI}\ri
 
 ### A3. Information-Theoretic Compression
 
-**Problem:** Reduce token consumption of tool outputs while preserving semantic content above a fidelity threshold.
+**Problem:** Reduce token consumption while preserving semantic content.
 
-**Formulation:**
+$$O \to O' \quad \text{s.t.} \quad H(O') \geq \theta \cdot H(O) \ \wedge \ |O'| < |O|$$
 
-$$\text{Compress: } O \to O' \quad \text{s.t.} \quad H(O') \geq \theta \cdot H(O) \;\wedge\; |O'| < |O|$$
-
-| Content type | $\theta$ | Strategy |
-|-------------|----------|----------|
-| Code blocks | $1.0$ | Lossless |
-| Test output | $0.7$ | Pass/fail + first error |
-| Verbose logs | $0.3$ | Summary only |
-
-Compression ratio:
+| Content | $\theta$ | Compression |
+|---------|----------|-------------|
+| Code | $1.0$ | Lossless |
+| Tests | $0.7$ | Pass/fail + first error |
+| Logs | $0.3$ | Summary only |
 
 $$CR(O) = 1 - \frac{|O'|}{|O|}$$
-
-| Pattern | $CR$ |
-|---------|------|
-| `npm test` | $\sim 0.8$ |
-| `git log` | $\sim 0.9$ |
-| `find` | $\sim 0.7$ |
-| `cat` | $\sim 0.6$ |
 
 **Implementation:** `plugins/token-saver/hooks/pre-tool-use/compress-bash.sh`
 
@@ -241,25 +164,13 @@ $$CR(O) = 1 - \frac{|O'|}{|O|}$$
 
 ### A4. Atomic State Serialization
 
-**Problem:** Persist enough session state to survive compaction without consuming excessive storage.
+**Problem:** Persist session state to survive compaction.
 
-**Formulation:**
-
-Minimal state vector:
-
-$$\text{Checkpoint}(t) = \{\text{files},\ \text{diff},\ \text{context},\ \text{drift},\ \text{metrics}\}$$
-
-$$\text{s.t.} \quad |\text{Checkpoint}(t)| \leq 50\text{KB}$$
-
-Atomic persistence protocol:
+$$|\text{Checkpoint}(t)| \leq 50\text{KB}$$
 
 $$\text{write}(f.\text{tmp}) \to \text{validate}(f.\text{tmp}) \to \text{rename}(f.\text{tmp}, f)$$
 
-Locking (portable, no `flock`):
-
-$$\text{acquire}() = \text{mkdir}(\text{lock\_dir}) \quad \text{(atomic on all filesystems)}$$
-
-$$\text{release}() = \text{rmdir}(\text{lock\_dir})$$
+Locking: $\text{acquire} = \text{mkdir}(\text{lock})$ (atomic on all filesystems)
 
 **Implementation:** `plugins/state-keeper/hooks/pre-compact/save-checkpoint.sh`
 
@@ -267,22 +178,14 @@ $$\text{release}() = \text{rmdir}(\text{lock\_dir})$$
 
 ### A5. Content-Addressable Deduplication
 
-**Problem:** Prevent re-reading unchanged files that are already in context.
-
-**Formulation:**
-
-For each file read request $(f, t)$:
+**Problem:** Prevent re-reading unchanged files.
 
 $$h_t = \text{SHA256}(\text{content}(f, t))$$
 
-$$\text{Decision}(f, t) = \begin{cases} \text{BLOCK} & \text{if } \text{cache}[f].h = h_t \\ \text{ALLOW} & \text{if } \text{cache}[f].h \neq h_t \\ \text{ALLOW} & \text{if } t - \text{cache}[f].t > \text{TTL} \end{cases}$$
-
-On ALLOW: update $\text{cache}[f] = (h_t, t)$
-
-On BLOCK: return preview (first 5 lines) + "use Grep for specific lines"
+$$\text{Decision}(f, t) = \begin{cases} \text{BLOCK} & \text{if cache}[f].h = h_t \\\\ \text{ALLOW} & \text{if cache}[f].h \neq h_t \\\\ \text{ALLOW} & \text{if } t - \text{cache}[f].t > \text{TTL} \end{cases}$$
 
 **Implementation:** `plugins/token-saver/hooks/pre-tool-use/block-duplicates.sh`
 
 ---
 
-*Every formula in this document maps to executable code in the enchanted-plugins ecosystem. The math runs.*
+*Every formula maps to executable code in the enchanted-plugins ecosystem. The math runs.*

@@ -166,39 +166,45 @@ Every Flux engine is built on a formal mathematical model. Full derivations in [
 
 ### Engine 1: Gauss Convergence Method
 
-$$\sigma(P) = \sqrt{\frac{\sum_{i=1}^{5}(S_i(P) - 10)^2}{5}} \qquad P_{n+1} = T_{k^*}(P_n) \text{ where } k^* = \underset{i}{\operatorname{argmin}}\ S_i(P_n)$$
+$$\sigma(P) = \sqrt{\frac{\sum_{i=1}^{5}(S_i(P) - 10)^2}{5}}$$
 
-Accept $P_{n+1}$ only if $\sigma(P_{n+1}) < \sigma(P_n)$. Auto-revert on regression. Converge when $\sigma < 0.45$. Knowledge accumulates: $\mathcal{K}_n = \mathcal{K}_{n-1} \cup \{(k^*, \Delta\sigma, \text{outcome})\}$.
+$$P_{n+1} = T_{k^\ast}(P_n) \quad \text{where} \quad k^\ast = \arg\min_i S_i(P_n)$$
+
+Accept $P_{n+1}$ only if $\sigma(P_{n+1}) < \sigma(P_n)$. Auto-revert on regression. Converge when $\sigma < 0.45$. Knowledge accumulates across sessions — skip strategies that historically revert.
 
 ### Engine 2: Boolean Satisfiability Overlay
 
-$$\text{DEPLOY}(P) \iff \sigma(P) < \tau \;\wedge\; \bigwedge_{j=1}^{8} A_j(P)$$
+$$\text{DEPLOY}(P) \iff \sigma(P) < \tau \ \wedge \ \bigwedge_{j=1}^{8} A_j(P)$$
 
-8 binary predicates (has_role, has_task, has_format, has_constraints, has_edge_cases, no_hedges, no_filler, has_structure) overlaid on continuous scoring. SAT-first, then optimize.
+8 binary predicates (has\_role, has\_task, has\_format, has\_constraints, has\_edge\_cases, no\_hedges, no\_filler, has\_structure) overlaid on continuous scoring. SAT-first, then optimize.
 
 ### Engine 3: Cross-Domain Adaptation
 
-$$T: (P, M_s) \to (P', M_t) \quad \text{s.t.} \quad \text{Semantic}(P') = \text{Semantic}(P) \;\wedge\; \text{Techniques}(P') \cap \text{AntiPatterns}(M_t) = \emptyset$$
+$$T: (P, M_s) \to (P', M_t)$$
 
-Constraint-preserving prompt transformation across 64 models: $P' = \mathcal{A}_{M_t} \circ \mathcal{T}_{M_t} \circ \mathcal{F}_{M_s \to M_t}(P)$.
+$$\text{subject to: } \text{Semantic}(P') = \text{Semantic}(P) \ \wedge \ \text{Techniques}(P') \cap \text{AntiPatterns}(M_t) = \emptyset$$
+
+Constraint-preserving prompt transformation across 64 models. Composition of format converter, technique selector, and model adapter.
 
 ### Engine 4: Adversarial Robustness
 
-$$\Omega(P) = \frac{|\{k : \delta(P, \alpha(c_k)) = \text{RESIST}\}|}{|\mathcal{C}|} \qquad P_{\text{hardened}} = \underset{P'}{\operatorname{argmax}}\ \Omega(P') \;\text{s.t.}\; S(P') \geq S(P) - \varepsilon$$
+$$\Omega(P) = \frac{|\lbrace k : \delta(P, \alpha(c_k)) = \text{RESIST}\rbrace|}{|C|}$$
+
+$$P_{\text{hardened}} = \arg\max_{P'} \Omega(P') \quad \text{s.t.} \quad S(P') \geq S(P) - \varepsilon$$
 
 Zero-sum game across 12 attack classes. OWASP LLM Top 10 coverage. Quality-preserving defense injection.
 
 ### Engine 5: Static-Dynamic Dual Verification
 
-$$\text{VERIFIED}(P) \iff \sigma(P) < \tau \;\wedge\; \text{PassRate}(P, \mathcal{T}) = 1.0$$
+$$\text{VERIFIED}(P) \iff \sigma(P) < \tau \ \wedge \ \text{PassRate}(P, T) = 1.0$$
 
 Bridges structure analysis (scoring) with behavioral testing (assertions against real output).
 
 ### Engine 6: Gauss Accumulation (Self-Learning)
 
-$$\mathcal{K}_n = \mathcal{K}_{n-1} \cup \{(k^*, \Delta\sigma, \text{outcome})\} \qquad \text{Skip } k \text{ if revert\_rate}(k) > 0.5$$
+$$K_n = K_{n-1} \cup \lbrace(k^\ast, \Delta\sigma, \text{outcome})\rbrace$$
 
-Cross-session learning in `learnings.json`. Strategy success rates, pattern detection, persistent plateau identification. The engine gets smarter with every session.
+Cross-session learning in `learnings.json`. Strategy success rates, pattern detection, persistent plateau identification. Skip $k$ if $\text{revert rate}(k) > 0.5$. The engine gets smarter with every session.
 
 ---
 
