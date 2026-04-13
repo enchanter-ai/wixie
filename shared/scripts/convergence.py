@@ -181,10 +181,12 @@ def load_learnings(prompt_dir):
         "sessions": [],
         "strategy_stats": {},
         "patterns": [],
-        "fix_history": [],      # what specific text changes were made
-        "weakness_profile": {},  # co-occurring weakness patterns
-        "recommendations": [],   # actionable advice for next session
-        "prompt_fingerprint": {},  # word count, section count, domain, model
+        "fix_history": [],           # what specific text changes were made + WHY
+        "negative_examples": [],     # failing outputs + why they failed (avoid bank)
+        "weakness_profile": {},      # co-occurring weakness patterns
+        "recommendations": [],       # actionable advice for next session
+        "prompt_fingerprint": {},    # word count, section count, domain, model
+        "confidence_scores": {},     # per-strategy confidence with decay
     }
 
 
@@ -256,18 +258,48 @@ def save_learnings(prompt_dir, log_entries, prev_learnings=None, prompt_text="",
             stats["consecutive_failures"] += 1
             stats["last_result"] = "reverted"
 
-    # Fix history — what specific changes were made (last 20)
+    # Fix history — what changed, WHY, and what happened (last 30)
     for entry in log_entries:
         data["fix_history"].append({
             "timestamp": datetime.now().isoformat()[:19],
             "axis": entry.get("axis", "?"),
             "hypothesis": entry.get("hypothesis", ""),
+            "reasoning": entry.get("reasoning", ""),
             "result": entry.get("result", "?"),
             "delta": entry.get("delta", 0),
             "score_before": entry.get("start_score", 0),
             "score_after": entry.get("end_score", 0),
+            "axis_changes": entry.get("axis_changes", {}),
+            "assertions_fixed": entry.get("assertions_fixed", []),
         })
-    data["fix_history"] = data["fix_history"][-20:]  # keep last 20
+    data["fix_history"] = data["fix_history"][-30:]
+
+    # Negative example bank — store WHY fixes failed so we can avoid them (last 15)
+    for entry in log_entries:
+        if entry.get("result") == "reverted":
+            data["negative_examples"].append({
+                "axis": entry.get("axis", "?"),
+                "why_failed": entry.get("why_failed", "unknown regression"),
+                "score_at_attempt": entry.get("start_score", 0),
+                "reasoning": entry.get("reasoning", ""),
+            })
+    data["negative_examples"] = data["negative_examples"][-15:]
+
+    # Confidence decay — strategies lose confidence if not re-confirmed within 3 sessions
+    session_count = len(data["sessions"])
+    for axis, s in data["strategy_stats"].items():
+        total = s["applied"] + s["reverted"]
+        if total == 0:
+            continue
+        base_confidence = s["applied"] / total
+        # Decay: reduce confidence by 10% per session since last success
+        sessions_since_use = 0
+        for sess in reversed(data["sessions"]):
+            if any(e.get("axis") == axis for e in sess.get("entries", [])):
+                break
+            sessions_since_use += 1
+        decay = max(0.0, 1.0 - (sessions_since_use * 0.1))
+        data["confidence_scores"][axis] = round(base_confidence * decay, 2)
 
     # Weakness profiling — which axes are consistently weak together?
     if log_entries:
@@ -460,6 +492,25 @@ def _render_learnings_md(data):
             lines.append(f"| {f.get('axis','?')} | {hyp} | {f.get('result','?')} | {f.get('delta',0):+.1f} | {f.get('score_before',0)}->{f.get('score_after',0)} |")
         lines.append("")
 
+    # Negative example bank (avoid these)
+    negs = data.get("negative_examples", [])
+    if negs:
+        lines.append("## Negative Examples (avoid these)")
+        lines.append("")
+        for n in negs[-5:]:
+            lines.append(f"- **{n.get('axis', '?')}** at score {n.get('score_at_attempt', '?')}: {n.get('why_failed', '?')}")
+        lines.append("")
+
+    # Confidence scores
+    conf = data.get("confidence_scores", {})
+    if conf:
+        lines.append("## Strategy Confidence (with decay)")
+        lines.append("")
+        for axis, score in sorted(conf.items(), key=lambda x: -x[1]):
+            bar = "#" * int(score * 10) + "." * (10 - int(score * 10))
+            lines.append(f"- {axis}: {score:.0%} [{bar}]")
+        lines.append("")
+
     # Prompt fingerprint
     fp = data.get("prompt_fingerprint", {})
     if fp:
@@ -504,20 +555,42 @@ def run(prompt_path, max_iterations=100, verbose=False):
     learnings = []
     prev_learnings = load_learnings(prompt_dir)
 
-    # Use prior learnings to identify unreliable strategies
+    # Use prior learnings for intelligent strategy selection
     skip_axes = set()
+    prioritize_axes = []
+    neg_examples = prev_learnings.get("negative_examples", [])
+    confidence = prev_learnings.get("confidence_scores", {})
+
     for p in prev_learnings.get("patterns", []):
-        if p.get("type") == "unreliable_strategy":
+        if p.get("type") == "unreliable":
             skip_axes.add(p.get("axis", ""))
+        if p.get("type") == "reliable":
+            prioritize_axes.append(p.get("axis", ""))
+
+    # Negative examples: don't repeat strategies that failed at similar scores
+    for neg in neg_examples:
+        neg_axis = neg.get("axis", "")
+        neg_score = neg.get("score_at_attempt", 0)
+        # If we failed fixing this axis at a similar score range before, skip it
+        if neg_axis and neg_score > 0:
+            skip_axes.add(neg_axis)  # conservative — skip any previously-failed axis
+
+    num_sessions = len(prev_learnings.get("sessions", []))
+    num_negs = len(neg_examples)
+    recs = prev_learnings.get("recommendations", [])
 
     print(f"\n{'=' * 60}")
     print(f"  FLUX CONVERGENCE ENGINE (Gauss Method)")
     print(f"  Target: DEPLOY (overall >= 9.0, all axes >= 7.0)")
     print(f"  Max iterations: {max_iterations}")
-    if prev_learnings.get("sessions"):
-        print(f"  Prior sessions: {len(prev_learnings['sessions'])} | Patterns: {len(prev_learnings.get('patterns', []))}")
+    if num_sessions:
+        print(f"  Prior knowledge: {num_sessions} sessions, {num_negs} negative examples, {len(confidence)} confidence scores")
     if skip_axes:
-        print(f"  Skipping unreliable: {', '.join(skip_axes)}")
+        print(f"  Skipping (learned): {', '.join(skip_axes)}")
+    if prioritize_axes:
+        print(f"  Prioritizing (learned): {', '.join(prioritize_axes)}")
+    if recs:
+        print(f"  Top recommendation: {recs[0][:70]}...")
     print(f"{'=' * 60}\n")
 
     for iteration in range(1, max_iterations + 1):
@@ -561,11 +634,16 @@ def run(prompt_path, max_iterations=100, verbose=False):
                 save_learnings(prompt_dir, learnings, prev_learnings, best_text)
                 return scores
 
-        # Form hypothesis — Gauss Method: target weakest axis, skip known-unreliable
+        # Form hypothesis — Gauss Method: target weakest axis, weighted by confidence
         axes_by_score = sorted(AXES, key=lambda a: scores[a])
-        # Skip axes that historically always revert (learned from prior sessions)
+        # Filter out axes that are known-unreliable (unless critically low)
         viable = [a for a in axes_by_score if a not in skip_axes or scores[a] < 5]
-        weakest = viable[0] if viable else axes_by_score[0]
+        if not viable:
+            viable = axes_by_score
+        # Among viable, prefer axes with higher historical confidence
+        if confidence:
+            viable.sort(key=lambda a: (scores[a], -(confidence.get(a, 0.5))))
+        weakest = viable[0]
         hypothesis = f"Fixing {weakest} (currently {scores[weakest]}/10) will improve overall from {overall}"
 
         # Progress update
@@ -594,22 +672,39 @@ def run(prompt_path, max_iterations=100, verbose=False):
 
         # Check for regression — Gauss revert: reject if deviation increased
         new_scores = score_prompt(text)
+        new_assertions = run_assertions(text)
+        new_failed = [a for a in new_assertions if not a[1]]
+
+        # Build reasoning chain — WHY did we choose this fix?
+        reasoning = f"Targeted {weakest} ({scores[weakest]}/10) because it was the lowest axis."
+        if weakest in skip_axes:
+            reasoning += " (Historically unreliable but score was critically low.)"
+        if failed:
+            reasoning += f" Also had {len(failed)} failing assertion(s): {', '.join(a[0] for a in failed)}."
+
         if new_scores["overall"] < overall - 0.5:
             text = pre_fix_text
             delta = new_scores["overall"] - overall
             outcome = f"REVERTED — regression from {overall} to {new_scores['overall']}"
             learnings.append({
                 "iteration": iteration, "axis": weakest, "hypothesis": hypothesis,
+                "reasoning": reasoning,
                 "result": "reverted", "outcome": outcome, "delta": delta,
                 "start_score": overall, "end_score": overall,
+                "why_failed": f"Fix caused {weakest} regression: {scores[weakest]}->{new_scores[weakest]}. Other axes affected: {', '.join(a for a in AXES if new_scores[a] < scores[a])}",
             })
         else:
             delta = new_scores["overall"] - overall
             outcome = f"{'improved' if delta > 0 else 'unchanged'} ({overall} → {new_scores['overall']})"
+            # Track which specific axes improved/degraded
+            axis_changes = {a: round(new_scores[a] - scores[a], 1) for a in AXES if new_scores[a] != scores[a]}
             learnings.append({
                 "iteration": iteration, "axis": weakest, "hypothesis": hypothesis,
+                "reasoning": reasoning,
                 "result": "applied", "outcome": outcome, "delta": delta,
                 "start_score": overall, "end_score": new_scores["overall"],
+                "axis_changes": axis_changes,
+                "assertions_fixed": [a[0] for a in failed if a[0] not in [nf[0] for nf in new_failed]],
             })
 
     # Max iterations
