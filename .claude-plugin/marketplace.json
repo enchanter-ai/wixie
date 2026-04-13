@@ -4,8 +4,8 @@
     "name": "enchanted-plugins"
   },
   "metadata": {
-    "description": "Prompt engineering marketplace with multi-agent convergence pipeline. 16 techniques, 64 models, autonomous perfection.",
-    "version": "2.0.0"
+    "description": "End-to-end prompt engineering platform. Create, optimize, test, harden, and translate prompts across 64 models with multi-agent pipelines.",
+    "version": "3.0.0"
   },
   "plugins": [
     {
@@ -23,8 +23,26 @@
     {
       "name": "convergence-engine",
       "source": "./plugins/convergence-engine",
-      "description": "Standalone prompt optimizer. Iterates up to 100 times with multi-agent review. Use on any prompt.",
+      "description": "Autonomous prompt optimizer. Up to 100 iterations with hypothesis-driven fixes, binary assertions, and auto-revert.",
       "category": "optimization"
+    },
+    {
+      "name": "prompt-tester",
+      "source": "./plugins/prompt-tester",
+      "description": "Executes tests.json against model output. Pass/fail assertions, regression testing, CI/CD compatible.",
+      "category": "testing"
+    },
+    {
+      "name": "prompt-harden",
+      "source": "./plugins/prompt-harden",
+      "description": "Tests prompts against 12 adversarial attack patterns. Reports vulnerabilities, suggests defenses. OWASP LLM Top 10.",
+      "category": "security"
+    },
+    {
+      "name": "prompt-translate",
+      "source": "./plugins/prompt-translate",
+      "description": "Converts prompts between models. Claude to GPT, GPT to Gemini, any to o-series. Preserves intent, adapts format.",
+      "category": "portability"
     }
   ]
 }
