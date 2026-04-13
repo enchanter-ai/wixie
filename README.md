@@ -117,6 +117,23 @@ Recommended alternatives:
 Continue with Gemini anyway? Or switch?
 ```
 
+## The Full Lifecycle
+
+```
+  Create          Optimize         Test           Harden          Translate
+  /enchant    →   /converge    →   /test-prompt → /harden     →  /translate-prompt
+  ┌─────────┐    ┌───────────┐    ┌───────────┐  ┌───────────┐  ┌──────────────┐
+  │ Crafter │───▶│Convergence│───▶│  Tester   │─▶│ Hardener  │─▶│  Translator  │
+  │  (Opus) │    │ (Sonnet)  │    │ (Sonnet)  │  │ (Sonnet)  │  │  (Sonnet)    │
+  └─────────┘    └───────────┘    └───────────┘  └───────────┘  └──────────────┘
+       │              │                │               │               │
+       ▼              ▼                ▼               ▼               ▼
+   prompt.xml    9.3/10 DEPLOY    5/5 PASS       10/12 RESIST    prompt-gpt.md
+   + metadata    + learnings.md   + results.json + audit.json    + comparison
+```
+
+Refine anytime with `/refine`. Every step is autonomous.
+
 ## Install
 
 ```
@@ -129,6 +146,9 @@ Full suite:
 /plugin install prompt-crafter@flux
 /plugin install prompt-refiner@flux
 /plugin install convergence-engine@flux
+/plugin install prompt-tester@flux
+/plugin install prompt-harden@flux
+/plugin install prompt-translate@flux
 ```
 
 Or manually:
@@ -136,15 +156,16 @@ Or manually:
 bash <(curl -s https://raw.githubusercontent.com/enchanted-plugins/flux/main/install.sh)
 ```
 
-## 3 Plugins, 4 Agents, 64 Models
+## 6 Plugins, 7 Agents, 64 Models
 
-| Plugin | What | Agents |
-|--------|------|--------|
-| prompt-crafter | Creates new prompts with full pipeline | reviewer (Haiku) |
-| prompt-refiner | Improves existing prompts, preserves intent | reviewer (Haiku) |
-| convergence-engine | Standalone optimizer — use on any prompt | optimizer (Sonnet) + reviewer (Haiku) |
-
-All three plugins delegate convergence to the **convergence-engine** plugin. No duplication.
+| Plugin | Command | What | Agent |
+|--------|---------|------|-------|
+| prompt-crafter | `/enchant` | Creates new prompts with full pipeline | reviewer (Haiku) |
+| prompt-refiner | `/refine` | Improves existing prompts, preserves intent | reviewer (Haiku) |
+| convergence-engine | `/converge` | 100-iteration autonomous optimizer | optimizer (Sonnet) + reviewer (Haiku) |
+| prompt-tester | `/test-prompt` | Executes tests.json assertions, pass/fail | executor (Sonnet) |
+| prompt-harden | `/harden` | 12 adversarial attack patterns, defense suggestions | red-team (Sonnet) |
+| prompt-translate | `/translate-prompt` | Converts between 64 models, preserves intent | adapter (Sonnet) |
 
 ### Supported Models
 
@@ -179,21 +200,20 @@ The **PDF audit report** includes: quality score bars, binary assertion results,
 
 ## vs Everything Else
 
-| | Flux | AutoResearch | Ralph Loop | PromptLayer | Manual |
+| | Flux | Promptfoo | AutoResearch | PromptLayer | Manual |
 |---|---|---|---|---|---|
-| Multi-agent pipeline | Opus + Sonnet + Haiku | single agent | single loop | - | - |
-| Autonomous iterations | up to 100 | unbounded | session-based | - | - |
-| Binary assertions | 8 pass/fail checks | hypothesis-based | completion-promise | - | - |
-| Auto-revert on regression | yes | git-based | - | - | - |
-| Learnings persistence | learnings.md | learnings.md | - | - | - |
-| Model-specific formatting | 64 models, auto-adapted | - | - | manual | manual |
-| Technique selection | 16 techniques, auto-routed | - | - | - | trial and error |
-| Model fit check | warns + suggests alternatives | - | - | - | - |
-| PDF audit report | dark theme, single page | - | - | basic metrics | - |
-| Image prompt collaboration | forced feedback loop | - | - | - | - |
-| Cost estimate | per-call + monthly | - | - | post-hoc | - |
-| Dependencies | Python stdlib only | Python | Python | SaaS | - |
-| Price | Free (MIT) | Free | Free | $$$ | Free |
+| Create prompts | 16 techniques, 64 models | - | - | - | trial and error |
+| Optimize prompts | 100 autonomous iterations | - | unbounded | - | - |
+| Test prompts | pass/fail assertions | YAML eval suite | hypothesis | basic metrics | - |
+| Harden prompts | 12 attack patterns | red-team module | - | - | - |
+| Translate prompts | 64 models, auto-adapted | - | - | - | manual rewrite |
+| Multi-agent | Opus + Sonnet + Haiku | - | single agent | - | - |
+| Binary assertions | 8 checks + auto-revert | custom assertions | hypothesis | - | - |
+| PDF audit report | dark theme, single page | - | - | dashboard | - |
+| Model fit check | warns + suggests | - | - | - | - |
+| Cost estimate | per-call + monthly | post-hoc | - | post-hoc | - |
+| Dependencies | Python stdlib only | Node.js | Python | SaaS | - |
+| Price | Free (MIT) | Free / Pro | Free | $$$ | Free |
 
 ## Contributing
 

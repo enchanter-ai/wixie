@@ -21,18 +21,27 @@ Before submitting a PR, verify:
 
 ```
 flux/
-├── .claude-plugin/marketplace.json    Marketplace (3 plugins)
+├── .claude-plugin/marketplace.json    Marketplace (6 plugins)
 ├── plugins/
-│   ├── prompt-crafter/                Creates prompts
+│   ├── prompt-crafter/                Creates prompts (/enchant)
 │   │   ├── skills/ (enchanter + reviewer)
-│   │   ├── agents/ (convergence + reviewer)
+│   │   ├── agents/ (reviewer)
 │   │   └── hooks/ (PostToolUse)
-│   ├── prompt-refiner/                Improves prompts
+│   ├── prompt-refiner/                Improves prompts (/refine)
 │   │   ├── skills/ (improver)
-│   │   └── agents/ (convergence + reviewer)
-│   └── convergence-engine/            Standalone optimizer
-│       ├── skills/ (converge)
-│       └── agents/ (optimizer + reviewer)
+│   │   └── agents/ (reviewer)
+│   ├── convergence-engine/            Autonomous optimizer (/converge)
+│   │   ├── skills/ (converge)
+│   │   └── agents/ (optimizer + reviewer)
+│   ├── prompt-tester/                 Test assertions (/test-prompt)
+│   │   ├── skills/ (test-runner)
+│   │   └── agents/ (executor)
+│   ├── prompt-harden/                 Security audit (/harden)
+│   │   ├── skills/ (harden)
+│   │   └── agents/ (red-team)
+│   └── prompt-translate/              Cross-model conversion (/translate-prompt)
+│       ├── skills/ (translate)
+│       └── agents/ (adapter)
 ├── shared/
 │   ├── references/                    Technique engine, model profiles, formats
 │   ├── scripts/                       convergence.py, self-eval.py, token-count.py, report-gen.py, html-to-pdf.py
@@ -77,7 +86,7 @@ Register the plugin in `.claude-plugin/marketplace.json`.
 bash tests/run-all.sh
 ```
 
-12 tests: 7 prompt-crafter, 3 prompt-refiner, 2 convergence-engine.
+15 tests: 7 prompt-crafter, 3 prompt-refiner, 2 convergence-engine, 1 prompt-tester, 1 prompt-harden, 1 prompt-translate.
 
 ## Submitting
 
