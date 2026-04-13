@@ -1,27 +1,23 @@
 # Flux
 
-Open-source Claude Code plugin that engineers prompts — not templates.
+The first prompt engineering platform that learns from itself.
 
-**Every technique accounted for. Every model adapted. Every prompt converged.**
+**6 plugins. 7 agents. 64 models. One command.**
 
-> Wrote a vague one-liner about stock analysis.
-> Flux ran 4 iterations autonomously. Fixed clarity, added fallbacks,
-> restructured for Claude Opus XML. Scored 9.3/10. Delivered a
-> production-ready prompt I'd have spent an hour writing manually.
+> "Build me a B2B ticket routing system like Zendesk."
+>
+> Flux researched Zendesk, Freshdesk, Intercom, and Crisp. Selected 3 techniques
+> for Claude Opus. Generated 10KB of production-ready prompt. Ran the Convergence
+> Engine — 2 iterations, hypothesis-driven, auto-fixed Failure Resilience from 5 to 10.
+> Scored 9.4/10. DEPLOY. All 8 assertions pass. Dark-themed PDF audit report delivered.
+>
+> Time: under 2 minutes. Manual effort: zero.
 
-## The Problem
+## How It Works
 
-Most prompt tools give you a template. Paste your task, get a wall of text, hope it works. But models aren't the same:
+Flux doesn't generate prompts. It **engineers** them — then stress-tests, hardens, and translates them across 64 models.
 
-- **Chain-of-Thought** boosts GPT and cripples o3
-- **XML tags** sharpen Claude and confuse Gemini
-- **Few-shot examples** are mandatory for Gemini, wasted tokens for o-series
-
-The prompting techniques that make one model sing make another one choke.
-
-## What Flux Does
-
-Give it a vague idea or an underperforming prompt. A network of specialized agents takes over:
+The core innovation is the **Convergence Engine** (סטיית תקן strategy): like gradient descent for prompts, each iteration measures the deviation from perfection, forms a hypothesis about which fix will reduce it, applies the fix, checks for regression, and auto-reverts if things got worse. It learns from every iteration and persists those learnings across sessions.
 
 ```
 You: "I need a prompt for Claude Opus to analyze stocks"
@@ -36,86 +32,75 @@ You: "I need a prompt for Claude Opus to analyze stocks"
   ┌──────────────────────┐           ┌──────────────────────┐
   │  OPTIMIZER (Sonnet)  │           │  REVIEWER (Haiku)    │
   │                      │           │                      │
-  │  Convergence Engine  │──────────▶│  9 validation checks │
+  │  Convergence Engine  │──────────▶│  Validation checks   │
   │  Up to 100 iterations│  when     │  Score freshness     │
   │  Hypothesis-driven   │  done     │  Format alignment    │
   │  Binary assertions   │           │  Registry cross-ref  │
   │  Auto-revert on      │           │  Domain coherence    │
   │  regression          │           │  APPROVED / FAIL     │
   └──────────────────────┘           └──────────────────────┘
-
-  Result: 9.3/10. DEPLOY. 1 iteration. Zero manual fixes.
-  Saved: prompt.xml + metadata.json + tests.json + report.pdf
 ```
 
-No permission prompts. No manual iteration. You describe the task, the agent network delivers a production-ready prompt with a PDF audit report.
+No permission prompts. No manual iteration. You describe what you need, the agent network delivers.
 
-## The Convergence Engine
+## What Makes Flux Different
 
-Other tools score your prompt and wish you luck. Flux fixes it.
+### It supports every model you actually use
 
-The engine runs up to **100 autonomous iterations**. Each cycle:
-1. **Scores** the prompt on 5 axes + 8 binary assertions
-2. **Forms a hypothesis** about which fix will improve the weakest axis
-3. **Applies the fix** — removes hedge words, adds missing components, restructures format
-4. **Re-scores** and checks for regression
-5. **Auto-reverts** if the fix made things worse
-6. **Logs learnings** to `learnings.md` for persistence across sessions
+**64 models** across text, code, image, video, and audio. Not just the big 3.
+
+Text LLMs: Claude (Opus/Sonnet/Haiku), GPT (4.1/4o/5), o-series (o1/o3/o4-mini), Gemini (2.5/3), DeepSeek (R1/V3), Grok, Qwen, Llama, Mistral, Cohere, Jamba, Amazon Nova, Phi, Yi, Codestral, Perplexity.
+
+**Image generation**: DALL-E 3, GPT Image 1.5, Midjourney v6/v7/v8, Niji 7, Stable Diffusion 3.5, FLUX.1/2 (Pro/Flex/Max/Kontext/Schnell), Ideogram 2/3, Imagen 3/4, Recraft V4, Reve Image, Adobe Firefly 5, Nano Banana (Pro/2), Seedream 4.5/5, Luma Photon, HunyuanImage 3, Kling Image 03, Wan 2.7.
+
+**Video**: Runway Gen-3, Seedance 2.0. **Audio**: ElevenLabs, Suno v4.
+
+Every model has a registry entry with context window, preferred format, reasoning type, CoT approach, few-shot requirements, and key constraints. The engine adapts automatically — XML for Claude, Markdown with sandwich method for GPT, stripped-down minimal for o-series, always-few-shot for Gemini.
+
+### It learns from itself
+
+The Convergence Engine doesn't just loop — it **learns**. Each iteration:
+
+1. **Scores** on 5 axes + 8 binary assertions
+2. **Forms a hypothesis**: "Fixing Failure Resilience (5/10) will improve overall"
+3. **Applies the fix** and re-scores
+4. **Auto-reverts** if the score dropped (no regression allowed)
+5. **Logs the outcome** to `learnings.md` — what worked, what didn't, why
 
 ```
 FLUX CONVERGENCE ENGINE
 Target: DEPLOY (overall >= 9.0, all axes >= 7.0)
 
-Iteration 1:  4.4/10 — hypothesis: fix Completeness
-              failed assertions: has_role, has_task, has_format, has_constraints (7/8)
-Iteration 2:  8.3/10 — hypothesis: fix Model Fit
-              REVERTED — regression detected, kept previous version
-Iteration 3:  8.3/10 — PLATEAU
+Iteration 1:  8.4/10 — hypothesis: fix Failure Resilience
+              applied → improved (8.4 → 9.4)
+Iteration 2:  9.4/10 — DEPLOY (8/8 assertions pass)
 
-FINAL: 8.3/10 | ASSERTIONS: 7/8 pass | VERDICT: BEST EFFORT
+VERDICT: DEPLOY
 ```
 
-**For text prompts:** Fully autonomous. Up to 100 iterations. Zero user input.
+Next time you refine that prompt, the engine reads `learnings.md` and avoids repeating failed strategies. It gets smarter with every use.
 
-**For image prompts:** Collaborative loop. You generate the image externally, rate it 1-10, tell Flux what's wrong. It adjusts, you try again. No iteration limit.
+### It works with image prompts too
 
-## The Agent Network
+For text prompts: fully autonomous, up to 100 iterations, zero user input.
 
-Three tiers. Each agent uses the optimal model for its role.
+For **image generation prompts** (DALL-E, Midjourney, Stable Diffusion, Flux, Nano Banana, and 20+ more): collaborative loop. You generate the image on your platform, rate it 1-10, tell the agent what's wrong. It adjusts the prompt based on your visual feedback — colors, composition, style, missing elements. No iteration limit. After 5+ rounds, it summarizes patterns and suggests trying a different model if issues persist.
 
-| Role | Model | What it does | Cost |
-|------|-------|-------------|------|
-| **Orchestrator** | Opus | Designs the prompt. Understands intent, selects techniques, makes judgment calls. | Highest quality |
-| **Optimizer** | Sonnet | Runs convergence.py. Executes fixes, manages artifacts. Doesn't need heavy reasoning. | Balanced |
-| **Reviewer** | Haiku | Validates files, checks JSON, compares scores. Simple pass/fail checks. Fastest. | Cheapest |
+### It catches model mismatches before you waste time
 
-The orchestrator delegates convergence to the optimizer (background), then the reviewer validates the result. If the reviewer finds issues, the optimizer re-runs. This loop continues until APPROVED or 3 review cycles.
+Pick Claude for image generation? GPT for a task that needs reasoning-native? Gemini without examples?
 
-### Plugin-Specific Review Checks
+Flux cross-references your model choice against the task domain and warns you with better alternatives — before generating a single token.
 
-| Plugin | Reviewer Checks | Total |
-|--------|----------------|-------|
-| **prompt-crafter** | Standard (5) + technique rationale, version=1, no stale placeholders, domain coherence | 9 checks |
-| **prompt-refiner** | Standard (5) + before/after scores, score improvement, version>1, refined timestamp, mode=refine | 10 checks |
-| **convergence-engine** | File completeness, metadata consistency, score freshness, format alignment, test coverage, learnings | 6 checks |
+### It hardens your prompts against attacks
 
-## Model Fit Check
+12 adversarial attack patterns: direct injection, role override, data extraction, encoding bypass, multi-turn escalation, payload splitting, indirect injection, output manipulation, refusal bypass, language switching, token smuggling, context manipulation.
 
-Pick the wrong model? Flux catches it before wasting your time.
+Reports VULNERABLE or RESISTANT per attack. Suggests specific defenses. Auto-applies them if you want.
 
-```
-⚠️ Model Fit Warning
+### It translates prompts between any two models
 
-You selected Gemini for a coding task.
-Gemini requires few-shot examples and temperature 1.0 — suboptimal for
-deterministic code generation.
-
-Recommended alternatives:
-1. Claude Opus 4.6 — extended thinking, strongest multi-file code gen
-2. GPT-4.1 — literal instruction following, sandwich method
-
-Continue with Gemini anyway? Or switch?
-```
+Wrote the perfect Claude prompt. Now the team needs GPT-4.1. One command: `/translate-prompt --to gpt-4.1`. XML becomes Markdown. "Think thoroughly" becomes "Think step by step." Sandwich method added. Few-shot adjusted. Intent preserved. Score comparison delivered.
 
 ## The Full Lifecycle
 
@@ -128,7 +113,7 @@ Continue with Gemini anyway? Or switch?
   └─────────┘    └───────────┘    └───────────┘  └───────────┘  └──────────────┘
        │              │                │               │               │
        ▼              ▼                ▼               ▼               ▼
-   prompt.xml    9.3/10 DEPLOY    5/5 PASS       10/12 RESIST    prompt-gpt.md
+   prompt.xml    9.4/10 DEPLOY    7/7 PASS       10/12 RESIST    prompt-gpt.md
    + metadata    + learnings.md   + results.json + audit.json    + comparison
 ```
 
@@ -151,7 +136,7 @@ Full suite:
 /plugin install prompt-translate@flux
 ```
 
-Or manually:
+Or one-liner:
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/enchanted-plugins/flux/main/install.sh)
 ```
@@ -160,58 +145,41 @@ bash <(curl -s https://raw.githubusercontent.com/enchanted-plugins/flux/main/ins
 
 | Plugin | Command | What | Agent |
 |--------|---------|------|-------|
-| prompt-crafter | `/enchant` | Creates new prompts with full pipeline | reviewer (Haiku) |
-| prompt-refiner | `/refine` | Improves existing prompts, preserves intent | reviewer (Haiku) |
+| prompt-crafter | `/enchant` | Creates production-ready prompts | reviewer (Haiku) |
+| prompt-refiner | `/refine` | Improves existing prompts | reviewer (Haiku) |
 | convergence-engine | `/converge` | 100-iteration autonomous optimizer | optimizer (Sonnet) + reviewer (Haiku) |
-| prompt-tester | `/test-prompt` | Executes tests.json assertions, pass/fail | executor (Sonnet) |
-| prompt-harden | `/harden` | 12 adversarial attack patterns, defense suggestions | red-team (Sonnet) |
-| prompt-translate | `/translate-prompt` | Converts between 64 models, preserves intent | adapter (Sonnet) |
-
-### Supported Models
-
-| Family | Models | Format |
-|---|---|---|
-| Claude | Opus 4.6, Sonnet 4.6, Haiku 4.5 | XML tags |
-| GPT | 4.1, 4o, 5, Image 1/1.5 | Markdown |
-| o-series | o1, o3, o4-mini | Minimal (no CoT) |
-| Gemini | 2.5 Pro/Flash, 3 | XML or Markdown |
-| DeepSeek | R1 (reasoning), V3 | Markdown |
-| Grok | 2, 3 | Markdown |
-| Qwen | 2.5, 2.5-Coder, QwQ | Markdown |
-| Llama | 4, 3 | Special tokens |
-| Mistral | Large, Codestral | Markdown |
-| Cohere | Command R+ | Markdown |
-| Image Gen | DALL-E 3, GPT Image 1.5, Midjourney v6-v8, Niji 7, SD 3.5, FLUX.1/2, Ideogram 2-3, Imagen 3-4, Recraft V4, Reve Image, Firefly 5, Nano Banana, Seedream 4.5/5, Luma Photon, HunyuanImage 3, Kling Image 03, Wan 2.7 | Descriptors / Natural language |
-| Video Gen | Runway Gen-3, Seedance 2.0 | Natural language |
-| Audio | ElevenLabs, Suno v4 | Natural language |
+| prompt-tester | `/test-prompt` | Runs test assertions, pass/fail | executor (Sonnet) |
+| prompt-harden | `/harden` | 12 attack patterns, defense suggestions | red-team (Sonnet) |
+| prompt-translate | `/translate-prompt` | Converts between 64 models | adapter (Sonnet) |
 
 ## What You Get Per Prompt
 
 ```
-prompts/stocks-analysis/
+prompts/b2b-ticket-router/
 ├── prompt.xml          Production-ready prompt
 ├── metadata.json       Model, tokens, cost, scores, config
-├── tests.json          3-5 regression test cases
+├── tests.json          7 regression test cases
 ├── report.pdf          Dark-themed single-page PDF audit report
 └── learnings.md        Convergence hypothesis/outcome log
 ```
 
-The **PDF audit report** includes: quality score bars, binary assertion results, technique pills (applied/avoided), model profile from registry, prompt statistics (words, lines, sections), audit findings with CRITICAL/WARNING severity, cost estimate per call + monthly projection, and an honest verdict (DEPLOY / REVIEW / IMPROVE / REWORK / DO NOT DEPLOY) with specific next steps.
+The **PDF audit report** includes: quality score bars, 8 binary assertion results, technique pills, model profile from the 64-model registry, prompt statistics, audit findings (CRITICAL/WARNING), cost estimate, and an honest verdict with next steps.
 
 ## vs Everything Else
 
 | | Flux | Promptfoo | AutoResearch | PromptLayer | Manual |
 |---|---|---|---|---|---|
 | Create prompts | 16 techniques, 64 models | - | - | - | trial and error |
-| Optimize prompts | 100 autonomous iterations | - | unbounded | - | - |
+| Optimize (convergence) | 100 iterations, self-learning | - | unbounded | - | - |
 | Test prompts | pass/fail assertions | YAML eval suite | hypothesis | basic metrics | - |
 | Harden prompts | 12 attack patterns | red-team module | - | - | - |
 | Translate prompts | 64 models, auto-adapted | - | - | - | manual rewrite |
-| Multi-agent | Opus + Sonnet + Haiku | - | single agent | - | - |
-| Binary assertions | 8 checks + auto-revert | custom assertions | hypothesis | - | - |
+| Image LLM support | 27 image models + collab loop | - | - | - | - |
+| Video/Audio support | Runway, Seedance, ElevenLabs, Suno | - | - | - | - |
+| Multi-agent pipeline | Opus + Sonnet + Haiku | - | single agent | - | - |
+| Self-learning | learnings.md persistence | - | learnings.md | - | - |
+| Auto-revert | yes (regression protection) | - | git-based | - | - |
 | PDF audit report | dark theme, single page | - | - | dashboard | - |
-| Model fit check | warns + suggests | - | - | - | - |
-| Cost estimate | per-call + monthly | post-hoc | - | post-hoc | - |
 | Dependencies | Python stdlib only | Node.js | Python | SaaS | - |
 | Price | Free (MIT) | Free / Pro | Free | $$$ | Free |
 
