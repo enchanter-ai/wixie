@@ -55,10 +55,21 @@ graph TD
     end
 
     Opt -->|"when done"| Rev
+    Rev -->|"APPROVED"| OT
+
+    subgraph OT["OUTPUT TESTER (Hybrid)"]
+        direction LR
+        pre["Pre-flight<br/><small>free</small>"]
+        gen2["Generate output"]
+        eval["Evaluate<br/><small>5-axis heuristic</small>"]
+        fix["Fix & loop"]
+        pre --> gen2 --> eval --> fix
+    end
 
     style Orch fill:#161b22,stroke:#bc8cff,color:#e6edf3
     style Opt fill:#161b22,stroke:#58a6ff,color:#e6edf3
     style Rev fill:#161b22,stroke:#3fb950,color:#e6edf3
+    style OT fill:#161b22,stroke:#f0883e,color:#e6edf3
 ```
 
 No permission prompts. No manual iteration. You describe what you need, the agent network delivers.
@@ -127,19 +138,22 @@ Wrote the perfect Claude prompt. Now the team needs GPT-4.1. One command: `/tran
 ```mermaid
 graph LR
     A["🎨 Crafter<br/><small>Opus</small><br/>/create"] -->|prompt.xml| B["⚡ Convergence<br/><small>Sonnet</small><br/>/converge"]
-    B -->|"9.4/10 DEPLOY"| C["🧪 Tester<br/><small>Sonnet</small><br/>/test-prompt"]
-    C -->|"7/7 PASS"| D["🛡️ Hardener<br/><small>Sonnet</small><br/>/harden"]
+    B -->|"9.0/10 DEPLOY"| C["🧪 Tester<br/><small>Sonnet</small><br/>/test-prompt"]
+    C -->|"7/7 PASS"| F["📊 Output Test<br/><small>Hybrid</small><br/>output-test.py"]
+    F -->|"9.9/10 PASS"| D["🛡️ Hardener<br/><small>Sonnet</small><br/>/harden"]
     D -->|"10/12 RESIST"| E["🌐 Translator<br/><small>Sonnet</small><br/>/translate-prompt"]
 
     A2(["prompt.xml<br/>+ metadata"]) ~~~ A
     B2(["learnings.md"]) ~~~ B
     C2(["results.json"]) ~~~ C
+    F2(["output-reference.md<br/>+ schema + scores"]) ~~~ F
     D2(["audit.json"]) ~~~ D
     E2(["prompt-gpt.md<br/>+ comparison"]) ~~~ E
 
     style A fill:#161b22,stroke:#bc8cff,color:#e6edf3
     style B fill:#161b22,stroke:#58a6ff,color:#e6edf3
     style C fill:#161b22,stroke:#3fb950,color:#e6edf3
+    style F fill:#161b22,stroke:#f0883e,color:#e6edf3
     style D fill:#161b22,stroke:#f85149,color:#e6edf3
     style E fill:#161b22,stroke:#d29922,color:#e6edf3
 ```
