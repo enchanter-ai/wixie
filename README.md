@@ -1,5 +1,13 @@
 # Flux
 
+<p align="center">
+  <a href="LICENSE.txt"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-3fb950?style=for-the-badge"></a>
+  <img alt="6 plugins" src="https://img.shields.io/badge/Plugins-6-bc8cff?style=for-the-badge">
+  <img alt="64 models" src="https://img.shields.io/badge/Models-64-58a6ff?style=for-the-badge">
+  <img alt="7 agents" src="https://img.shields.io/badge/Agents-7-d29922?style=for-the-badge">
+  <img alt="Gauss Convergence Method" src="https://img.shields.io/badge/Gauss-Convergence-f0883e?style=for-the-badge">
+</p>
+
 > **An @enchanted-plugins product — algorithm-driven, agent-managed, self-learning.**
 
 The first prompt engineering platform that learns from itself.
