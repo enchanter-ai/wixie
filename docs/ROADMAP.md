@@ -29,13 +29,13 @@ The template is the contract. When it drifts, all downstream siblings drift — 
 
 The first 5 plugins answer the 5 fundamental questions of AI-assisted development.
 
-| # | Plugin | Question | Algorithms | Status |
-|---|--------|----------|------------|--------|
-| 1 | **Flux** | What did I say? (prompt quality) | Gauss Convergence, Boolean SAT, Game Theory, Cross-Domain Adaptation | Shipped |
-| 2 | **Allay** | What did I spend? (token health) | Markov Drift, Shannon Compression, Linear Runway, Atomic Serialization | Shipped |
-| 3 | **Hornet** | What just happened? (change comprehension) | Bayesian Trust, Semantic Diff, Information-Gain, Session Continuity | Prompt ready |
-| 4 | **Reaper** | Is it safe? (security) | Aho-Corasick, Shannon Entropy, Config Poisoning, Phantom Dependency, Threat Convergence | Next |
-| 5 | **Nook** | What did it cost? (spend tracking) | Exponential Smoothing, Budget Forecasting | Next |
+| # | Plugin | Question | Algorithms | Version | Status |
+|---|--------|----------|------------|---------|--------|
+| 1 | **Flux** | What did I say? (prompt quality) | Gauss Convergence, Boolean SAT, Game Theory, Cross-Domain Adaptation | v3.0.0 | Shipped — 7 plugins |
+| 2 | **Allay** | What did I spend? (token health) | Markov Drift, Shannon Compression, Linear Runway, Atomic Serialization | v2.0.0 | Shipped — 4 plugins |
+| 3 | **Hornet** | What just happened? (change comprehension) | Bayesian Trust, Semantic Diff, Information-Gain, Session Continuity | v1.0.0 | Shipped — 5 plugins |
+| 4 | **Reaper** | Is it safe? (security) | Aho-Corasick, Shannon Entropy, Config Poisoning, Phantom Dependency, Threat Convergence | v1.0.0 | Shipped — 6 plugins |
+| 5 | **Nook** | What did it cost? (spend tracking) | Exponential Smoothing, Budget Forecasting | — | Not started |
 
 ### Milestone: 5 plugins shipped
 - Each plugin is a standalone Claude Code marketplace
@@ -131,7 +131,7 @@ Add 5 more plugins covering code quality, testing, DevOps, documentation, and AP
 | 18 | **Synapse** | CRDT Knowledge Merging | Collaboration |
 | 19 | **Vault** | Three-Way Merge Diffing | Database |
 | 20 | **Relay** | Event Sourcing + Saga Pattern | Webhooks |
-| 21 | **Weaver** | Jaccard-Cosine Boundary Segmentation + Myers-Diff Conventional Classifier | Git workflow |
+| 21 | **Weaver** ✓ | Jaccard-Cosine Boundary Segmentation + Myers-Diff Conventional Classifier | Git workflow (shipped early — v0.0.1, 9 plugins) |
 
 ### Production MCP Features
 
@@ -156,10 +156,10 @@ Add 5 more plugins covering code quality, testing, DevOps, documentation, and AP
 
 | Phase | Milestone | Plugins | Target |
 |-------|-----------|---------|--------|
-| 1 | Foundation | 5 (Flux, Allay, Hornet, Reaper, Nook) | Q2 2026 |
+| 1 | Foundation | 5 (Flux, Allay, Hornet, Reaper, Nook) — 4/5 shipped (Nook not started) | Q2 2026 |
 | 2 | MCP POC | 5 + MCP client | Q3 2026 |
 | 3 | Full Coverage | 10 + enhanced MCP | Q4 2026 |
-| 4 | Production | 21 + production MCP | Q1 2027 |
+| 4 | Production | 21 + production MCP — Weaver (#21) shipped early | Q1 2027 |
 
 ---
 
