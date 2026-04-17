@@ -119,6 +119,7 @@ Add 5 more plugins covering code quality, testing, DevOps, documentation, and AP
 | 18 | **Synapse** | CRDT Knowledge Merging | Collaboration |
 | 19 | **Vault** | Three-Way Merge Diffing | Database |
 | 20 | **Relay** | Event Sourcing + Saga Pattern | Webhooks |
+| 21 | **Weaver** | Jaccard-Cosine Boundary Segmentation + Myers-Diff Conventional Classifier | Git workflow |
 
 ### Production MCP Features
 
@@ -130,7 +131,7 @@ Add 5 more plugins covering code quality, testing, DevOps, documentation, and AP
 - Telemetry and analytics (opt-in)
 - Plugin SDK for third-party developers
 
-### Milestone: 20 plugins + production MCP
+### Milestone: 21 plugins + production MCP
 - Full developer operating system
 - Every stage of AI-assisted development covered
 - Algorithm-driven, agent-managed, self-learning at every layer
@@ -146,7 +147,7 @@ Add 5 more plugins covering code quality, testing, DevOps, documentation, and AP
 | 1 | Foundation | 5 (Flux, Allay, Hornet, Reaper, Nook) | Q2 2026 |
 | 2 | MCP POC | 5 + MCP client | Q3 2026 |
 | 3 | Full Coverage | 10 + enhanced MCP | Q4 2026 |
-| 4 | Production | 20 + production MCP | Q1 2027 |
+| 4 | Production | 21 + production MCP | Q1 2027 |
 
 ---
 
@@ -164,6 +165,7 @@ Every plugin is named after a game entity that metaphorically describes its func
 | **Athena** | Athena | Hades | Goddess of wisdom who judges your combat quality and grants boons for excellence — code review |
 | **Crucible** | Crucible | Terraria | Endgame crafting station forged in hellfire — tests things to destruction — mutation testing |
 | **Assembler** | Assembling Machine | Factorio | Takes parts in, produces artifacts out, chains into automated pipelines — CI/CD building |
+| **Weaver** | Weavers | Hollow Knight | Silk-spinners and Hornet's ancestral kin who weave threads into coherent patterns — weaving branches, commits, and PRs into one history |
 
 ## Brand Standard (All Plugins)
 
@@ -207,5 +209,10 @@ Every named algorithm across the ecosystem:
 | S2 | Shannon Entropy Analysis | Reaper | High-entropy string detection |
 | L1 | Exponential Smoothing | Nook | Cost forecasting |
 | L2 | Budget Boundary Detection | Nook | Spend threshold alerting |
+| W1 | Myers-Diff Conventional Classifier | Weaver | Diff-to-Conventional-Commits classification |
+| W2 | Jaccard-Cosine Boundary Segmentation | Weaver | Task-boundary clustering from edit-event stream (defining engine) |
+| W3 | Workflow-Pattern Classifier | Weaver | Repo-signal → branching-model inference |
+| W4 | Path-History Reviewer Routing | Weaver | Blame-graph reviewer suggestion |
+| W5 | Gauss Learning (Weaver) | Weaver | Developer workflow-preference accumulation |
 
-*This is a living document. Update as plugins ship and algorithms evolve.*
+*This is a living document. Update as plugins ship and algorithms evolve. Weaver W1–W5 are seed names from `prompts/weaver-architecture/` — final names emerge from the architecture prompt's output.*
