@@ -6,7 +6,7 @@ config:
   flowchart:
     curve: basis
     padding: 16
-    nodeSpacing: 42
+    nodeSpacing: 40
     rankSpacing: 48
     htmlLabels: true
     subGraphTitleMargin:
@@ -14,44 +14,59 @@ config:
       bottom: 14
 ---
 flowchart TB
-    User(["<b>Developer request</b><br/><span style='color:#8b949e;font-size:13px'>'a prompt for Claude Opus to analyze stocks'</span>"])
+    TitleBlock["<div style='font-family:ui-monospace,SFMono-Regular,Consolas,monospace;text-align:left;min-width:880px;padding:4px 8px'><div style='color:#58a6ff;font-size:14px;letter-spacing:3px;border-bottom:1px solid #1e3a5f;padding-bottom:8px;margin-bottom:8px'>FLUX &nbsp;·&nbsp; PROMPT&nbsp;ENGINEERING &nbsp;·&nbsp; ARCHITECTURE</div><div style='display:flex;gap:28px;font-size:11px;color:#8b949e;letter-spacing:1px'><span>DWG: <b style='color:#e6edf3'>FLX-001</b></span><span>REV: <b style='color:#e6edf3'>A.3</b></span><span>SCALE: <b style='color:#e6edf3'>1:1</b></span><span>TIER: <b style='color:#e6edf3'>Opus &middot; Sonnet &middot; Haiku</b></span><span>SHEET: <b style='color:#e6edf3'>01&nbsp;/&nbsp;01</b></span></div></div>"]
 
-    subgraph Orch["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;01</span>&nbsp;&nbsp;·&nbsp;&nbsp;ORCHESTRATOR&nbsp;&nbsp;·&nbsp;&nbsp;Opus"]
+    User(["<b>Developer request</b>&nbsp;&nbsp;—&nbsp;&nbsp;<em style='color:#8b949e;font-size:13px;font-weight:400'>a prompt for Claude Opus to analyze stocks</em>"])
+
+    subgraph Orch["<div style='text-align:left;min-width:880px'><span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:11px;letter-spacing:2px'>AGENT&nbsp;01</span>&nbsp;&nbsp;·&nbsp;&nbsp;<b>ORCHESTRATOR</b>&nbsp;&nbsp;·&nbsp;&nbsp;<span style='color:#bc8cff'>Opus</span><br/><span style='color:#6e7681;font-size:11px;font-family:ui-monospace,monospace'>judgment &middot; intent recognition &middot; technique selection &middot; typical&nbsp;~15s &middot; ~1.2k&nbsp;tok &middot; ~$0.06</span></div>"]
         direction LR
-        scan["scan context"] --> ask["ask questions"] --> tech["select techniques"] --> gen["generate prompt"]
+        scan["scan context<br/><small style='color:#6e7681'>repo, env, prior prompts</small>"] --> ask["ask questions<br/><small style='color:#6e7681'>clarify intent, domain</small>"] --> tech["select techniques<br/><small style='color:#6e7681'>16-technique registry</small>"] --> gen["generate prompt<br/><small style='color:#6e7681'>XML / MD / minimal</small>"]
     end
 
-    subgraph Opt["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;02</span>&nbsp;&nbsp;·&nbsp;&nbsp;OPTIMIZER&nbsp;&nbsp;·&nbsp;&nbsp;Sonnet"]
+    subgraph Opt["<div style='text-align:left;min-width:880px'><span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:11px;letter-spacing:2px'>AGENT&nbsp;02</span>&nbsp;&nbsp;·&nbsp;&nbsp;<b>OPTIMIZER</b>&nbsp;&nbsp;·&nbsp;&nbsp;<span style='color:#58a6ff'>Sonnet</span><br/><span style='color:#6e7681;font-size:11px;font-family:ui-monospace,monospace'>executor &middot; ≤100&nbsp;iterations &middot; σ&nbsp;target&nbsp;&lt;&nbsp;0.45 &middot; typical&nbsp;30-90s &middot; ~5k&nbsp;tok &middot; ~$0.15</span></div>"]
         direction LR
-        conv["Convergence engine<br/><small>≤ 100 iterations</small>"] --> hypo["hypothesis-driven fix"] --> asrt["8 binary assertions"] --> revert["auto-revert<br/>on regression"]
+        conv["Convergence engine<br/><small style='color:#6e7681'>Gauss method · 5-axis σ</small>"] --> hypo["hypothesis-driven fix<br/><small style='color:#6e7681'>weakest-axis targeting</small>"] --> asrt["8 binary assertions<br/><small style='color:#6e7681'>role · task · format · …</small>"] --> revert["auto-revert<br/><small style='color:#6e7681'>on σ regression</small>"]
     end
 
-    subgraph Rev["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;03</span>&nbsp;&nbsp;·&nbsp;&nbsp;REVIEWER&nbsp;&nbsp;·&nbsp;&nbsp;Haiku"]
+    subgraph Rev["<div style='text-align:left;min-width:880px'><span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:11px;letter-spacing:2px'>AGENT&nbsp;03</span>&nbsp;&nbsp;·&nbsp;&nbsp;<b>REVIEWER</b>&nbsp;&nbsp;·&nbsp;&nbsp;<span style='color:#3fb950'>Haiku</span><br/><span style='color:#6e7681;font-size:11px;font-family:ui-monospace,monospace'>validator &middot; 4&nbsp;gates &middot; fail-open on ambiguity &middot; typical&nbsp;~2s &middot; ~0.8k&nbsp;tok &middot; ~$0.02</span></div>"]
         direction LR
-        val["validation"] --> fresh["score freshness"] --> fmt["format alignment"] --> reg["registry cross-ref"] --> verdict(["APPROVED / FAIL"])
+        val["validation<br/><small style='color:#6e7681'>file completeness</small>"] --> fresh["score freshness<br/><small style='color:#6e7681'>current run vs. cached</small>"] --> fmt["format alignment<br/><small style='color:#6e7681'>target-model contract</small>"] --> reg["registry cross-ref<br/><small style='color:#6e7681'>64-model constraints</small>"] --> verdict(["APPROVED / FAIL"])
     end
 
-    subgraph OT["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;04</span>&nbsp;&nbsp;·&nbsp;&nbsp;OUTPUT&nbsp;TESTER&nbsp;&nbsp;·&nbsp;&nbsp;Hybrid"]
+    subgraph OT["<div style='text-align:left;min-width:880px'><span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:11px;letter-spacing:2px'>AGENT&nbsp;04</span>&nbsp;&nbsp;·&nbsp;&nbsp;<b>OUTPUT&nbsp;TESTER</b>&nbsp;&nbsp;·&nbsp;&nbsp;<span style='color:#d8853b'>Hybrid</span><br/><span style='color:#6e7681;font-size:11px;font-family:ui-monospace,monospace'>verification &middot; 4-phase pipeline &middot; offline by default &middot; API only for fixes &middot; ~free → ~$0.10</span></div>"]
         direction LR
-        pre["pre-flight<br/><small>free</small>"] --> gen2["generate<br/>output"] --> evl["evaluate<br/><small>5-axis heuristic</small>"] --> fix["fix &amp; loop"]
+        pre["pre-flight<br/><small style='color:#6e7681'>prompt QA · budget forecast</small>"] --> gen2["generate output<br/><small style='color:#6e7681'>self-check injected</small>"] --> evl["evaluate<br/><small style='color:#6e7681'>heuristic + schema + assertions</small>"] --> fix["fix &amp; loop<br/><small style='color:#6e7681'>offline regex → Sonnet if needed</small>"]
     end
 
-    User --> Orch
-    Orch --> Opt
-    Opt -->|"when done"| Rev
-    Rev -->|"APPROVED"| OT
+    subgraph Legend["<div style='font-family:ui-monospace,monospace;color:#8b949e;font-size:11px;letter-spacing:2px;min-width:880px;text-align:left'>LEGEND &nbsp;·&nbsp; AGENT TIERS</div>"]
+        direction LR
+        lg1["<span style='color:#bc8cff'>■</span>&nbsp;Opus&nbsp;·&nbsp;orchestrator"] --- lg2["<span style='color:#58a6ff'>■</span>&nbsp;Sonnet&nbsp;·&nbsp;executor"] --- lg3["<span style='color:#3fb950'>■</span>&nbsp;Haiku&nbsp;·&nbsp;validator"] --- lg4["<span style='color:#d8853b'>■</span>&nbsp;Hybrid&nbsp;·&nbsp;offline+API"]
+    end
 
-    classDef tier fill:#0a1628,stroke:#1e3a5f,stroke-width:1px,color:#c9d1d9,rx:6,ry:6
-    classDef user fill:#0a1628,stroke:#1e3a5f,stroke-width:1px,color:#e6edf3
+    TitleBlock ~~~ User
+    User -->|"natural-language intent"| Orch
+    Orch -->|"prompt v1 + metadata"| Opt
+    Opt -->|"when σ &lt; 0.45"| Rev
+    Rev -->|"APPROVED · deploy gate passed"| OT
+    OT ~~~ Legend
+
+    classDef step fill:#0a1628,stroke:#1e3a5f,stroke-width:1px,color:#c9d1d9,rx:6,ry:6
+    classDef user fill:#0a1628,stroke:#1e3a5f,stroke-width:1.5px,color:#e6edf3
     classDef verdictStyle fill:#0f1d33,stroke:#3fb950,stroke-width:2px,color:#3fb950
+    classDef titleBlock fill:#06111f,stroke:#1e3a5f,stroke-width:1px,color:#e6edf3,rx:4,ry:4
+    classDef legend fill:#06111f,stroke:#1e3a5f,stroke-width:1px,color:#8b949e,rx:4,ry:4
+    classDef legendItem fill:#0a1628,stroke:#1e3a5f,stroke-width:0.5px,color:#c9d1d9,rx:4,ry:4
 
     class User user
-    class scan,ask,tech,gen,conv,hypo,asrt,revert,val,fresh,fmt,reg,pre,gen2,evl,fix tier
+    class scan,ask,tech,gen,conv,hypo,asrt,revert,val,fresh,fmt,reg,pre,gen2,evl,fix step
     class verdict verdictStyle
+    class TitleBlock titleBlock
+    class Legend legend
+    class lg1,lg2,lg3,lg4 legendItem
 
     style Orch fill:#0f1d33,stroke:#bc8cff,stroke-width:2px,color:#e6edf3,rx:12,ry:12
     style Opt  fill:#0f1d33,stroke:#58a6ff,stroke-width:2px,color:#e6edf3,rx:12,ry:12
     style Rev  fill:#0f1d33,stroke:#3fb950,stroke-width:2px,color:#e6edf3,rx:12,ry:12
     style OT   fill:#0f1d33,stroke:#d8853b,stroke-width:2px,color:#e6edf3,rx:12,ry:12
 
-    linkStyle 0,1,2,3 stroke:#8b949e,stroke-width:2px
+    linkStyle default stroke:#8b949e,stroke-width:1.5px

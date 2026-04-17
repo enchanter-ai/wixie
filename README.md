@@ -47,14 +47,10 @@ The core innovation is the **Convergence Engine** powered by the **Gauss Converg
 
 The diagram below shows the four-agent pipeline: a user request flows into the **Opus orchestrator** (scan → ask → technique select → generate), which hands off to the **Sonnet optimizer** (convergence, hypothesis-driven fixes, binary assertions, auto-revert) and the **Haiku reviewer** (validation, freshness, format, registry). An approved prompt then enters the **hybrid output tester** (pre-flight → generate → evaluate → fix).
 
-<p align="center">
-  <img src="docs/assets/pipeline.svg"
-       alt="Flux four-agent pipeline: Developer request → Orchestrator (Opus) → Optimizer (Sonnet) → Reviewer (Haiku) → Output Tester (Hybrid)"
-       width="100%" style="max-width: 720px;">
-</p>
-
-<details>
-<summary>&nbsp;<img src="https://img.shields.io/badge/%E2%96%B8%20Diagram-Source%20%26%20regenerate-58a6ff?style=flat-square&labelColor=0a1628" alt="Click to view diagram source and regenerate" valign="middle"></summary>
+<details align="center">
+<summary style="list-style: none; cursor: pointer;"><img src="docs/assets/pipeline.svg"
+       alt="Flux four-agent pipeline blueprint — title block, Developer request, Orchestrator (Opus), Optimizer (Sonnet), Reviewer (Haiku), Output Tester (Hybrid), and tier legend. Click to expand source."
+       width="100%" style="max-width: 1000px;"></summary>
 
 <br/>
 
@@ -63,7 +59,7 @@ Source: [docs/assets/pipeline.mmd](docs/assets/pipeline.mmd). Mobile-safe pre-re
 ```bash
 npx @mermaid-js/mermaid-cli \
   -i docs/assets/pipeline.mmd -o docs/assets/pipeline.svg \
-  -c docs/assets/mermaid.config.json -b "#0a1628" -w 1400 \
+  -c docs/assets/mermaid.config.json -b "#0a1628" -w 1800 \
   && node docs/assets/apply-blueprint.js docs/assets/pipeline.svg
 ```
 
@@ -134,14 +130,10 @@ Wrote the perfect Claude prompt. Now the team needs GPT-4.1. One command: `/tran
 
 A prompt moves left to right through five stages: **Crafter** (Opus, `/create`) produces `prompt.xml` + metadata; **Convergence** (Sonnet, `/converge`) drives it to 9.0+/DEPLOY and appends `learnings.md`; **Tester** (Sonnet, `/test-prompt`) runs assertions; the **Output Test** hybrid pipeline generates and evaluates real model output; **Hardener** (Sonnet, `/harden`) runs 12 attack patterns and emits `audit.json`; **Translator** (Sonnet, `/translate-prompt`) rewrites for a target model with a score comparison attached. Each stage produces a named artifact consumed by the next.
 
-<p align="center">
-  <img src="docs/assets/lifecycle.svg"
-       alt="Flux prompt lifecycle: stages 01 Crafter → 02 Convergence → 03 Tester → 04 Output Test → 05 Hardener → 06 Translator"
-       width="100%" style="max-width: 320px;">
-</p>
-
-<details>
-<summary>&nbsp;<img src="https://img.shields.io/badge/%E2%96%B8%20Diagram-Source%20%26%20regenerate-58a6ff?style=flat-square&labelColor=0a1628" alt="Click to view diagram source and regenerate" valign="middle"></summary>
+<details align="center">
+<summary style="list-style: none; cursor: pointer;"><img src="docs/assets/lifecycle.svg"
+       alt="Flux prompt lifecycle blueprint — 6 stages, Crafter → Convergence → Tester → Output Test → Hardener → Translator. Click to expand source."
+       width="100%" style="max-width: 320px;"></summary>
 
 <br/>
 
