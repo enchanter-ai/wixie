@@ -16,22 +16,22 @@ config:
 flowchart TB
     User(["<b>Developer request</b><br/><span style='color:#8b949e;font-size:13px'>&ldquo;a prompt for Claude Opus to analyze stocks&rdquo;</span>"])
 
-    subgraph Orch["🧠 &nbsp;ORCHESTRATOR &nbsp;·&nbsp; Opus"]
+    subgraph Orch["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;01</span>&nbsp;&nbsp;·&nbsp;&nbsp;ORCHESTRATOR&nbsp;&nbsp;·&nbsp;&nbsp;Opus"]
         direction LR
         scan["scan context"] --> ask["ask questions"] --> tech["select techniques"] --> gen["generate prompt"]
     end
 
-    subgraph Opt["⚡ &nbsp;OPTIMIZER &nbsp;·&nbsp; Sonnet"]
+    subgraph Opt["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;02</span>&nbsp;&nbsp;·&nbsp;&nbsp;OPTIMIZER&nbsp;&nbsp;·&nbsp;&nbsp;Sonnet"]
         direction LR
         conv["Convergence engine<br/><small>≤ 100 iterations</small>"] --> hypo["hypothesis-driven fix"] --> asrt["8 binary assertions"] --> revert["auto-revert<br/>on regression"]
     end
 
-    subgraph Rev["🛡️ &nbsp;REVIEWER &nbsp;·&nbsp; Haiku"]
+    subgraph Rev["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;03</span>&nbsp;&nbsp;·&nbsp;&nbsp;REVIEWER&nbsp;&nbsp;·&nbsp;&nbsp;Haiku"]
         direction LR
         val["validation"] --> fresh["score freshness"] --> fmt["format alignment"] --> reg["registry cross-ref"] --> verdict(["APPROVED / FAIL"])
     end
 
-    subgraph OT["🧪 &nbsp;OUTPUT TESTER &nbsp;·&nbsp; Hybrid"]
+    subgraph OT["<span style='font-family:ui-monospace,monospace;color:#8b949e;font-size:12px;letter-spacing:1.5px'>AGENT&nbsp;04</span>&nbsp;&nbsp;·&nbsp;&nbsp;OUTPUT&nbsp;TESTER&nbsp;&nbsp;·&nbsp;&nbsp;Hybrid"]
         direction LR
         pre["pre-flight<br/><small>free</small>"] --> gen2["generate<br/>output"] --> evl["evaluate<br/><small>5-axis heuristic</small>"] --> fix["fix &amp; loop"]
     end
@@ -41,17 +41,17 @@ flowchart TB
     Opt -->|"when done"| Rev
     Rev -->|"APPROVED"| OT
 
-    classDef tier fill:#0d1117,stroke:#30363d,stroke-width:1px,color:#c9d1d9,rx:6,ry:6
-    classDef user fill:#0d1117,stroke:#484f58,stroke-width:1px,color:#e6edf3
-    classDef verdictStyle fill:#161b22,stroke:#3fb950,stroke-width:2px,color:#3fb950
+    classDef tier fill:#0a1628,stroke:#1e3a5f,stroke-width:1px,color:#c9d1d9,rx:6,ry:6
+    classDef user fill:#0a1628,stroke:#1e3a5f,stroke-width:1px,color:#e6edf3
+    classDef verdictStyle fill:#0f1d33,stroke:#3fb950,stroke-width:2px,color:#3fb950
 
     class User user
     class scan,ask,tech,gen,conv,hypo,asrt,revert,val,fresh,fmt,reg,pre,gen2,evl,fix tier
     class verdict verdictStyle
 
-    style Orch fill:#161b22,stroke:#bc8cff,stroke-width:2px,color:#e6edf3,rx:12,ry:12
-    style Opt  fill:#161b22,stroke:#58a6ff,stroke-width:2px,color:#e6edf3,rx:12,ry:12
-    style Rev  fill:#161b22,stroke:#3fb950,stroke-width:2px,color:#e6edf3,rx:12,ry:12
-    style OT   fill:#161b22,stroke:#d8853b,stroke-width:2px,color:#e6edf3,rx:12,ry:12
+    style Orch fill:#0f1d33,stroke:#bc8cff,stroke-width:2px,color:#e6edf3,rx:12,ry:12
+    style Opt  fill:#0f1d33,stroke:#58a6ff,stroke-width:2px,color:#e6edf3,rx:12,ry:12
+    style Rev  fill:#0f1d33,stroke:#3fb950,stroke-width:2px,color:#e6edf3,rx:12,ry:12
+    style OT   fill:#0f1d33,stroke:#d8853b,stroke-width:2px,color:#e6edf3,rx:12,ry:12
 
     linkStyle 0,1,2,3 stroke:#8b949e,stroke-width:2px

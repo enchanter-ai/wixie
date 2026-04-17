@@ -49,18 +49,21 @@ The diagram below shows the four-agent pipeline: a user request flows into the *
 <p align="center">
   <img src="docs/assets/pipeline.svg"
        alt="Flux four-agent pipeline: Developer request → Orchestrator (Opus) → Optimizer (Sonnet) → Reviewer (Haiku) → Output Tester (Hybrid)"
-       width="100%" style="max-width: 900px;">
+       width="100%" style="max-width: 720px;">
 </p>
 
 <details>
-<summary>View diagram source &amp; regenerate</summary>
+<summary><img src="https://img.shields.io/badge/DIAGRAM-Source%20%26%20regenerate-58a6ff?style=for-the-badge&labelColor=0a1628" alt="View diagram source and regenerate"></summary>
 
-Source: [docs/assets/pipeline.mmd](docs/assets/pipeline.mmd). Mobile-safe pre-rendered SVG. Regenerate:
+<br/>
+
+Source: [docs/assets/pipeline.mmd](docs/assets/pipeline.mmd). Mobile-safe pre-rendered SVG with blueprint overlay. Regenerate:
 
 ```bash
 npx @mermaid-js/mermaid-cli \
   -i docs/assets/pipeline.mmd -o docs/assets/pipeline.svg \
-  -c docs/assets/mermaid.config.json -b "#0d1117" -w 1400
+  -c docs/assets/mermaid.config.json -b "#0a1628" -w 1400 \
+  && node docs/assets/apply-blueprint.js docs/assets/pipeline.svg
 ```
 
 </details>
@@ -132,19 +135,22 @@ A prompt moves left to right through five stages: **Crafter** (Opus, `/create`) 
 
 <p align="center">
   <img src="docs/assets/lifecycle.svg"
-       alt="Flux prompt lifecycle: Crafter → Convergence → Tester → Output Test → Hardener → Translator"
-       width="100%" style="max-width: 560px;">
+       alt="Flux prompt lifecycle: stages 01 Crafter → 02 Convergence → 03 Tester → 04 Output Test → 05 Hardener → 06 Translator"
+       width="100%" style="max-width: 460px;">
 </p>
 
 <details>
-<summary>View diagram source &amp; regenerate</summary>
+<summary><img src="https://img.shields.io/badge/DIAGRAM-Source%20%26%20regenerate-58a6ff?style=for-the-badge&labelColor=0a1628" alt="View diagram source and regenerate"></summary>
 
-Source: [docs/assets/lifecycle.mmd](docs/assets/lifecycle.mmd). Mobile-safe pre-rendered SVG. Regenerate:
+<br/>
+
+Source: [docs/assets/lifecycle.mmd](docs/assets/lifecycle.mmd). Mobile-safe pre-rendered SVG with blueprint overlay. Regenerate:
 
 ```bash
 npx @mermaid-js/mermaid-cli \
   -i docs/assets/lifecycle.mmd -o docs/assets/lifecycle.svg \
-  -c docs/assets/mermaid.config.json -b "#0d1117" -w 1400
+  -c docs/assets/mermaid.config.json -b "#0a1628" -w 1400 \
+  && node docs/assets/apply-blueprint.js docs/assets/lifecycle.svg
 ```
 
 </details>
