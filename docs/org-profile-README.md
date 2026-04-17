@@ -56,6 +56,18 @@ The math isn't documentation. It runs as code.
 
 [Repository](https://github.com/enchanted-plugins/allay) | [Science](https://github.com/enchanted-plugins/flux/blob/main/docs/science/README.md#allay-context-health)
 
+## Infrastructure
+
+### Schematic — Repo Template
+
+The canonical template from which every @enchanted-plugins sibling is cloned. Ships the invariant tree: 8-section CLAUDE.md, 10 universal `shared/conduct/*.md` behavioral modules, `docs/architecture/` auto-generation pipeline, example sub-plugin skeleton, and renderer toolchain. Never installed — cloned.
+
+```
+git clone https://github.com/enchanted-plugins/schematic.git <your-plugin-name>
+```
+
+[Repository](https://github.com/enchanted-plugins/schematic)
+
 ## The Standard
 
 We believe AI tooling should be:
