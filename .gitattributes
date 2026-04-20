@@ -1,0 +1,13 @@
+# Cross-platform line-ending normalization
+* text=auto eol=lf
+
+# GitHub language stats
+*.md linguist-detectable=true
+*.svg linguist-generated=true
+
+# Binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.ico binary
