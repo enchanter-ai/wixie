@@ -1,0 +1,15 @@
+# CODEOWNERS — default reviewer for every path in this repo.
+# GitHub uses the last matching line, so put stricter rules later.
+#
+# Each sibling in the @enchanted-plugins ecosystem inherits this file from
+# `schematic/`. Per-repo overrides add rules below the default line.
+
+* @klaiderman
+
+# Shared behavioral contract — changes here ripple across all siblings.
+/shared/conduct/            @klaiderman
+
+# Diagrams are regenerated, never hand-edited. If you see a hand-edit here,
+# the PR needs a second pair of eyes on whether the generator was bypassed.
+/docs/architecture/*.mmd    @klaiderman
+/docs/architecture/*.html   @klaiderman

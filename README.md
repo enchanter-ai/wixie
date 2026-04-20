@@ -322,12 +322,6 @@ Interactive architecture explorer with plugin diagrams, agent cards, and data fl
 
 See [CONTRIBUTING.md](CONTRIBUTING.md)
 
-## Origin
-
-Flux takes its name from **Minecraft** — crafting, enchanting, and collecting, the foundation of building something from nothing. In the game, flux is what you channel through an enchanting table to bind a property to an object. In this ecosystem, Flux is what you channel through the convergence engine to bind a behavior to a prompt.
-
-The plugin answers the first of the Five Questions every AI-assisted session surfaces: *"What did I say?"* See [docs/ecosystem.md](docs/ecosystem.md) for the full map.
-
 ## License
 
 MIT
