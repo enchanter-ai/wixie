@@ -85,7 +85,7 @@ The inference engine is a four-stage pipeline over an append-only event stream. 
   a failure or            U2 Wald SPRT                    sort by weight            reads at
   precedent  ───►         U3 Beta-Binomial  ───►          write markdown   ───►     session start
   emits JSONL             U5 EMA decay                    to state/briefings        via U-curve top
-  to artifacts-*.jsonl    U6 Reservoir                    /<plugin>.md              slot
+  to artifacts.jsonl      U6 Reservoir                    /<plugin>.md              slot
                           atomic catalog.json
 ```
 
@@ -135,7 +135,7 @@ Five stages from failure to countermeasure:
 
 1. **Observation.** A plugin catches a failure (Flux notices reactive iteration, Hornet flags a silent revert, Reaper classifies a new attack pattern). The plugin composes a JSON artifact with `code`, `category`, `title`, `cause`, `counter`, `signal`, `tags`, and `evidence`.
 
-2. **Emission.** The plugin calls `inference-engine.py emit` (or the `inference-emit.sh` bash wrapper). The engine stamps `ts`, `session_id`, `plugin`, appends to `state/artifacts-YYYY-MM.jsonl`. Opt-in gate `FLUX_INFERENCE_ENABLED=1` required; otherwise silent no-op.
+2. **Emission.** The plugin calls `inference-engine.py emit` (or the `inference-emit.sh` bash wrapper). The engine stamps `ts`, `session_id`, `plugin`, appends to `state/artifacts.jsonl`. Opt-in gate `FLUX_INFERENCE_ENABLED=1` required; otherwise silent no-op.
 
 3. **Reconciliation.** Triggered manually, on schedule, or after an artifact write. The engine loads every artifact, fingerprints, runs SPRT + Beta-Binomial + EMA + Reservoir, writes `catalog.json` atomically. Idempotent on identical streams.
 
@@ -222,7 +222,7 @@ One machine-readable catalog. One per-plugin briefing. Honest numbers on every e
 ```
 state/catalog.json                             → full catalog, posteriors + CIs + verdicts
 state/briefings/flux.md                        → top-of-context briefing for /converge
-state/artifacts-YYYY-MM.jsonl                  → append-only stream (one per month)
+state/artifacts.jsonl                          → append-only master log (rotation deferred; see discipline.md)
 ```
 
 An elevated pattern entry in a briefing looks like:
@@ -331,7 +331,7 @@ flux/plugins/inference-engine/
 │   └── inference-query/SKILL.md         /inference-query <term>
 ├── hooks/hooks.json                     advisory PostToolUse notifier
 └── state/
-    ├── artifacts-YYYY-MM.jsonl          append-only event stream
+    ├── artifacts.jsonl                  append-only master log (rotation deferred)
     ├── catalog.json                     pattern catalog (atomic writes)
     └── briefings/
         └── flux.md                      top-of-context briefing for /converge

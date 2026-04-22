@@ -10,7 +10,7 @@ Five file surfaces:
 
 | File                                   | Role                                                  | Mutation contract                                                  |
 |----------------------------------------|-------------------------------------------------------|-------------------------------------------------------------------|
-| `state/artifacts-YYYY-MM.jsonl`        | append-only event stream, monthly rotation            | `inference-engine.py emit` appends; never edit in place            |
+| `state/artifacts.jsonl`                | append-only master log (rotation deferred)            | `inference-engine.py emit` appends; never edit in place            |
 | `state/catalog.json`                   | pattern catalog (posteriors, LLR, verdicts, weights)  | `inference-engine.py reconcile` writes atomically; never edit     |
 | `state/briefings/<plugin>.md`          | per-plugin top-of-context briefing                    | `inference-engine.py render-briefing` writes; never edit          |
 | `state/.lock` (if present)             | reconcile mutual-exclusion lock                       | the engine takes and releases; never touch                        |
@@ -18,7 +18,7 @@ Five file surfaces:
 
 ## The rule
 
-**Every write to the substrate goes through the engine.** Never `echo >> catalog.json`. Never hand-edit a briefing. Never append to `artifacts-YYYY-MM.jsonl` without the engine's timestamp + fingerprint stamping.
+**Every write to the substrate goes through the engine.** Never `echo >> catalog.json`. Never hand-edit a briefing. Never append to `artifacts.jsonl` without the engine's timestamp + fingerprint stamping.
 
 Why: the engine is the only place the honest-numbers contract is enforced — atomic writes, SHA-1 fingerprints, Wald SPRT thresholds, Beta-Binomial bounds, EMA decay half-life. Going around it breaks cross-session comparability.
 

@@ -31,11 +31,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+# Windows default console is cp1252 — reconfigure to UTF-8 so non-ASCII glyphs
+# (em-dashes, arrows, CI brackets) in output don't crash the subcommand.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PLUGIN_DIR = SCRIPT_DIR.parent.parent / "plugins" / "inference-engine"
-STATE_DIR = PLUGIN_DIR / "state"
+# Tests + sandboxes override via FLUX_INFERENCE_STATE to avoid polluting
+# production state at plugins/inference-engine/state/.
+STATE_DIR = Path(os.environ.get("FLUX_INFERENCE_STATE") or (PLUGIN_DIR / "state"))
 BRIEFINGS_DIR = STATE_DIR / "briefings"
 CATALOG_PATH = STATE_DIR / "catalog.json"
 
@@ -46,8 +56,9 @@ def env_enabled() -> bool:
 
 
 def artifacts_path(ts: datetime | None = None) -> Path:
-    ts = ts or datetime.now(timezone.utc)
-    return STATE_DIR / f"artifacts-{ts:%Y-%m}.jsonl"
+    # One master append-only log. Rotation deferred until volume warrants it
+    # (see discipline.md — three similar lines beats a premature abstraction).
+    return STATE_DIR / "artifacts.jsonl"
 
 
 # ─── U1: Pattern fingerprint ──────────────────────────────────────────────────
@@ -192,9 +203,14 @@ def load_catalog() -> dict:
 
 
 def iter_artifacts() -> list[dict]:
-    """Load every artifact from every artifacts-YYYY-MM.jsonl file."""
+    """Load every artifact from state/artifacts.jsonl plus any legacy artifacts-*.jsonl files."""
     out = []
-    for p in sorted(STATE_DIR.glob("artifacts-*.jsonl")):
+    # Master log (current convention)
+    master = STATE_DIR / "artifacts.jsonl"
+    paths = [master] if master.exists() else []
+    # Legacy date-rotated files, if any linger from before the rotation was retired.
+    paths.extend(sorted(STATE_DIR.glob("artifacts-*.jsonl")))
+    for p in paths:
         with p.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -317,8 +333,12 @@ def cmd_reconcile(args: list[str]) -> int:
         sys.stderr.write("[inference-engine] no artifacts to reconcile\n")
         return 0
 
-    catalog = load_catalog()
-    patterns: dict[str, dict] = catalog.get("patterns", {})
+    # Event-sourced rebuild: derive the whole pattern state from the artifact log
+    # every reconcile. Preserve only the first-crossing timestamps from the
+    # previous catalog so elevation/retirement history is durable.
+    prior_catalog = load_catalog()
+    prior_patterns: dict[str, dict] = prior_catalog.get("patterns", {})
+    patterns: dict[str, dict] = {}
     rng = random.Random(42)  # deterministic reservoir selection across runs
     now = datetime.now(timezone.utc)
 
@@ -363,7 +383,7 @@ def cmd_reconcile(args: list[str]) -> int:
 
         reservoir_add(pat["reservoir"], {"ts": art.get("ts"), "session": sid, "title": art.get("title", "")}, 50, rng)
 
-    # Compute verdict + EMA weight per pattern
+    # Compute verdict + EMA weight per pattern; restore first-crossing stamps
     for pid, pat in patterns.items():
         last = parse_ts(pat["last_seen"]) or now
         days = (now - last).total_seconds() / 86400.0
@@ -373,22 +393,27 @@ def cmd_reconcile(args: list[str]) -> int:
         pat["posterior_mean"] = round(beta_mean(pat["alpha"], pat["beta"]), 4)
         lo, hi = beta_ci(pat["alpha"], pat["beta"])
         pat["posterior_ci95"] = [round(lo, 4), round(hi, 4)]
-        if pat["verdict"] == "elevated" and "elevated_at" not in pat:
-            pat["elevated_at"] = iso_now()
-        if pat["verdict"] == "retired" and "retired_at" not in pat:
-            pat["retired_at"] = iso_now()
+        prior = prior_patterns.get(pid) or {}
+        if pat["verdict"] == "elevated":
+            pat["elevated_at"] = prior.get("elevated_at") or iso_now()
+        if pat["verdict"] == "retired":
+            pat["retired_at"] = prior.get("retired_at") or iso_now()
 
-    catalog["patterns"] = patterns
-    catalog["last_reconciled"] = iso_now()
-    catalog["total_artifacts"] = len(artifacts)
-    catalog["total_patterns"] = len(patterns)
-    catalog["elevated_count"] = sum(1 for p in patterns.values() if p["verdict"] == "elevated")
-    atomic_write_json(CATALOG_PATH, catalog)
+    new_catalog = {
+        "version": 1,
+        "last_reconciled": iso_now(),
+        "total_artifacts": len(artifacts),
+        "total_patterns": len(patterns),
+        "elevated_count": sum(1 for p in patterns.values() if p["verdict"] == "elevated"),
+        "retired_count": sum(1 for p in patterns.values() if p["verdict"] == "retired"),
+        "patterns": patterns,
+    }
+    atomic_write_json(CATALOG_PATH, new_catalog)
 
     print(
         f"reconciled {len(artifacts)} artifacts -> "
-        f"{catalog['total_patterns']} patterns "
-        f"({catalog['elevated_count']} elevated)"
+        f"{new_catalog['total_patterns']} patterns "
+        f"({new_catalog['elevated_count']} elevated, {new_catalog['retired_count']} retired)"
     )
     return 0
 
