@@ -21,3 +21,14 @@ __pycache__/
 docs/assets/node_modules/
 docs/assets/package-lock.json
 docs/assets/package.json
+
+# Guard against rogue agent scratch in the top-level state/ dir.
+# state/precedent.jsonl is the only tracked artifact here; everything
+# else is scratch (see OP06). Stray .py / .sh / simulation files never
+# commit by accident, even if an agent forgets to clean up.
+state/*.py
+state/*.sh
+state/sim_*
+state/debug_*
+state/*.tmp
+state/scratch/
