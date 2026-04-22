@@ -1,0 +1,17 @@
+{
+  "description": "Flux inference-engine hooks — advisory-only. Notify when an artifact lands; never auto-trigger reconcile.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [ \"${FLUX_INFERENCE_ENABLED:-0}\" = \"1\" ] && echo \"$FILE\" | grep -Eq \"(state/precedent\\.jsonl|plugins/inference-engine/state/artifacts-[0-9]{4}-[0-9]{2}\\.jsonl)$\"; then echo \"[inference-engine] artifact landed: $(basename \"$FILE\") — /inference-reconcile when ready\" >&2; fi; exit 0'",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

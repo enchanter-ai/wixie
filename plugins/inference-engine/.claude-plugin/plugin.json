@@ -1,0 +1,27 @@
+{
+  "name": "flux-inference-engine",
+  "display_name": "Inference Engine",
+  "description": "Evidence-accumulation substrate for the enchanted-plugins ecosystem. Runs Wald SPRT + Beta-Binomial + EMA over an append-only artifact stream; elevates patterns that recur across sessions; renders per-plugin briefings consumed at session start. Complements — does not replace — existing per-plugin Gauss-Accumulation-class engines.",
+  "version": "0.1.0",
+  "author": {
+    "name": "enchanted-plugins"
+  },
+  "license": "MIT",
+  "keywords": [
+    "inference",
+    "evidence-accumulation",
+    "pattern-elevation",
+    "sprt",
+    "beta-binomial",
+    "cross-session-learning"
+  ],
+  "skills": [
+    "./skills/inference-emit/",
+    "./skills/inference-reconcile/",
+    "./skills/inference-brief/",
+    "./skills/inference-query/"
+  ],
+  "agents": "./agents/",
+  "hooks": "./hooks/hooks.json",
+  "dependencies": []
+}

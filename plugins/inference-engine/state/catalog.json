@@ -1,0 +1,241 @@
+{
+  "elevated_count": 1,
+  "last_reconciled": "2026-04-22T10:12:11Z",
+  "patterns": {
+    "247a5ef05c8a927c": {
+      "alpha": 2.0,
+      "beta": 1.0,
+      "category": "operational-discipline",
+      "code": "OP01",
+      "counter": "After generating a Flux PDF, sweep the prompt folder for *.html and move or delete. Only prompt.<ext>, metadata.json, tests.json, learnings.{md,json}, output-schema.json, and report.pdf belong in prompts/<name>/. Intermediate files go in plugins/prompt-crafter/state/.",
+      "days_since_last_seen": 10.425,
+      "first_seen": "2026-04-12",
+      "last_seen": "2026-04-12",
+      "llr": 1.791759469228055,
+      "observations": 1,
+      "pattern_id": "247a5ef05c8a927c",
+      "posterior_ci95": [
+        0.1581,
+        0.9874
+      ],
+      "posterior_mean": 0.6667,
+      "reservoir": [
+        {
+          "session": "prompt-crafter invocation 2026-04-12",
+          "title": "Report placement: HTML in plugin state dir, PDF in prompt folder",
+          "ts": "2026-04-12"
+        }
+      ],
+      "sessions_seen": [
+        "prompt-crafter invocation 2026-04-12"
+      ],
+      "signal": "If you see a .html or ._tmp_* file next to prompt.xml, you skipped cleanup. Sweep before declaring done.",
+      "tags": [
+        "flux",
+        "file-hygiene",
+        "report-generation",
+        "prompt-folder"
+      ],
+      "title": "Report placement: HTML in plugin state dir, PDF in prompt folder",
+      "verdict": "noise",
+      "weight": 0.7859
+    },
+    "5bacc3c49a4c61da": {
+      "alpha": 2.0,
+      "beta": 1.0,
+      "category": "branding-drift",
+      "code": "OP05",
+      "counter": "Honest naming contract: every algorithm name must match what the code does, not what the roadmap aspires to. When declaring an engine 'Bayesian / Gauss / Thompson / Beta-Binomial,' verify prior and posterior update steps exist in code. If only a decay rule exists, call it EMA / exponential smoothing / posture decay. Taxonomy across enchanted-plugins: EMA-class (Reaper R8, Nook L1, Allay A2), Beta-Binomial-class (Mantis M6), Prose-log-class (Flux F6 learnings.json, precedent.jsonl).",
+      "days_since_last_seen": 0.425,
+      "first_seen": "2026-04-22",
+      "last_seen": "2026-04-22",
+      "llr": 1.791759469228055,
+      "observations": 1,
+      "pattern_id": "5bacc3c49a4c61da",
+      "posterior_ci95": [
+        0.1581,
+        0.9874
+      ],
+      "posterior_mean": 0.6667,
+      "reservoir": [
+        {
+          "session": "learning-ecosystem-research Opus execution 2026-04-22",
+          "title": "R8 labeled 'Bayesian Threat Convergence' but implementation is pure EMA",
+          "ts": "2026-04-22"
+        }
+      ],
+      "sessions_seen": [
+        "learning-ecosystem-research Opus execution 2026-04-22"
+      ],
+      "signal": "Before shipping any engine with 'Bayesian' in its name, grep the implementation for actual prior/posterior usage. If the only parameter is a learning rate alpha, the honest name is EMA. Apply to future ecosystem engines the same test the research caught here.",
+      "tags": [
+        "reaper",
+        "naming-discipline",
+        "casting-doubt",
+        "branding-drift",
+        "enchanted-plugins",
+        "gauss-accumulation-taxonomy"
+      ],
+      "title": "R8 labeled 'Bayesian Threat Convergence' but implementation is pure EMA",
+      "verdict": "noise",
+      "weight": 0.9902
+    },
+    "7c3fbe8e4bec150b": {
+      "alpha": 2.0,
+      "beta": 1.0,
+      "category": "operational-discipline",
+      "code": "OP03",
+      "counter": "A directory has real tracked content OR a .gitkeep — never both. When adding the first real file, remove the .gitkeep in the same commit. Sweep before committing plugin scaffolds: for d in $(find . -type d); do [[ -f $d/.gitkeep ]] && [[ $(ls -A $d | grep -v gitkeep | wc -l) -gt 0 ]] && echo redundant: $d/.gitkeep; done",
+      "days_since_last_seen": 5.425,
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "llr": 1.791759469228055,
+      "observations": 1,
+      "pattern_id": "7c3fbe8e4bec150b",
+      "posterior_ci95": [
+        0.1581,
+        0.9874
+      ],
+      "posterior_mean": 0.6667,
+      "reservoir": [
+        {
+          "session": "scaffolding passes 2026-04-17",
+          "title": ".gitkeep only in empty dirs — never alongside real content",
+          "ts": "2026-04-17"
+        }
+      ],
+      "sessions_seen": [
+        "scaffolding passes 2026-04-17"
+      ],
+      "signal": "Cross-repo rule: applies to flux, allay, hornet, reaper, weaver, mantis, nook, schematic, and every future sibling.",
+      "tags": [
+        "enchanted-plugins",
+        "git-hygiene",
+        "cross-repo",
+        "scaffolding"
+      ],
+      "title": ".gitkeep only in empty dirs — never alongside real content",
+      "verdict": "noise",
+      "weight": 0.8822
+    },
+    "85153f16a1d32872": {
+      "alpha": 8.0,
+      "beta": 1.0,
+      "category": "process-discipline",
+      "code": "F07",
+      "counter": "Run the full Flux lifecycle in one pass before handing over: /create → /converge (Sonnet optimizer + Haiku reviewer, not heuristic loops) → /test-prompt (surfaces tests.json + metadata shape + format/registry mismatch) → /harden (red-team audit on high-stakes prompts) → hand over with honest verdict. Heuristic self-eval is a sanity check, not convergence.",
+      "days_since_last_seen": 1.425,
+      "elevated_at": "2026-04-22T10:12:11Z",
+      "first_seen": "2026-04-21",
+      "last_seen": "2026-04-21",
+      "llr": 10.0,
+      "observations": 7,
+      "pattern_id": "85153f16a1d32872",
+      "posterior_ci95": [
+        0.6306,
+        0.9968
+      ],
+      "posterior_mean": 0.8889,
+      "reservoir": [
+        {
+          "session": "ten-golden-circle-research v1-v7",
+          "title": "Ran seven reactive iterations instead of one-pass Flux lifecycle",
+          "ts": "2026-04-21"
+        }
+      ],
+      "sessions_seen": [
+        "ten-golden-circle-research v1-v7"
+      ],
+      "signal": "When generating any prompt artifact for Flux, walk the four lifecycle stages in order before the user sees the result. If you find yourself applying a schema fix because the user flagged a warning, the lifecycle was skipped.",
+      "tags": [
+        "flux",
+        "lifecycle",
+        "convergence",
+        "prompt-engineering",
+        "process-discipline"
+      ],
+      "title": "Ran seven reactive iterations instead of one-pass Flux lifecycle",
+      "verdict": "elevated",
+      "weight": 0.9676
+    },
+    "884dfe8c2b89e70f": {
+      "alpha": 2.0,
+      "beta": 1.0,
+      "category": "operational-discipline",
+      "code": "OP02",
+      "counter": "Pre-run minimum on every new prompt folder: prompt.<ext>, metadata.json, tests.json, learnings.md, learnings.json (sessions/hypotheses/axis-progressions shape), output-schema.json. Post-run additions: output-reference.md, output-test-results.json, report.pdf. Diff against reaper/, reaper-patterns/, redteam-ops-architecture/ before declaring ready.",
+      "days_since_last_seen": 5.425,
+      "first_seen": "2026-04-17",
+      "last_seen": "2026-04-17",
+      "llr": 1.791759469228055,
+      "observations": 1,
+      "pattern_id": "884dfe8c2b89e70f",
+      "posterior_ci95": [
+        0.1581,
+        0.9874
+      ],
+      "posterior_mean": 0.6667,
+      "reservoir": [
+        {
+          "session": "multiple prompt crafts 2026-04-12 to 2026-04-17",
+          "title": "Every new Flux prompt folder ships the full canonical file set pre-run",
+          "ts": "2026-04-17"
+        }
+      ],
+      "sessions_seen": [
+        "multiple prompt crafts 2026-04-12 to 2026-04-17"
+      ],
+      "signal": "Before handing a prompt over, enumerate files in the folder. If count < 6 pre-run or < 8 post-run, the set is incomplete.",
+      "tags": [
+        "flux",
+        "prompt-folder",
+        "canonical-shape",
+        "deliverables"
+      ],
+      "title": "Every new Flux prompt folder ships the full canonical file set pre-run",
+      "verdict": "noise",
+      "weight": 0.8822
+    },
+    "d29eca2b2ca46f14": {
+      "alpha": 2.0,
+      "beta": 1.0,
+      "category": "process-discipline",
+      "code": "OP04",
+      "counter": "For ecosystem facts (plugin list, roadmap, naming, status) always read the live docs first: flux/docs/ROADMAP.md, flux/docs/ecosystem.md, flux/docs/brand-guide.md, and the filesystem under c:/git/enchanted-skills/. Auto-memory is for user preferences, not ecosystem state.",
+      "days_since_last_seen": 4.425,
+      "first_seen": "2026-04-18",
+      "last_seen": "2026-04-18",
+      "llr": 1.791759469228055,
+      "observations": 1,
+      "pattern_id": "d29eca2b2ca46f14",
+      "posterior_ci95": [
+        0.1581,
+        0.9874
+      ],
+      "posterior_mean": 0.6667,
+      "reservoir": [
+        {
+          "session": "plugin-survey conversation 2026-04-18",
+          "title": "Read flux/docs/* directly for ecosystem facts, not auto-memory",
+          "ts": "2026-04-18"
+        }
+      ],
+      "sessions_seen": [
+        "plugin-survey conversation 2026-04-18"
+      ],
+      "signal": "When the user asks 'what plugins exist?' or 'what's next?' or 'what's the naming rule?', the first tool call should be Read on a docs file or Bash ls on the repo, not memory recall.",
+      "tags": [
+        "flux",
+        "ecosystem",
+        "source-of-truth",
+        "stale-memory"
+      ],
+      "title": "Read flux/docs/* directly for ecosystem facts, not auto-memory",
+      "verdict": "noise",
+      "weight": 0.9028
+    }
+  },
+  "total_artifacts": 6,
+  "total_patterns": 6,
+  "version": 1
+}
