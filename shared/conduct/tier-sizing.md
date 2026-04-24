@@ -33,6 +33,7 @@ Every Haiku prompt passes these:
 5. **Failure paths are enumerated.** Not "handle errors gracefully" but "if paywalled → return `{error: 'unfetchable'}`; if 404 → return `{error: 'not_found'}`".
 6. **Length bounds are numeric.** "Under 400 words", not "concise". "≤ 200 chars", not "brief".
 7. **Forbidden behaviors are named.** "Do NOT spawn sub-subagents", "Do NOT invent a date if absent", "NEVER paraphrase in the `quote` field".
+8. **Explanatory math and theory prose are not instructions.** If a formula, algorithm derivation, or background paragraph appears, Haiku treats it as noise that competes with the actual steps. Strip it — or move it into a `## Why` section at the bottom that the agent is told to ignore. The *instruction* is the bash command, the decision table, the boolean test — not the math that motivates them.
 
 ## Density, measured
 
@@ -86,6 +87,7 @@ Tighten below the guideline only when you've load-tested the target agent. A Hai
 - **Copy-paste an Opus prompt to a Haiku agent.** Silent quality degradation.
 - **"Just follow the plan" on a Haiku agent.** Haiku doesn't bridge gaps; spec the plan step-by-step.
 - **Vague failure modes on a Haiku prompt.** "Handle errors" — Haiku doesn't know which errors. List them.
+- **Mixing algorithm exposition with instructions.** LaTeX formulas, "the intuition is…", derivation paragraphs — if the actual work is bash/awk/lookup-table, the math is context that Haiku can't distinguish from steps. Put the *command*, not the *derivation*. If the math must appear, isolate it in a `## Why` section marked as background.
 - **Sonnet prompt with Opus-level abstract goals and no decomposition.** Sonnet will pick a decomposition; it may not be yours.
 - **Running a Sonnet-sized task through Haiku "to save money".** It won't save, because the output will be wrong or partial and you'll retry.
 - **Running a Haiku-sized task through Opus "for safety".** Opus will do fine but at 10× the cost; pick the right tier.
