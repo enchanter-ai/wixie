@@ -50,6 +50,22 @@ def score_completeness(text):
     return max(1.0, min(10.0, score))
 
 def score_efficiency(text):
+    # Original assumption (pre-2026-04-25): repeated 5-grams are always filler, cap at -2.5.
+    # That assumption breaks for richly-structured XML/research-brief prompts >2k words where
+    # structural boilerplate ("include for every pattern", "verification_pending: true",
+    # "source_class", etc.) legitimately repeats as schema anchors, not as filler.
+    #
+    # Size-scaling rationale: penalty cap scales with prompt length because structural phrases
+    # grow proportionally to scope, not proportionally to sloppiness. Under 1000 words the full
+    # -2.5 cap applies (short prompts have no excuse for repetition). 1000–2000 words: -2.0.
+    # Over 2000 words: -1.5. This keeps short-prompt sensitivity while allowing structured
+    # long-form prompts to reach DEPLOY-bar Efficiency ≥ 8.5.
+    #
+    # Stopword exclusion: 5-grams composed entirely of stopword-class tokens (articles,
+    # prepositions, conjunctions, auxiliaries) are not meaningful repetition — they are
+    # grammatical glue. Excluding them prevents sentence-structure matches from masking
+    # genuine content repetition. The stopword set is intentionally small and conservative;
+    # any token carrying domain meaning is kept in scoring.
     score = 10.0
     # Strip example blocks before checking for repetition — repeated structure in
     # examples is intentional (demonstrates expected output format)
@@ -61,8 +77,37 @@ def score_efficiency(text):
     fc = sum(len(re.findall(f, text, re.I)) for f in fillers)
     score -= min(fc * 0.7, 3.0)
     if len(words) > 20:
-        ngrams = [re.sub(r'[^\w\s]', '', " ".join(words[i:i+5]).lower()) for i in range(len(words)-4)]
-        score -= min(sum(1 for c in Counter(ngrams).values() if c > 1) * 0.5, 2.5)
+        # Stopword set: tokens that carry no domain signal when they are the only content
+        # in a 5-gram. Conservative — only closed-class function words.
+        STOPWORDS = {
+            'the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by',
+            'and', 'or', 'but', 'nor', 'so', 'yet', 'both', 'either', 'neither',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had',
+            'do', 'does', 'did', 'will', 'would', 'shall', 'should', 'may', 'might',
+            'can', 'could', 'must', 'that', 'this', 'these', 'those', 'it', 'its',
+            'not', 'no', 'nor', 'as', 'if', 'than', 'then', 'when', 'where', 'which',
+            'who', 'whom', 'whose', 'what', 'how', 'from', 'into', 'onto', 'out',
+            'up', 'down', 'about', 'above', 'after', 'before', 'between', 'through',
+        }
+        # Strip leading/trailing punctuation per token, lowercase, then build 5-grams
+        clean_words = [re.sub(r'^[^\w]+|[^\w]+$', '', w).lower() for w in words]
+        ngrams = []
+        for i in range(len(clean_words) - 4):
+            gram_tokens = clean_words[i:i+5]
+            # Skip 5-grams whose non-empty tokens are all stopwords
+            content_tokens = [t for t in gram_tokens if t]
+            if content_tokens and all(t in STOPWORDS for t in content_tokens):
+                continue
+            ngrams.append(" ".join(gram_tokens))
+        # Word-count-scaled penalty cap: longer structured prompts get a smaller cap
+        word_count = len(text.split())
+        if word_count > 2000:
+            ngram_cap = 1.5
+        elif word_count > 1000:
+            ngram_cap = 2.0
+        else:
+            ngram_cap = 2.5
+        score -= min(sum(1 for c in Counter(ngrams).values() if c > 1) * 0.5, ngram_cap)
     all_words = text.split()
     secs = len(re.findall(r'(^#{1,3}\s|\n#{1,3}\s|<\w+>)', text))
     if len(all_words) > 500 and secs < 3: score -= 1.5

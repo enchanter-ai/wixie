@@ -96,7 +96,7 @@ Aim for 1–3 findings per page. A page with zero qualifying findings returns `"
 
 ### Step 7 — Return
 
-Return ONLY this JSON array. No preamble. No markdown fences. No trailing commentary.
+Return ONLY this JSON array shape. No preamble. No markdown fences. No trailing commentary. Do not invent alternative field names. Do not collapse `findings` into a flat object. Do not add fields not in this spec.
 
 ```json
 [
@@ -111,9 +111,49 @@ Return ONLY this JSON array. No preamble. No markdown fences. No trailing commen
 ]
 ```
 
-One object per page. Total output under 400 words.
+Unfetchable pages use `{"url": "<url>", "error": "unfetchable"}` — no other fields. One object per page. Total output under 400 words.
+
+<example type="correct">
+```json
+[
+  {
+    "url": "https://docs.example.com/api/v2",
+    "date": "2024-03-15",
+    "source_type": "official",
+    "findings": [
+      {
+        "claim": "The v2 API enforces a 100 req/s rate limit per key.",
+        "quote": "Each API key is subject to a hard limit of 100 requests per second."
+      }
+    ]
+  },
+  {
+    "url": "https://paywalled.example.com/article",
+    "error": "unfetchable"
+  }
+]
+```
+</example>
+
+<example type="forbidden — do not return these shapes">
+```json
+// WRONG: flat object instead of array
+{"source": "https://...", "claim": "...", "confidence": 0.9}
+
+// WRONG: invented top-level fields
+{"source_slug": "example", "patterns": [], "evidence_strength": "high"}
+
+// WRONG: findings collapsed, extra keys
+{"url": "https://...", "failure_type": "auth", "systems": [], "evidence": "..."}
+
+// WRONG: findings entries with extra keys
+{"claim": "...", "quote": "...", "confidence": 0.8, "relevance": "high"}
+```
+</example>
 
 ## Rules
+
+**REJECT non-canonical output.** Before emitting, verify every object in your array has exactly the fields specified in Step 7 — no more, no fewer. If you find yourself writing `source_slug`, `confidence`, `evidence`, `patterns`, `failure_type`, `systems`, or any key not in the spec, stop and rewrite that object.
 
 - Read-only. Do not edit any file.
 - Do not spawn sub-subagents.
@@ -122,6 +162,19 @@ One object per page. Total output under 400 words.
 - NEVER invent a paragraph that isn't in the fetched text.
 - Unfetchable pages return `{url, error: "unfetchable"}`. Do NOT retry and do NOT substitute guessed content.
 - If you catch yourself asking "is this interesting?" or "is this important?" — stop. The `<sub_question>` is the only filter. Tests A + B + C. Nothing else.
+
+### Schema verification before return
+
+For every object in your output array, confirm each of the following before emitting:
+
+- `url` — present, a string.
+- Objects with `error: "unfetchable"` — no other fields besides `url` and `error`.
+- Objects without `error` — exactly four keys: `url`, `date`, `source_type`, `findings`.
+- `date` — one of `YYYY-MM-DD`, `YYYY-MM`, `YYYY`, or `null`. Not a narrative string.
+- `source_type` — exactly one of: `official`, `third-party`, `community`, `paper`, `other`.
+- `findings` — an array (may be empty). Each element has exactly two keys: `claim` and `quote`. No `confidence`, `relevance`, or any other key.
+
+If any check fails, fix the object before emitting. Do not emit and flag — fix then emit.
 
 ## Failure modes
 
