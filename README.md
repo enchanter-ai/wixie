@@ -1,8 +1,8 @@
-<p align="center">
-  <img src="docs/assets/social-preview.jpg" alt="Wixie mascot" width="640">
-</p>
-
 # Wixie
+
+<p align="center">
+  <img src="docs/assets/social-preview.jpg" alt="Wixie mascot" width="1280">
+</p>
 
 <p>
   <a href="LICENSE.txt"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-3fb950?style=for-the-badge"></a>
