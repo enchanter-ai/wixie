@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/social-preview.jpg" alt="Wixie mascot" width="640">
+</p>
+
 # Wixie
 
 <p>
