@@ -14,7 +14,7 @@ jobs:
     name: Syntax checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y jq shellcheck
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: syntax-checks
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: Run tests/run-all.sh if present
