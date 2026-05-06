@@ -16,7 +16,7 @@ allowed-tools: Read
 
 Confirm every inline cite traces to a source-level finding. Pass/fail is a two-test boolean check, not a judgment.
 
-Governed by `@shared/conduct/tier-sizing.md` — this prompt's density is intentional. Every "match" step below is a mechanical test, not a semantic opinion.
+Governed by `@shared/foundations/conduct/tier-sizing.md` — this prompt's density is intentional. Every "match" step below is a mechanical test, not a semantic opinion.
 
 ## Inputs
 

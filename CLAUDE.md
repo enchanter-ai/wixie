@@ -6,19 +6,19 @@ Audience: Claude. Wixie engineers prompts — crafts, converges, tests, hardens,
 
 These apply to every skill in every plugin. Load once; do not re-derive.
 
-- @shared/conduct/discipline.md — coding conduct: think-first, simplicity, surgical edits, goal-driven loops
-- @shared/conduct/context.md — attention-budget hygiene, U-curve placement, checkpoint protocol
-- @shared/conduct/verification.md — independent checks, baseline snapshots, dry-run for destructive ops
-- @shared/conduct/doubt-engine.md — adversarial self-check before agreement; counter to F01 sycophancy; fires on user proposals AND your own prior framing
-- @shared/conduct/delegation.md — subagent contracts, tool whitelisting, parallel vs. serial rules
-- @shared/conduct/failure-modes.md — 14-code taxonomy for `learnings.md` so E6 can aggregate
-- @shared/conduct/tool-use.md — tool-choice hygiene, error payload contract, parallel-dispatch rules
-- @shared/conduct/formatting.md — per-target format (XML/Markdown/minimal/few-shot), prefill + stop sequences
-- @shared/conduct/skill-authoring.md — SKILL.md frontmatter discipline, discovery test
-- @shared/conduct/hooks.md — advisory-only hooks, injection over denial, fail-open
-- @shared/conduct/precedent.md — log self-observed failures to `state/precedent-log.md`; consult before risky steps
-- @shared/conduct/tier-sizing.md — prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent
-- @shared/conduct/web-fetch.md — external URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only
+- @shared/foundations/conduct/discipline.md — coding conduct: think-first, simplicity, surgical edits, goal-driven loops
+- @shared/foundations/conduct/context.md — attention-budget hygiene, U-curve placement, checkpoint protocol
+- @shared/foundations/conduct/verification.md — independent checks, baseline snapshots, dry-run for destructive ops
+- @shared/foundations/conduct/doubt-engine.md — adversarial self-check before agreement; counter to F01 sycophancy; fires on user proposals AND your own prior framing
+- @shared/foundations/conduct/delegation.md — subagent contracts, tool whitelisting, parallel vs. serial rules
+- @shared/foundations/conduct/failure-modes.md — 14-code taxonomy for `learnings.md` so E6 can aggregate
+- @shared/foundations/conduct/tool-use.md — tool-choice hygiene, error payload contract, parallel-dispatch rules
+- @shared/foundations/conduct/formatting.md — per-target format (XML/Markdown/minimal/few-shot), prefill + stop sequences
+- @shared/foundations/conduct/skill-authoring.md — SKILL.md frontmatter discipline, discovery test
+- @shared/foundations/conduct/hooks.md — advisory-only hooks, injection over denial, fail-open
+- @shared/foundations/conduct/precedent.md — log self-observed failures to `state/precedent-log.md`; consult before risky steps
+- @shared/foundations/conduct/tier-sizing.md — prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent
+- @shared/foundations/conduct/web-fetch.md — external URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only
 - @shared/conduct/inference-substrate.md — cross-session evidence accumulation; emit to and read from the inference-engine substrate without corrupting its honest-numbers contract
 
 When a module conflicts with a plugin-local instruction, the plugin wins — but log the override.
@@ -62,7 +62,7 @@ E0 auto-fires inside `/create` (and `/refine`) when the topic depends on externa
 5. **Ask, don't guess.** If a metadata field is unknown, ask the developer or run the engine. Never fabricate scores, costs, or technique lists.
 6. **ESCALATE on image prompts.** DALL-E, Midjourney, SD, Wixie, Nano Banana, etc. are collaborative — wait for the developer's 1–10 rating and visual feedback each round. After 5+ rounds without progress, recommend a different image model.
 7. **ESCALATE on unknown target model.** If the target model ID is not in `shared/models-registry.json`, stop and ask. The registry is the capability source of truth.
-8. **Offer commit + push after registry or shared-artifact edits.** Whenever you edit `shared/models-registry.json`, a `shared/conduct/*.md` module, or anything a downstream plugin reads as source-of-truth, end the turn by asking whether to commit and push — don't wait for the developer to remember. State the change in one line ("registry bumped to N models, last_updated YYYY-MM-DD") and wait for yes before running git.
+8. **Offer commit + push after registry or shared-artifact edits.** Whenever you edit `shared/models-registry.json`, a `shared/foundations/conduct/*.md` module, `shared/conduct/inference-substrate.md`, or anything a downstream plugin reads as source-of-truth, end the turn by asking whether to commit and push — don't wait for the developer to remember. State the change in one line ("registry bumped to N models, last_updated YYYY-MM-DD") and wait for yes before running git.
 
 ## Artifacts per prompt
 

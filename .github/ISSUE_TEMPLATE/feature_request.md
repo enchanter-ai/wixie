@@ -29,7 +29,7 @@ What real-world pain point does this solve? One paragraph.
 
 - Which plugin / sub-plugin does this belong to?
 - Does this require a new named algorithm? If yes, propose the ID + name.
-- Does this affect the shared conduct contract in `shared/conduct/`?
+- Does this affect the shared conduct contract in `shared/foundations/conduct/` or `shared/conduct/inference-substrate.md`?
 - Would this change the install footprint (new dependency)?
 
 ## Acceptance criteria

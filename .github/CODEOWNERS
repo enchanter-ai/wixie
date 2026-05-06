@@ -7,7 +7,8 @@
 * @klaiderman
 
 # Shared behavioral contract — changes here ripple across all siblings.
-/shared/conduct/            @klaiderman
+/shared/foundations/conduct/    @klaiderman
+/shared/conduct/                @klaiderman
 
 # Diagrams are regenerated, never hand-edited. If you see a hand-edit here,
 # the PR needs a second pair of eyes on whether the generator was bypassed.

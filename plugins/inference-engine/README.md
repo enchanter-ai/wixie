@@ -141,7 +141,7 @@ Five stages from failure to countermeasure:
 
 4. **Briefing.** The briefer agent renders `state/briefings/<plugin>.md` — filtered to that plugin's tags, sorted by weight, formatted for human + machine reading.
 
-5. **Consumption.** At session start the target plugin's primary skill (Phase 1: `/converge` in Wixie) reads the briefing at top-of-context. The U-curve top-200-tokens slot (`shared/conduct/context.md`) means the learned patterns are the first thing Claude sees.
+5. **Consumption.** At session start the target plugin's primary skill (Phase 1: `/converge` in Wixie) reads the briefing at top-of-context. The U-curve top-200-tokens slot (`shared/foundations/conduct/context.md`) means the learned patterns are the first thing Claude sees.
 
 ## Install
 
@@ -387,7 +387,7 @@ The closest production analog is **Sentry's fingerprint-and-elevate** model, but
 
 ## Agent Conduct Modules
 
-Inherits all 10 `shared/conduct/*.md` modules:
+Inherits all conduct modules from `shared/foundations/conduct/*.md` (vendored from agent-foundations) plus wixie-specific `shared/conduct/inference-substrate.md`:
 
 1. `discipline.md` — think-first, simplicity, surgical edits.
 2. `context.md` — U-curve placement; the briefing *is* the top-of-context slot.
