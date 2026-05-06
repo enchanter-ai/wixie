@@ -1,0 +1,12 @@
+name: conduct-abi
+on: [pull_request, push]
+jobs:
+  abi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: enchanter-ai/agent-foundations
+          path: .canonical
+      - run: bash .canonical/scripts/conduct-abi-check.sh .canonical/conduct
