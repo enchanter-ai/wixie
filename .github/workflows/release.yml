@@ -20,6 +20,7 @@ jobs:
         run: |
           tar --exclude='.git' --exclude='node_modules' --exclude='__pycache__' \
               --exclude='dist' --exclude='target' \
+              --exclude='./release.tar.gz' --exclude='*.tar.gz' \
               -czf release.tar.gz .
       - name: Generate hash
         id: hash
