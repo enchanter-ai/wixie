@@ -1,5 +1,5 @@
 {
-  "description": "Wixie inference-engine hooks — advisory-only. Notify when an artifact lands; never auto-trigger reconcile.",
+  "description": "Wixie inference-engine hooks — advisory-only. Notify when an artifact lands; never auto-trigger reconcile. Emit model-freshness telemetry on SessionStart (F-006).",
   "hooks": {
     "PostToolUse": [
       {
@@ -9,6 +9,17 @@
             "type": "command",
             "command": "bash -c 'FILE=$(jq -r \".tool_input.file_path // empty\"); if [ \"${WIXIE_INFERENCE_ENABLED:-0}\" = \"1\" ] && [ -n \"$FILE\" ] && echo \"$FILE\" | grep -Eq \"(state/precedent\\.jsonl|plugins/inference-engine/state/artifacts\\.jsonl)$\"; then echo \"[inference-engine] artifact landed: $(basename \"$FILE\") — /inference-reconcile when ready\" >&2; fi; exit 0'",
             "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -n \"${CLAUDE_SUBAGENT:-}\" ]; then exit 0; fi; python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py\" >/dev/null 2>&1 || true; exit 0'",
+            "timeout": 5
           }
         ]
       }
