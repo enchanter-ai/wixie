@@ -18,10 +18,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build artifact
         run: |
+          # Write to /tmp first to avoid "file changed as we read it" when tar
+          # races its own output mid-write inside the source dir.
           tar --exclude='.git' --exclude='node_modules' --exclude='__pycache__' \
-              --exclude='dist' --exclude='target' \
-              --exclude='./release.tar.gz' --exclude='*.tar.gz' \
-              -czf release.tar.gz .
+              --exclude='dist' --exclude='target' --exclude='*.tar.gz' \
+              -czf /tmp/release.tar.gz .
+          mv /tmp/release.tar.gz release.tar.gz
       - name: Generate hash
         id: hash
         run: |
