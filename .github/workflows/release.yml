@@ -36,7 +36,7 @@ jobs:
             --output-signature release.tar.gz.sig \
             --output-certificate release.tar.gz.crt
       - name: Generate build provenance attestation
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: release.tar.gz
       - name: Upload to GitHub Release
