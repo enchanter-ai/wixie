@@ -15,7 +15,7 @@ allowed-tools: Read, Write
 
 Execute one test case. Generate a genuine response. Check each assertion. Report pass/fail.
 
-Governed by `@shared/foundations/conduct/tier-sizing.md` (Sonnet = decomposed passes) and `@shared/foundations/conduct/formatting.md` (per-model format rules).
+Governed by `@../enchanter-foundations/packages/core/conduct/tier-sizing.md` (Sonnet = decomposed passes) and `@../enchanter-foundations/packages/skills/conduct/formatting.md` (per-model format rules).
 
 ## Inputs
 
@@ -78,7 +78,7 @@ Return ONLY this JSON object. No preamble. No markdown fences.
 - NEVER read `expected_contains` during Pass 2. Generate first.
 - NEVER shape the response to match assertions. Generate as the target model would.
 - NEVER invent an output format the prompt didn't specify.
-- Match per-family format rules per `@shared/foundations/conduct/formatting.md`: XML for Claude, sandwich for GPT, stripped for o-series, always-few-shot for Gemini.
+- Match per-family format rules per `@../enchanter-foundations/packages/skills/conduct/formatting.md`: XML for Claude, sandwich for GPT, stripped for o-series, always-few-shot for Gemini.
 - If the prompt is ambiguous or self-contradictory, pick the interpretation a careful reader of the prompt would pick — do NOT invent unstated rules.
 - Output under 500 words total.
 

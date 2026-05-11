@@ -14,7 +14,7 @@ allowed-tools: WebSearch, WebFetch, Read
 
 Fetch sources for one seed query and return structured findings. Every judgment step below is a boolean test. If you catch yourself interpreting, stop and re-read the step.
 
-Governed by `@shared/foundations/conduct/web-fetch.md` (caching, tier selection, cite hygiene) and `@shared/foundations/conduct/tier-sizing.md` (this prompt's density is intentional — do not skim).
+Governed by `@../enchanter-foundations/packages/web/conduct/web-fetch.md` (caching, tier selection, cite hygiene) and `@../enchanter-foundations/packages/core/conduct/tier-sizing.md` (this prompt's density is intentional — do not skim).
 
 ## Inputs
 

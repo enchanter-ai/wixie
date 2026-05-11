@@ -250,7 +250,7 @@ The **PDF audit report** includes: quality score bars, 8 binary assertion result
 
 ### State surface
 
-In addition to the per-prompt artifacts above, Wixie writes plugin-level state to `state/`. The key file is `state/precedent.jsonl` — the plugin's self-observed-failure log, maintained per `shared/foundations/conduct/precedent.md`. Each line is a JSON object recording a command or pattern that failed unexpectedly (with the reason and the working alternative). Claude consults this log before running non-trivial Bash commands or multi-step tool sequences, and appends to it after any unexpected failure. This log is a team asset: commit it alongside code so failures discovered in one session are not silently repeated in the next.
+In addition to the per-prompt artifacts above, Wixie writes plugin-level state to `state/`. The key file is `state/precedent.jsonl` — the plugin's self-observed-failure log, maintained per `../enchanter-foundations/packages/core/conduct/precedent.md`. Each line is a JSON object recording a command or pattern that failed unexpectedly (with the reason and the working alternative). Claude consults this log before running non-trivial Bash commands or multi-step tool sequences, and appends to it after any unexpected failure. This log is a team asset: commit it alongside code so failures discovered in one session are not silently repeated in the next.
 
 ## Roadmap
 
@@ -366,18 +366,18 @@ Every skill inherits a reusable behavioral contract from [shared/](shared/) — 
 
 | Module | What it governs |
 |--------|-----------------|
-| [discipline.md](shared/foundations/conduct/discipline.md) | Coding conduct: think-first, simplicity, surgical edits, goal-driven loops |
-| [context.md](shared/foundations/conduct/context.md) | Attention-budget hygiene, U-curve placement, checkpoint protocol |
-| [verification.md](shared/foundations/conduct/verification.md) | Independent checks, baseline snapshots, dry-run for destructive ops |
-| [delegation.md](shared/foundations/conduct/delegation.md) | Subagent contracts, tool whitelisting, parallel vs. serial rules |
-| [failure-modes.md](shared/foundations/conduct/failure-modes.md) | 14-code taxonomy for `learnings.md` so E6 Gauss Accumulation compounds |
-| [tool-use.md](shared/foundations/conduct/tool-use.md) | Tool-choice hygiene, error payload contract, parallel-dispatch rules |
-| [formatting.md](shared/foundations/conduct/formatting.md) | Per-target format (XML / Markdown sandwich / minimal / few-shot), prefill + stop sequences |
-| [skill-authoring.md](shared/foundations/conduct/skill-authoring.md) | SKILL.md frontmatter discipline, discovery test |
-| [hooks.md](shared/foundations/conduct/hooks.md) | Advisory-only hooks, injection over denial, fail-open |
-| [precedent.md](shared/foundations/conduct/precedent.md) | Log self-observed failures to `state/precedent-log.md`; consult before risky steps |
-| [tier-sizing.md](shared/foundations/conduct/tier-sizing.md) | Prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent |
-| [web-fetch.md](shared/foundations/conduct/web-fetch.md) | External URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only |
+| [discipline.md](../enchanter-foundations/packages/core/conduct/discipline.md) | Coding conduct: think-first, simplicity, surgical edits, goal-driven loops |
+| [context.md](../enchanter-foundations/packages/core/conduct/context.md) | Attention-budget hygiene, U-curve placement, checkpoint protocol |
+| [verification.md](../enchanter-foundations/packages/core/conduct/verification.md) | Independent checks, baseline snapshots, dry-run for destructive ops |
+| [delegation.md](../enchanter-foundations/packages/core/conduct/delegation.md) | Subagent contracts, tool whitelisting, parallel vs. serial rules |
+| [failure-modes.md](../enchanter-foundations/packages/core/conduct/failure-modes.md) | 14-code taxonomy for `learnings.md` so E6 Gauss Accumulation compounds |
+| [tool-use.md](../enchanter-foundations/packages/core/conduct/tool-use.md) | Tool-choice hygiene, error payload contract, parallel-dispatch rules |
+| [formatting.md](../enchanter-foundations/packages/skills/conduct/formatting.md) | Per-target format (XML / Markdown sandwich / minimal / few-shot), prefill + stop sequences |
+| [skill-authoring.md](../enchanter-foundations/packages/skills/conduct/skill-authoring.md) | SKILL.md frontmatter discipline, discovery test |
+| [hooks.md](../enchanter-foundations/packages/core/conduct/hooks.md) | Advisory-only hooks, injection over denial, fail-open |
+| [precedent.md](../enchanter-foundations/packages/core/conduct/precedent.md) | Log self-observed failures to `state/precedent-log.md`; consult before risky steps |
+| [tier-sizing.md](../enchanter-foundations/packages/core/conduct/tier-sizing.md) | Prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent |
+| [web-fetch.md](../enchanter-foundations/packages/web/conduct/web-fetch.md) | External URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only |
 | [inference-substrate.md](shared/conduct/inference-substrate.md) | Cross-session evidence accumulation; emit to and read from the inference-engine substrate without corrupting its honest-numbers contract |
 
 ## Architecture
