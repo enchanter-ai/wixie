@@ -1,0 +1,69 @@
+# foundations-verify.yml — GitHub Actions workflow template.
+#
+# Drop into: .github/workflows/foundations-verify.yml in every sibling plugin.
+#
+# Per s2.0 recommendation Layer 3: every PR runs ./scripts/bootstrap.sh --verify
+# which is hash-coverage all-or-nothing across every conduct file referenced by
+# the plugin's CLAUDE.md. Partial coverage is an error, not a degradation.
+#
+# Corroborated by SRI, npm ci, pip --require-hashes, and Go go mod verify.
+
+name: foundations-verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: extract foundations ref from .foundations-versions
+        id: foundations_ref
+        working-directory: plugin
+        run: |
+          # The plugin pins per-package tags; for CI we check out main of foundations
+          # since each tag commit is part of the main history. The bootstrap script
+          # then resolves the per-package tags against the fetched refs.
+          echo "ref=main" >> "$GITHUB_OUTPUT"
+
+      - name: checkout enchanter-foundations (sibling layout)
+        uses: actions/checkout@v4
+        with:
+          repository: enchanter-ai/enchanter-foundations
+          path: enchanter-foundations
+          ref: ${{ steps.foundations_ref.outputs.ref }}
+          fetch-depth: 0   # need all tags for per-package tag resolution
+
+      - name: ensure bootstrap is executable
+        working-directory: plugin
+        run: chmod +x scripts/bootstrap.sh
+
+      - name: bootstrap (writes/refreshes .foundations-lock)
+        working-directory: plugin
+        run: ./scripts/bootstrap.sh
+
+      - name: verify hash coverage (all-or-nothing)
+        working-directory: plugin
+        run: ./scripts/bootstrap.sh --verify
+
+      - name: fail if .foundations-lock changed (lock must be committed in sync with .foundations-versions)
+        working-directory: plugin
+        run: |
+          # `resolved_at` is a diagnostic timestamp; it differs on every bootstrap and is
+          # not used in --verify. Compare everything EXCEPT that one line.
+          if ! diff <(grep -v '^resolved_at:' .foundations-lock) \
+                    <(git show HEAD:.foundations-lock | grep -v '^resolved_at:') > /dev/null; then
+            echo "::error::.foundations-lock is out of sync with .foundations-versions."
+            echo "::error::Run ./scripts/bootstrap.sh locally and commit the updated lock."
+            diff <(grep -v '^resolved_at:' .foundations-lock) \
+                 <(git show HEAD:.foundations-lock | grep -v '^resolved_at:') || true
+            exit 1
+          fi
