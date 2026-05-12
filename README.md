@@ -198,16 +198,13 @@ bash <(curl -s https://raw.githubusercontent.com/enchanter-ai/wixie/main/install
 
 ## Quickstart
 
-Install, craft, converge, ship. Sixty seconds:
-
-```
-/plugin install full@wixie
-/create B2B ticket routing system like Zendesk, for Claude Opus
-/converge prompts/b2b-ticket-router
+```bash
+git clone https://github.com/enchanter-ai/wixie
+cd wixie
+./scripts/bootstrap.sh    # canonical first command — installs enchanter-foundations sibling
 ```
 
-Expected: `prompts/b2b-ticket-router/` with `prompt.xml` + `metadata.json`, and a DEPLOY verdict (σ < 0.45, overall ≥ 9.0, 8/8 SAT assertions) within 2-4 convergence iterations. See [docs/getting-started.md](docs/getting-started.md) for the full guided first run.
-
+Without `./scripts/bootstrap.sh`, conduct imports will silently miss and Claude Code's `@`-loader will fail-soft. Always bootstrap first.
 ## 6 Plugins, 7 Agents, 64 Models
 
 | Plugin | Command | What | Agent |
