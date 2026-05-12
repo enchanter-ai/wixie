@@ -2,10 +2,12 @@
 # bootstrap.sh — canonical first command for an @enchanter-ai sibling plugin.
 #
 # Behavior (per s2.0 4-layer recommendation, Layer 1):
-#   1. Read .foundations-versions (YAML-ish: "enchanter-<pkg>: \"~<ver>\"").
-#   2. Ensure ../enchanter-foundations exists (clone if missing).
+#   1. Read .foundations-versions (YAML-ish: "<pkg>: \"~<ver>\"").
+#   2. Ensure ../foundations exists (clone if missing).
 #   3. Fetch tags; checkout each pinned package tag (enchanter-<pkg>--v<ver>).
-#   4. Verify every @../enchanter-foundations/... reference in CLAUDE.md resolves.
+#      Note: tags retain the historical `enchanter-` prefix even after the
+#      repo rename; the script prepends it during tag lookup.
+#   4. Verify every @../foundations/... reference in CLAUDE.md resolves.
 #   5. Write .foundations-lock with foundations SHA, per-package tag commits,
 #      and SHA-1 of every conduct file referenced by CLAUDE.md.
 #
@@ -21,8 +23,8 @@ set -uo pipefail
 
 MODE="${1:-bootstrap}"
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-FOUNDATIONS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/enchanter-foundations"
-FOUNDATIONS_REPO="${ENCHANTER_FOUNDATIONS_REPO:-https://github.com/enchanter-ai/enchanter-foundations}"
+FOUNDATIONS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/foundations"
+FOUNDATIONS_REPO="${FOUNDATIONS_REPO:-https://github.com/enchanter-ai/foundations}"
 VERSIONS_FILE="$PLUGIN_DIR/.foundations-versions"
 LOCK_FILE="$PLUGIN_DIR/.foundations-lock"
 CLAUDE_MD="$PLUGIN_DIR/CLAUDE.md"
@@ -42,7 +44,7 @@ if [[ ! -f "$CLAUDE_MD" ]]; then
 fi
 
 # --- parse .foundations-versions --------------------------------------------
-# Format: lines like  enchanter-core: "~0.6.0"
+# Format: lines like  core: "~0.6.0"
 # We extract (pkg, version) pairs. Comment lines (#…) and blanks ignored.
 
 declare -a PKGS=()
@@ -52,8 +54,8 @@ while IFS= read -r line; do
   line="${line%%#*}"
   line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   [[ -z "$line" ]] && continue
-  # match: enchanter-<pkg>: "<spec>"
-  if [[ "$line" =~ ^enchanter-([a-z]+):[[:space:]]*\"?([~^]?[0-9][^\"[:space:]]*)\"?[[:space:]]*$ ]]; then
+  # match: <pkg>: "<spec>"
+  if [[ "$line" =~ ^([a-z]+):[[:space:]]*\"?([~^]?[0-9][^\"[:space:]]*)\"?[[:space:]]*$ ]]; then
     PKGS+=("${BASH_REMATCH[1]}")
     # strip a leading ~ or ^ for the tag lookup
     raw="${BASH_REMATCH[2]}"
@@ -74,7 +76,7 @@ if [[ "$MODE" != "--verify" ]]; then
   if [[ ! -d "$FOUNDATIONS_DIR/.git" ]]; then
     err "foundations sibling missing at $FOUNDATIONS_DIR — cloning"
     git clone "$FOUNDATIONS_REPO" "$FOUNDATIONS_DIR" || {
-      err "clone failed — set ENCHANTER_FOUNDATIONS_REPO or clone manually"
+      err "clone failed — set FOUNDATIONS_REPO or clone manually"
       exit 1
     }
   fi
@@ -110,15 +112,15 @@ FOUND_SHA=$(git -C "$FOUNDATIONS_DIR" rev-parse HEAD)
 
 # --- walk CLAUDE.md for @-imports and SHA-1 each --------------------------
 
-# Capture every line of the form  @../enchanter-foundations/<rel-path>
-# Tolerates surrounding markdown (e.g., "- @../enchanter-foundations/...md — desc").
+# Capture every line of the form  @../foundations/<rel-path>
+# Tolerates surrounding markdown (e.g., "- @../foundations/...md — desc").
 mapfile -t IMPORT_PATHS < <(
-  grep -oE '@\.\./enchanter-foundations/[A-Za-z0-9._/-]+' "$CLAUDE_MD" | \
-    sed 's#^@\.\./enchanter-foundations/##' | sort -u
+  grep -oE '@\.\./foundations/[A-Za-z0-9._/-]+' "$CLAUDE_MD" | \
+    sed 's#^@\.\./foundations/##' | sort -u
 )
 
 if [[ "${#IMPORT_PATHS[@]}" -eq 0 ]]; then
-  err "warning: no @../enchanter-foundations/... imports found in $CLAUDE_MD"
+  err "warning: no @../foundations/... imports found in $CLAUDE_MD"
 fi
 
 # Compute SHA-1 of each referenced file. Bail loud on any miss.
@@ -128,7 +130,7 @@ MISSING=0
 for rel in "${IMPORT_PATHS[@]}"; do
   full="$FOUNDATIONS_DIR/$rel"
   if [[ ! -f "$full" ]]; then
-    err "import resolves to missing file: @../enchanter-foundations/$rel"
+    err "import resolves to missing file: @../foundations/$rel"
     MISSING=1
     continue
   fi

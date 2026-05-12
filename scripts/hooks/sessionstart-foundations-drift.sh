@@ -3,7 +3,7 @@
 #
 # Per s2.0 recommendation Layer 2: at session start, compare .foundations-versions
 # (manifest intent) and .foundations-lock (resolved state) against the actual
-# ../enchanter-foundations checkout. Fail loud on mismatch with a one-line
+# ../foundations checkout. Fail loud on mismatch with a one-line
 # remediation — never auto-heal.
 #
 # Hook is advisory per conduct/hooks.md § Injection over denial: stdout is
@@ -24,7 +24,7 @@ if [[ -n "${CLAUDE_SUBAGENT:-}" ]]; then
 fi
 
 PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-FOUNDATIONS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/enchanter-foundations"
+FOUNDATIONS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/foundations"
 LOCK_FILE="$PLUGIN_DIR/.foundations-lock"
 
 # Use the bootstrap script's --verify mode as the single source of truth.

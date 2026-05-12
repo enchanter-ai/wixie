@@ -22,7 +22,7 @@ Most "it doesn't work" reports resolve on this list alone.
 - The hook event doesn't match what you're doing. Check the hook's `matcher` in `plugins/*/hooks/*.json`. A hook matched to `Write` does not fire on `Bash`.
 - Hook permissions: the hook script isn't executable (`chmod +x path/to/hook.sh`).
 - jq not installed. Hooks that parse JSON silently fail if `jq` is missing. Run `which jq`.
-- The hook timed out. Hooks have per-event budgets; see [../enchanter-foundations/packages/core/conduct/hooks.md](../../enchanter-foundations/packages/core/conduct/hooks.md) § Performance budget.
+- The hook timed out. Hooks have per-event budgets; see [../foundations/packages/core/conduct/hooks.md](../../foundations/packages/core/conduct/hooks.md) § Performance budget.
 
 **Fix:** re-run with a more specific matcher, install `jq`, or restart Claude Code to re-register hooks.
 
@@ -87,7 +87,7 @@ Most "it doesn't work" reports resolve on this list alone.
 
 **Symptom:** A hook or script output is "Failed" with no detail.
 
-**Cause:** Someone's error payload is unhelpful — see [../enchanter-foundations/packages/core/conduct/tool-use.md](../../enchanter-foundations/packages/core/conduct/tool-use.md) § Error payloads are contracts.
+**Cause:** Someone's error payload is unhelpful — see [../foundations/packages/core/conduct/tool-use.md](../../foundations/packages/core/conduct/tool-use.md) § Error payloads are contracts.
 
 **Fix:** file a bug with the exact command and the observed output. Ambiguous errors are themselves bugs.
 

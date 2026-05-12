@@ -34,11 +34,11 @@ jobs:
           # then resolves the per-package tags against the fetched refs.
           echo "ref=main" >> "$GITHUB_OUTPUT"
 
-      - name: checkout enchanter-foundations (sibling layout)
+      - name: checkout foundations (sibling layout)
         uses: actions/checkout@v4
         with:
-          repository: enchanter-ai/enchanter-foundations
-          path: enchanter-foundations
+          repository: enchanter-ai/foundations
+          path: foundations
           ref: ${{ steps.foundations_ref.outputs.ref }}
           fetch-depth: 0   # need all tags for per-package tag resolution
 

@@ -13,8 +13,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $PluginDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$FoundationsDir = (Resolve-Path (Join-Path $PluginDir "..")).Path + "\enchanter-foundations"
-$FoundationsRepo = if ($env:ENCHANTER_FOUNDATIONS_REPO) { $env:ENCHANTER_FOUNDATIONS_REPO } else { "https://github.com/enchanter-ai/enchanter-foundations" }
+$FoundationsDir = (Resolve-Path (Join-Path $PluginDir "..")).Path + "\foundations"
+$FoundationsRepo = if ($env:FOUNDATIONS_REPO) { $env:FOUNDATIONS_REPO } else { "https://github.com/enchanter-ai/foundations" }
 $VersionsFile = Join-Path $PluginDir ".foundations-versions"
 $LockFile = Join-Path $PluginDir ".foundations-lock"
 $ClaudeMd = Join-Path $PluginDir "CLAUDE.md"
@@ -37,7 +37,7 @@ $vers = @()
 Get-Content $VersionsFile | ForEach-Object {
     $line = ($_ -replace '#.*$', '').Trim()
     if (-not $line) { return }
-    if ($line -match '^enchanter-([a-z]+):\s*"?([~^]?[0-9][^"\s]+)"?\s*$') {
+    if ($line -match '^([a-z]+):\s*"?([~^]?[0-9][^"\s]+)"?\s*$') {
         $pkgs += $matches[1]
         $vers += ($matches[2] -replace '^[~^]', '')
     } else {
@@ -54,7 +54,7 @@ if (-not $Verify) {
     if (-not (Test-Path (Join-Path $FoundationsDir ".git"))) {
         [Console]::Error.WriteLine("foundations sibling missing at $FoundationsDir — cloning")
         & git clone $FoundationsRepo $FoundationsDir
-        if ($LASTEXITCODE -ne 0) { Fail "clone failed — set ENCHANTER_FOUNDATIONS_REPO or clone manually" }
+        if ($LASTEXITCODE -ne 0) { Fail "clone failed — set FOUNDATIONS_REPO or clone manually" }
     }
     & git -C $FoundationsDir fetch --tags --quiet
     if ($LASTEXITCODE -ne 0) { Fail "git fetch --tags failed in $FoundationsDir" }
@@ -79,8 +79,8 @@ $foundSha = (& git -C $FoundationsDir rev-parse HEAD).Trim()
 
 # --- walk CLAUDE.md for @-imports and SHA-1 each ---------------------------
 $claudeText = Get-Content $ClaudeMd -Raw
-$matches = [regex]::Matches($claudeText, '@\.\./enchanter-foundations/[A-Za-z0-9._/-]+')
-$importPaths = $matches | ForEach-Object { $_.Value -replace '^@\.\./enchanter-foundations/', '' } | Sort-Object -Unique
+$matches = [regex]::Matches($claudeText, '@\.\./foundations/[A-Za-z0-9._/-]+')
+$importPaths = $matches | ForEach-Object { $_.Value -replace '^@\.\./foundations/', '' } | Sort-Object -Unique
 
 $hashPaths = @()
 $hashValues = @()
@@ -88,7 +88,7 @@ $missing = $false
 foreach ($rel in $importPaths) {
     $full = Join-Path $FoundationsDir $rel
     if (-not (Test-Path $full)) {
-        [Console]::Error.WriteLine("import resolves to missing file: @../enchanter-foundations/$rel")
+        [Console]::Error.WriteLine("import resolves to missing file: @../foundations/$rel")
         $missing = $true
         continue
     }
