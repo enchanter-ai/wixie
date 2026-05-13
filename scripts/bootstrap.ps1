@@ -2,7 +2,7 @@
 #
 # Same semantics as scripts/bootstrap.sh (see that file for the spec).
 # Modes:
-#   .\scripts\bootstrap.ps1           — full bootstrap + write .foundations-lock
+#   .\scripts\bootstrap.ps1           — full bootstrap + write .vis-lock
 #   .\scripts\bootstrap.ps1 -Verify   — read-only verify against lock; exit 1 on mismatch
 
 [CmdletBinding()]
@@ -13,10 +13,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $PluginDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$FoundationsDir = (Resolve-Path (Join-Path $PluginDir "..")).Path + "\foundations"
-$FoundationsRepo = if ($env:FOUNDATIONS_REPO) { $env:FOUNDATIONS_REPO } else { "https://github.com/enchanter-ai/foundations" }
-$VersionsFile = Join-Path $PluginDir ".foundations-versions"
-$LockFile = Join-Path $PluginDir ".foundations-lock"
+$VisDir = (Resolve-Path (Join-Path $PluginDir "..")).Path + "\vis"
+$VisRepo = if ($env:VIS_REPO) { $env:VIS_REPO } else { "https://github.com/enchanter-ai/vis" }
+$VersionsFile = Join-Path $PluginDir ".vis-versions"
+$LockFile = Join-Path $PluginDir ".vis-lock"
 $ClaudeMd = Join-Path $PluginDir "CLAUDE.md"
 
 function Fail([string]$msg) {
@@ -25,13 +25,13 @@ function Fail([string]$msg) {
 }
 
 if (-not (Test-Path $VersionsFile)) {
-    Fail "missing $VersionsFile — every sibling plugin must pin foundations packages"
+    Fail "missing $VersionsFile — every sibling plugin must pin vis packages"
 }
 if (-not (Test-Path $ClaudeMd)) {
     Fail "missing $ClaudeMd — bootstrap verifies @-imports against this file"
 }
 
-# --- parse .foundations-versions --------------------------------------------
+# --- parse .vis-versions --------------------------------------------
 $pkgs = @()
 $vers = @()
 Get-Content $VersionsFile | ForEach-Object {
@@ -41,7 +41,7 @@ Get-Content $VersionsFile | ForEach-Object {
         $pkgs += $matches[1]
         $vers += ($matches[2] -replace '^[~^]', '')
     } else {
-        [Console]::Error.WriteLine("warning: unparsed line in .foundations-versions: $line")
+        [Console]::Error.WriteLine("warning: unparsed line in .vis-versions: $line")
     }
 }
 
@@ -49,18 +49,18 @@ if ($pkgs.Count -eq 0) {
     Fail "no packages parsed from $VersionsFile"
 }
 
-# --- ensure foundations sibling exists --------------------------------------
+# --- ensure vis sibling exists --------------------------------------
 if (-not $Verify) {
-    if (-not (Test-Path (Join-Path $FoundationsDir ".git"))) {
-        [Console]::Error.WriteLine("foundations sibling missing at $FoundationsDir — cloning")
-        & git clone $FoundationsRepo $FoundationsDir
-        if ($LASTEXITCODE -ne 0) { Fail "clone failed — set FOUNDATIONS_REPO or clone manually" }
+    if (-not (Test-Path (Join-Path $VisDir ".git"))) {
+        [Console]::Error.WriteLine("vis sibling missing at $VisDir — cloning")
+        & git clone $VisRepo $VisDir
+        if ($LASTEXITCODE -ne 0) { Fail "clone failed — set VIS_REPO or clone manually" }
     }
-    & git -C $FoundationsDir fetch --tags --quiet
-    if ($LASTEXITCODE -ne 0) { Fail "git fetch --tags failed in $FoundationsDir" }
+    & git -C $VisDir fetch --tags --quiet
+    if ($LASTEXITCODE -ne 0) { Fail "git fetch --tags failed in $VisDir" }
 } else {
-    if (-not (Test-Path (Join-Path $FoundationsDir ".git"))) {
-        Fail "foundations sibling missing — run ./scripts/bootstrap.sh"
+    if (-not (Test-Path (Join-Path $VisDir ".git"))) {
+        Fail "vis sibling missing — run ./scripts/bootstrap.sh"
     }
 }
 
@@ -68,27 +68,27 @@ if (-not $Verify) {
 $tagCommits = @()
 for ($i = 0; $i -lt $pkgs.Count; $i++) {
     $tag = "enchanter-$($pkgs[$i])--v$($vers[$i])"
-    $sha = & git -C $FoundationsDir rev-list -n 1 "refs/tags/$tag" 2>$null
+    $sha = & git -C $VisDir rev-list -n 1 "refs/tags/$tag" 2>$null
     if (-not $sha) {
-        Fail "tag missing in foundations: $tag"
+        Fail "tag missing in vis: $tag"
     }
     $tagCommits += $sha.Trim()
 }
 
-$foundSha = (& git -C $FoundationsDir rev-parse HEAD).Trim()
+$foundSha = (& git -C $VisDir rev-parse HEAD).Trim()
 
 # --- walk CLAUDE.md for @-imports and SHA-1 each ---------------------------
 $claudeText = Get-Content $ClaudeMd -Raw
-$matches = [regex]::Matches($claudeText, '@\.\./foundations/[A-Za-z0-9._/-]+')
-$importPaths = $matches | ForEach-Object { $_.Value -replace '^@\.\./foundations/', '' } | Sort-Object -Unique
+$matches = [regex]::Matches($claudeText, '@\.\./vis/[A-Za-z0-9._/-]+')
+$importPaths = $matches | ForEach-Object { $_.Value -replace '^@\.\./vis/', '' } | Sort-Object -Unique
 
 $hashPaths = @()
 $hashValues = @()
 $missing = $false
 foreach ($rel in $importPaths) {
-    $full = Join-Path $FoundationsDir $rel
+    $full = Join-Path $VisDir $rel
     if (-not (Test-Path $full)) {
-        [Console]::Error.WriteLine("import resolves to missing file: @../foundations/$rel")
+        [Console]::Error.WriteLine("import resolves to missing file: @../vis/$rel")
         $missing = $true
         continue
     }
@@ -98,16 +98,16 @@ foreach ($rel in $importPaths) {
 }
 
 if ($missing) {
-    Fail "one or more @-imports unresolved — run ./scripts/bootstrap.sh after fixing .foundations-versions"
+    Fail "one or more @-imports unresolved — run ./scripts/bootstrap.sh after fixing .vis-versions"
 }
 
-# --- write or verify .foundations-lock --------------------------------------
+# --- write or verify .vis-lock --------------------------------------
 function Write-Lock {
     $iso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $lines = New-Object System.Collections.Generic.List[string]
-    $lines.Add("# .foundations-lock — auto-generated by scripts/bootstrap.sh")
+    $lines.Add("# .vis-lock — auto-generated by scripts/bootstrap.sh")
     $lines.Add("# Do not edit by hand. Run ./scripts/bootstrap.sh to refresh.")
-    $lines.Add("foundations_commit: $foundSha")
+    $lines.Add("vis_commit: $foundSha")
     $lines.Add("resolved_at: $iso")
     $lines.Add("packages:")
     for ($i = 0; $i -lt $pkgs.Count; $i++) {
@@ -125,20 +125,20 @@ function Write-Lock {
 
 if (-not $Verify) {
     Write-Lock
-    Write-Output "bootstrapped: $($pkgs.Count) packages, $($hashPaths.Count) conduct files, foundations SHA $foundSha"
+    Write-Output "bootstrapped: $($pkgs.Count) packages, $($hashPaths.Count) conduct files, vis SHA $foundSha"
     Write-Output "wrote $LockFile"
     exit 0
 }
 
 # --verify path
 if (-not (Test-Path $LockFile)) {
-    Fail "foundations not bootstrapped — run ./scripts/bootstrap.sh"
+    Fail "vis not bootstrapped — run ./scripts/bootstrap.sh"
 }
 
 $lockText = Get-Content $LockFile -Raw
-$lockFound = ([regex]::Match($lockText, '(?m)^foundations_commit:\s*(\S+)').Groups[1].Value)
+$lockFound = ([regex]::Match($lockText, '(?m)^vis_commit:\s*(\S+)').Groups[1].Value)
 if ($lockFound -ne $foundSha) {
-    Fail "foundations drift: lock says $lockFound, checkout is $foundSha — run ./scripts/bootstrap.sh to re-resolve"
+    Fail "vis drift: lock says $lockFound, checkout is $foundSha — run ./scripts/bootstrap.sh to re-resolve"
 }
 
 for ($i = 0; $i -lt $pkgs.Count; $i++) {
@@ -165,5 +165,5 @@ for ($i = 0; $i -lt $hashPaths.Count; $i++) {
     }
 }
 
-Write-Output "verified: $($hashPaths.Count) conduct files, $($pkgs.Count) packages, foundations SHA $foundSha"
+Write-Output "verified: $($hashPaths.Count) conduct files, $($pkgs.Count) packages, vis SHA $foundSha"
 exit 0

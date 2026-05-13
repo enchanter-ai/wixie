@@ -1,6 +1,0 @@
-# .foundations-versions — foundations packages this sibling consumes
-# Update via: bump version + pull from canonical at ../foundations
-core: "~0.6.0"
-skills: "~0.6.0"
-web: "~0.6.0"
-orchestration: "~0.6.0"

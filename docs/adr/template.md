@@ -26,4 +26,4 @@ opens up. Be honest — if the decision has a real cost, name it.
 ## Related
 
 - Links to relevant code, PRs, other ADRs.
-- Cross-ref to `shared/foundations/conduct/*.md` (or `shared/conduct/inference-substrate.md`) if the decision rests on a behavioral contract.
+- Cross-ref to `shared/vis/conduct/*.md` (or `shared/conduct/inference-substrate.md`) if the decision rests on a behavioral contract.

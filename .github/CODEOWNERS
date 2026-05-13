@@ -7,7 +7,7 @@
 * @klaiderman
 
 # Shared behavioral contract — changes here ripple across all siblings.
-/shared/foundations/conduct/    @klaiderman
+/shared/vis/conduct/    @klaiderman
 /shared/conduct/                @klaiderman
 
 # Diagrams are regenerated, never hand-edited. If you see a hand-edit here,

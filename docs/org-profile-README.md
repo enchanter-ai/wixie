@@ -90,7 +90,7 @@ Auto-orchestrates branch / commit / PR per task boundary; reads CI status across
 
 ### Schematic — Repo Template
 
-The canonical template from which every @enchanter-ai sibling is cloned. Ships the invariant tree: 8-section CLAUDE.md, universal `shared/foundations/conduct/*.md` behavioral modules (vendored from agent-foundations), `docs/architecture/` auto-generation pipeline, example sub-plugin skeleton, and renderer toolchain. Never installed — cloned.
+The canonical template from which every @enchanter-ai sibling is cloned. Ships the invariant tree: 8-section CLAUDE.md, universal `shared/vis/conduct/*.md` behavioral modules (vendored from vis), `docs/architecture/` auto-generation pipeline, example sub-plugin skeleton, and renderer toolchain. Never installed — cloned.
 
 ```
 git clone https://github.com/enchanter-ai/schematic.git <your-plugin-name>

@@ -38,7 +38,7 @@ In scope:
 - Prompt-injection paths that cause the plugin to execute unintended actions.
 - Credential / secret exposure in logs, artifacts, or hook output.
 - Command-injection surfaces in hooks or helper scripts.
-- Bypass of the shared [hooks contract](../foundations/packages/core/conduct/hooks.md) — any hook that decides instead of advises.
+- Bypass of the shared [hooks contract](../vis/packages/core/conduct/hooks.md) — any hook that decides instead of advises.
 - Supply-chain concerns in the renderer toolchain (`docs/assets/package.json`).
 
 Out of scope:

@@ -7,6 +7,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          repository: enchanter-ai/agent-foundations
+          repository: enchanter-ai/vis
           path: .canonical
       - run: bash .canonical/scripts/conduct-abi-check.sh .canonical/conduct

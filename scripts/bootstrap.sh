@@ -2,19 +2,19 @@
 # bootstrap.sh — canonical first command for an @enchanter-ai sibling plugin.
 #
 # Behavior (per s2.0 4-layer recommendation, Layer 1):
-#   1. Read .foundations-versions (YAML-ish: "<pkg>: \"~<ver>\"").
-#   2. Ensure ../foundations exists (clone if missing).
+#   1. Read .vis-versions (YAML-ish: "<pkg>: \"~<ver>\"").
+#   2. Ensure ../vis exists (clone if missing).
 #   3. Fetch tags; checkout each pinned package tag (enchanter-<pkg>--v<ver>).
 #      Note: tags retain the historical `enchanter-` prefix even after the
 #      repo rename; the script prepends it during tag lookup.
-#   4. Verify every @../foundations/... reference in CLAUDE.md resolves.
-#   5. Write .foundations-lock with foundations SHA, per-package tag commits,
+#   4. Verify every @../vis/... reference in CLAUDE.md resolves.
+#   5. Write .vis-lock with vis SHA, per-package tag commits,
 #      and SHA-1 of every conduct file referenced by CLAUDE.md.
 #
 # Modes:
 #   ./scripts/bootstrap.sh           — perform full bootstrap, write lock
 #   ./scripts/bootstrap.sh --verify  — read-only; re-resolve and compare against
-#                                      .foundations-lock; exit 1 on any mismatch.
+#                                      .vis-lock; exit 1 on any mismatch.
 #                                      Used by CI (hash-coverage all-or-nothing).
 #
 # Idempotent. Fails loud on any drift.
@@ -23,10 +23,10 @@ set -uo pipefail
 
 MODE="${1:-bootstrap}"
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-FOUNDATIONS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/foundations"
-FOUNDATIONS_REPO="${FOUNDATIONS_REPO:-https://github.com/enchanter-ai/foundations}"
-VERSIONS_FILE="$PLUGIN_DIR/.foundations-versions"
-LOCK_FILE="$PLUGIN_DIR/.foundations-lock"
+VIS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/vis"
+VIS_REPO="${VIS_REPO:-https://github.com/enchanter-ai/vis}"
+VERSIONS_FILE="$PLUGIN_DIR/.vis-versions"
+LOCK_FILE="$PLUGIN_DIR/.vis-lock"
 CLAUDE_MD="$PLUGIN_DIR/CLAUDE.md"
 
 err() { printf '%s\n' "$*" >&2; }
@@ -34,7 +34,7 @@ err() { printf '%s\n' "$*" >&2; }
 # --- preflight ---------------------------------------------------------------
 
 if [[ ! -f "$VERSIONS_FILE" ]]; then
-  err "missing $VERSIONS_FILE — every sibling plugin must pin foundations packages"
+  err "missing $VERSIONS_FILE — every sibling plugin must pin vis packages"
   exit 1
 fi
 
@@ -43,7 +43,7 @@ if [[ ! -f "$CLAUDE_MD" ]]; then
   exit 1
 fi
 
-# --- parse .foundations-versions --------------------------------------------
+# --- parse .vis-versions --------------------------------------------
 # Format: lines like  core: "~0.6.0"
 # We extract (pkg, version) pairs. Comment lines (#…) and blanks ignored.
 
@@ -61,7 +61,7 @@ while IFS= read -r line; do
     raw="${BASH_REMATCH[2]}"
     VERS+=("${raw#[~^]}")
   else
-    err "warning: unparsed line in .foundations-versions: $line"
+    err "warning: unparsed line in .vis-versions: $line"
   fi
 done < "$VERSIONS_FILE"
 
@@ -70,23 +70,23 @@ if [[ "${#PKGS[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-# --- ensure foundations sibling exists --------------------------------------
+# --- ensure vis sibling exists --------------------------------------
 
 if [[ "$MODE" != "--verify" ]]; then
-  if [[ ! -d "$FOUNDATIONS_DIR/.git" ]]; then
-    err "foundations sibling missing at $FOUNDATIONS_DIR — cloning"
-    git clone "$FOUNDATIONS_REPO" "$FOUNDATIONS_DIR" || {
-      err "clone failed — set FOUNDATIONS_REPO or clone manually"
+  if [[ ! -d "$VIS_DIR/.git" ]]; then
+    err "vis sibling missing at $VIS_DIR — cloning"
+    git clone "$VIS_REPO" "$VIS_DIR" || {
+      err "clone failed — set VIS_REPO or clone manually"
       exit 1
     }
   fi
-  git -C "$FOUNDATIONS_DIR" fetch --tags --quiet || {
-    err "git fetch --tags failed in $FOUNDATIONS_DIR"
+  git -C "$VIS_DIR" fetch --tags --quiet || {
+    err "git fetch --tags failed in $VIS_DIR"
     exit 1
   }
 else
-  if [[ ! -d "$FOUNDATIONS_DIR/.git" ]]; then
-    err "foundations sibling missing — run ./scripts/bootstrap.sh"
+  if [[ ! -d "$VIS_DIR/.git" ]]; then
+    err "vis sibling missing — run ./scripts/bootstrap.sh"
     exit 1
   fi
 fi
@@ -98,29 +98,29 @@ for i in "${!PKGS[@]}"; do
   pkg="${PKGS[$i]}"
   ver="${VERS[$i]}"
   tag="enchanter-${pkg}--v${ver}"
-  sha=$(git -C "$FOUNDATIONS_DIR" rev-list -n 1 "refs/tags/${tag}" 2>/dev/null || true)
+  sha=$(git -C "$VIS_DIR" rev-list -n 1 "refs/tags/${tag}" 2>/dev/null || true)
   if [[ -z "$sha" ]]; then
-    err "tag missing in foundations: ${tag}"
-    err "  → bump .foundations-versions or check available tags: git -C $FOUNDATIONS_DIR tag"
+    err "tag missing in vis: ${tag}"
+    err "  → bump .vis-versions or check available tags: git -C $VIS_DIR tag"
     exit 1
   fi
   TAG_COMMITS+=("$sha")
 done
 
-# Foundations checkout SHA = HEAD of foundations (used as overall pointer).
-FOUND_SHA=$(git -C "$FOUNDATIONS_DIR" rev-parse HEAD)
+# Vis checkout SHA = HEAD of vis (used as overall pointer).
+FOUND_SHA=$(git -C "$VIS_DIR" rev-parse HEAD)
 
 # --- walk CLAUDE.md for @-imports and SHA-1 each --------------------------
 
-# Capture every line of the form  @../foundations/<rel-path>
-# Tolerates surrounding markdown (e.g., "- @../foundations/...md — desc").
+# Capture every line of the form  @../vis/<rel-path>
+# Tolerates surrounding markdown (e.g., "- @../vis/...md — desc").
 mapfile -t IMPORT_PATHS < <(
-  grep -oE '@\.\./foundations/[A-Za-z0-9._/-]+' "$CLAUDE_MD" | \
-    sed 's#^@\.\./foundations/##' | sort -u
+  grep -oE '@\.\./vis/[A-Za-z0-9._/-]+' "$CLAUDE_MD" | \
+    sed 's#^@\.\./vis/##' | sort -u
 )
 
 if [[ "${#IMPORT_PATHS[@]}" -eq 0 ]]; then
-  err "warning: no @../foundations/... imports found in $CLAUDE_MD"
+  err "warning: no @../vis/... imports found in $CLAUDE_MD"
 fi
 
 # Compute SHA-1 of each referenced file. Bail loud on any miss.
@@ -128,9 +128,9 @@ declare -a HASH_PATHS=()
 declare -a HASH_VALUES=()
 MISSING=0
 for rel in "${IMPORT_PATHS[@]}"; do
-  full="$FOUNDATIONS_DIR/$rel"
+  full="$VIS_DIR/$rel"
   if [[ ! -f "$full" ]]; then
-    err "import resolves to missing file: @../foundations/$rel"
+    err "import resolves to missing file: @../vis/$rel"
     MISSING=1
     continue
   fi
@@ -141,19 +141,19 @@ for rel in "${IMPORT_PATHS[@]}"; do
 done
 
 if [[ "$MISSING" -ne 0 ]]; then
-  err "one or more @-imports unresolved — run ./scripts/bootstrap.sh after fixing .foundations-versions"
+  err "one or more @-imports unresolved — run ./scripts/bootstrap.sh after fixing .vis-versions"
   exit 1
 fi
 
-# --- write or verify .foundations-lock --------------------------------------
+# --- write or verify .vis-lock --------------------------------------
 
 generate_lock() {
   local iso
   iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   {
-    echo "# .foundations-lock — auto-generated by scripts/bootstrap.sh"
+    echo "# .vis-lock — auto-generated by scripts/bootstrap.sh"
     echo "# Do not edit by hand. Run ./scripts/bootstrap.sh to refresh."
-    echo "foundations_commit: $FOUND_SHA"
+    echo "vis_commit: $FOUND_SHA"
     echo "resolved_at: $iso"
     echo "packages:"
     for i in "${!PKGS[@]}"; do
@@ -171,7 +171,7 @@ generate_lock() {
 
 if [[ "$MODE" != "--verify" ]]; then
   generate_lock
-  echo "bootstrapped: ${#PKGS[@]} packages, ${#HASH_PATHS[@]} conduct files, foundations SHA $FOUND_SHA"
+  echo "bootstrapped: ${#PKGS[@]} packages, ${#HASH_PATHS[@]} conduct files, vis SHA $FOUND_SHA"
   echo "wrote $LOCK_FILE"
   exit 0
 fi
@@ -179,14 +179,14 @@ fi
 # --verify path: lock must exist and match exactly.
 
 if [[ ! -f "$LOCK_FILE" ]]; then
-  err "foundations not bootstrapped — run ./scripts/bootstrap.sh"
+  err "vis not bootstrapped — run ./scripts/bootstrap.sh"
   exit 1
 fi
 
-# Compare foundations_commit
-lock_found=$(grep -E '^foundations_commit:' "$LOCK_FILE" | awk '{print $2}')
+# Compare vis_commit
+lock_found=$(grep -E '^vis_commit:' "$LOCK_FILE" | awk '{print $2}')
 if [[ "$lock_found" != "$FOUND_SHA" ]]; then
-  err "foundations drift: lock says $lock_found, checkout is $FOUND_SHA — run ./scripts/bootstrap.sh to re-resolve"
+  err "vis drift: lock says $lock_found, checkout is $FOUND_SHA — run ./scripts/bootstrap.sh to re-resolve"
   exit 1
 fi
 
@@ -225,5 +225,5 @@ for i in "${!HASH_PATHS[@]}"; do
   fi
 done
 
-echo "verified: ${#HASH_PATHS[@]} conduct files, ${#PKGS[@]} packages, foundations SHA $FOUND_SHA"
+echo "verified: ${#HASH_PATHS[@]} conduct files, ${#PKGS[@]} packages, vis SHA $FOUND_SHA"
 exit 0

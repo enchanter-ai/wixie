@@ -193,7 +193,7 @@ If `freshness < 30 days`, `/create` reuses `claims.json` without re-running E0. 
 | F13 | Long page polluted findings | Fetcher returns quote + claim only |
 | F14 | Brief cites retired API / deprecated flag | Source `date` weighted by triangulator |
 
-Log occurrences to `state/precedent-log.md` per `@../foundations/packages/core/conduct/precedent.md`.
+Log occurrences to `state/precedent-log.md` per `@../vis/packages/core/conduct/precedent.md`.
 
 ---
 

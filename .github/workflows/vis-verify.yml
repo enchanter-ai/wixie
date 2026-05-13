@@ -1,6 +1,6 @@
-# foundations-verify.yml — GitHub Actions workflow template.
+# vis-verify.yml — GitHub Actions workflow template.
 #
-# Drop into: .github/workflows/foundations-verify.yml in every sibling plugin.
+# Drop into: .github/workflows/vis-verify.yml in every sibling plugin.
 #
 # Per s2.0 recommendation Layer 3: every PR runs ./scripts/bootstrap.sh --verify
 # which is hash-coverage all-or-nothing across every conduct file referenced by
@@ -8,7 +8,7 @@
 #
 # Corroborated by SRI, npm ci, pip --require-hashes, and Go go mod verify.
 
-name: foundations-verify
+name: vis-verify
 
 on:
   push:
@@ -25,28 +25,28 @@ jobs:
         with:
           path: plugin
 
-      - name: extract foundations ref from .foundations-versions
-        id: foundations_ref
+      - name: extract vis ref from .vis-versions
+        id: vis_ref
         working-directory: plugin
         run: |
-          # The plugin pins per-package tags; for CI we check out main of foundations
+          # The plugin pins per-package tags; for CI we check out main of vis
           # since each tag commit is part of the main history. The bootstrap script
           # then resolves the per-package tags against the fetched refs.
           echo "ref=main" >> "$GITHUB_OUTPUT"
 
-      - name: checkout foundations (sibling layout)
+      - name: checkout vis (sibling layout)
         uses: actions/checkout@v4
         with:
-          repository: enchanter-ai/foundations
-          path: foundations
-          ref: ${{ steps.foundations_ref.outputs.ref }}
+          repository: enchanter-ai/vis
+          path: vis
+          ref: ${{ steps.vis_ref.outputs.ref }}
           fetch-depth: 0   # need all tags for per-package tag resolution
 
       - name: ensure bootstrap is executable
         working-directory: plugin
         run: chmod +x scripts/bootstrap.sh
 
-      - name: bootstrap (writes/refreshes .foundations-lock)
+      - name: bootstrap (writes/refreshes .vis-lock)
         working-directory: plugin
         run: ./scripts/bootstrap.sh
 
@@ -54,16 +54,16 @@ jobs:
         working-directory: plugin
         run: ./scripts/bootstrap.sh --verify
 
-      - name: fail if .foundations-lock changed (lock must be committed in sync with .foundations-versions)
+      - name: fail if .vis-lock changed (lock must be committed in sync with .vis-versions)
         working-directory: plugin
         run: |
           # `resolved_at` is a diagnostic timestamp; it differs on every bootstrap and is
           # not used in --verify. Compare everything EXCEPT that one line.
-          if ! diff <(grep -v '^resolved_at:' .foundations-lock) \
-                    <(git show HEAD:.foundations-lock | grep -v '^resolved_at:') > /dev/null; then
-            echo "::error::.foundations-lock is out of sync with .foundations-versions."
+          if ! diff <(grep -v '^resolved_at:' .vis-lock) \
+                    <(git show HEAD:.vis-lock | grep -v '^resolved_at:') > /dev/null; then
+            echo "::error::.vis-lock is out of sync with .vis-versions."
             echo "::error::Run ./scripts/bootstrap.sh locally and commit the updated lock."
-            diff <(grep -v '^resolved_at:' .foundations-lock) \
-                 <(git show HEAD:.foundations-lock | grep -v '^resolved_at:') || true
+            diff <(grep -v '^resolved_at:' .vis-lock) \
+                 <(git show HEAD:.vis-lock | grep -v '^resolved_at:') || true
             exit 1
           fi

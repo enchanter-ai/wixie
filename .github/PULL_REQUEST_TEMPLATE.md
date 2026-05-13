@@ -36,7 +36,7 @@ List the commands and the relevant output.
 ## Ecosystem contract checklist
 
 - [ ] No new runtime dependencies (bash + jq for hooks; Python stdlib for scripts)
-- [ ] Shared conduct modules in `shared/foundations/conduct/` are unchanged (or a vendored update from agent-foundations was intentional), and `shared/conduct/inference-substrate.md` is unchanged, or the rationale for divergence is captured in the PR body
+- [ ] Shared conduct modules in `shared/vis/conduct/` are unchanged (or a vendored update from vis was intentional), and `shared/conduct/inference-substrate.md` is unchanged, or the rationale for divergence is captured in the PR body
 - [ ] No sibling-identifier leaks (this repo does not reference another sibling by filesystem path)
 - [ ] No hand-edited architecture diagrams (regenerate via `generate.py`)
 - [ ] No `.gitkeep` alongside real content

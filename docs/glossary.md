@@ -105,13 +105,13 @@ Wixie emits prompts in one of four shapes depending on the target model family:
 - **Stripped minimal** — o-series (o1, o3). No few-shot, no "think step by step", no role-play preamble. The model reasons internally at length; external CoT hurts.
 - **Always-few-shot** — Gemini. 2-5 demonstrations baseline; zero-shot recall is measurably weaker.
 
-The full rationale lives in [../foundations/packages/skills/conduct/formatting.md](../../foundations/packages/skills/conduct/formatting.md).
+The full rationale lives in [../vis/packages/skills/conduct/formatting.md](../../vis/packages/skills/conduct/formatting.md).
 
 ## `learnings.md`
 
 Per-prompt cross-session memory. Each iteration logs a hypothesis (which axis to lift) and the outcome (score delta, failure code). Subsequent sessions read the log before picking a new axis — E6 accumulation means the engine gets smarter with use, not just the current session.
 
-Failure codes (F01–F14) are defined in [../foundations/packages/core/conduct/failure-modes.md](../../foundations/packages/core/conduct/failure-modes.md).
+Failure codes (F01–F14) are defined in [../vis/packages/core/conduct/failure-modes.md](../../vis/packages/core/conduct/failure-modes.md).
 
 ## See also
 

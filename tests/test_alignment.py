@@ -121,13 +121,13 @@ class TestConductModuleCount(unittest.TestCase):
     """Conduct module count on disk should match any N-module claim in CLAUDE.md / README.md."""
 
     def _count_conduct_modules(self) -> int:
-        # Vendored foundations conduct modules (canonical source).
-        foundations_dir = REPO_ROOT / "shared" / "foundations" / "conduct"
-        foundations_count = len(list(foundations_dir.glob("*.md"))) if foundations_dir.is_dir() else 0
+        # Vendored vis conduct modules (canonical source).
+        vis_dir = REPO_ROOT / "shared" / "vis" / "conduct"
+        vis_count = len(list(vis_dir.glob("*.md"))) if vis_dir.is_dir() else 0
         # Wixie-specific conduct modules (inference-substrate.md lives here).
         local_dir = REPO_ROOT / "shared" / "conduct"
         local_count = len(list(local_dir.glob("*.md"))) if local_dir.is_dir() else 0
-        return foundations_count + local_count
+        return vis_count + local_count
 
     def _check_doc_count(self, doc_path: Path, actual: int) -> None:
         """Soft check: if a numeric module count claim exists in doc, it must match actual."""
@@ -144,7 +144,7 @@ class TestConductModuleCount(unittest.TestCase):
                     int(m),
                     actual,
                     f"{doc_path.name} claims {m} conduct modules but {actual} .md files found "
-                    f"in shared/foundations/conduct/ + shared/conduct/",
+                    f"in shared/vis/conduct/ + shared/conduct/",
                 )
 
     def test_conduct_module_count_matches_claude_md(self):

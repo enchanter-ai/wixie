@@ -19,7 +19,7 @@ Before the first plugin ships, the ecosystem needs one shared piece: the repo te
 
 | Repo | Role | Status |
 |------|------|--------|
-| [`enchanter-ai/schematic`](https://github.com/enchanter-ai/schematic) | Canonical repo template. Ships the 8-section CLAUDE.md, `shared/foundations/conduct/*.md` modules (vendored from agent-foundations), `docs/architecture/` auto-generation pipeline, `plugins/example-subplugin/` skeleton, renderer toolchain. Never installed — cloned. | Shipped |
+| [`enchanter-ai/schematic`](https://github.com/enchanter-ai/schematic) | Canonical repo template. Ships the 8-section CLAUDE.md, `shared/vis/conduct/*.md` modules (vendored from vis), `docs/architecture/` auto-generation pipeline, `plugins/example-subplugin/` skeleton, renderer toolchain. Never installed — cloned. | Shipped |
 
 The template is the contract. When it drifts, all downstream siblings drift — so changes to `schematic` are treated as brand-standard changes, not per-plugin improvements.
 

@@ -6,27 +6,27 @@ Audience: Claude. Wixie engineers prompts — crafts, converges, tests, hardens,
 
 These apply to every skill in every plugin. Load once; do not re-derive.
 
-- @../foundations/packages/core/conduct/discipline.md — coding conduct: think-first, simplicity, surgical edits, goal-driven loops
-- @../foundations/packages/core/conduct/context.md — attention-budget hygiene, U-curve placement, checkpoint protocol
-- @../foundations/packages/core/conduct/capability-fidelity.md — contracts survive capability gaps: recover, escalate, or abort; never silently substitute
-- @../foundations/packages/core/conduct/verification.md — independent checks, baseline snapshots, dry-run for destructive ops
-- @../foundations/packages/core/conduct/verdict-calibration.md — every verdict (DEPLOY/PASS/COMPLETE/VERIFIED) carries n, sampling method, and a calibration qualifier; foundations abstraction over the wixie DEPLOY bar
-- @../foundations/packages/core/conduct/doubt-engine.md — adversarial self-check before agreement; counter to F01 sycophancy; fires on user proposals AND your own prior framing
-- @../foundations/packages/core/conduct/delegation.md — subagent contracts, tool whitelisting, parallel vs. serial rules
-- @../foundations/packages/core/conduct/failure-modes.md — 14-code taxonomy for `learnings.md` so E6 can aggregate
-- @../foundations/packages/core/conduct/tool-use.md — tool-choice hygiene, error payload contract, parallel-dispatch rules
-- @../foundations/packages/skills/conduct/formatting.md — per-target format (XML/Markdown/minimal/few-shot), prefill + stop sequences
-- @../foundations/packages/skills/conduct/skill-authoring.md — SKILL.md frontmatter discipline, discovery test
-- @../foundations/packages/core/conduct/hooks.md — advisory-only hooks, injection over denial, fail-open
-- @../foundations/packages/core/conduct/metacognition.md — periodic goal-restate; fires every K=8 tool-uses or on user meta-question
-- @../foundations/packages/core/conduct/precedent.md — log self-observed failures to `state/precedent-log.md`; consult before risky steps
-- @../foundations/packages/core/conduct/precedent-freshness.md — verify self-authored memory/precedent/briefings before relying on them: Class-A surfaces (path/function/flag) get a Glob/Grep existence check; Class-B snapshots get a git-log freshness check; Class-C feedback rules are trusted unless contradicted
-- @../foundations/packages/core/conduct/prior-art-discovery.md — F28 counter: run the 5-target discovery pass (shared/scripts, packages/*/skills, state/proposals, slug-glob, signature-grep) before authoring a new tool/script/skill/module
-- @../foundations/packages/core/conduct/reversibility-foresight.md — classify action reversibility (trivial/costly/impossible) before acting; confirmation scales with tier
-- @../foundations/packages/core/conduct/substrate-consumption.md — read-side complement to precedent.md: consume briefing, MEMORY, learnings, and precedent before acting; counter to F24 substrate-blindness
-- @../foundations/packages/core/conduct/sunk-cost-iteration.md — stop-and-re-ask after 2 INCONCLUSIVE/BLOCKED results on the same artifact; iteration is not an authorization to keep patching
-- @../foundations/packages/core/conduct/tier-sizing.md — prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent
-- @../foundations/packages/web/conduct/web-fetch.md — external URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only
+- @../vis/packages/core/conduct/discipline.md — coding conduct: think-first, simplicity, surgical edits, goal-driven loops
+- @../vis/packages/core/conduct/context.md — attention-budget hygiene, U-curve placement, checkpoint protocol
+- @../vis/packages/core/conduct/capability-fidelity.md — contracts survive capability gaps: recover, escalate, or abort; never silently substitute
+- @../vis/packages/core/conduct/verification.md — independent checks, baseline snapshots, dry-run for destructive ops
+- @../vis/packages/core/conduct/verdict-calibration.md — every verdict (DEPLOY/PASS/COMPLETE/VERIFIED) carries n, sampling method, and a calibration qualifier; vis-side abstraction over the wixie DEPLOY bar
+- @../vis/packages/core/conduct/doubt-engine.md — adversarial self-check before agreement; counter to F01 sycophancy; fires on user proposals AND your own prior framing
+- @../vis/packages/core/conduct/delegation.md — subagent contracts, tool whitelisting, parallel vs. serial rules
+- @../vis/packages/core/conduct/failure-modes.md — 14-code taxonomy for `learnings.md` so E6 can aggregate
+- @../vis/packages/core/conduct/tool-use.md — tool-choice hygiene, error payload contract, parallel-dispatch rules
+- @../vis/packages/skills/conduct/formatting.md — per-target format (XML/Markdown/minimal/few-shot), prefill + stop sequences
+- @../vis/packages/skills/conduct/skill-authoring.md — SKILL.md frontmatter discipline, discovery test
+- @../vis/packages/core/conduct/hooks.md — advisory-only hooks, injection over denial, fail-open
+- @../vis/packages/core/conduct/metacognition.md — periodic goal-restate; fires every K=8 tool-uses or on user meta-question
+- @../vis/packages/core/conduct/precedent.md — log self-observed failures to `state/precedent-log.md`; consult before risky steps
+- @../vis/packages/core/conduct/precedent-freshness.md — verify self-authored memory/precedent/briefings before relying on them: Class-A surfaces (path/function/flag) get a Glob/Grep existence check; Class-B snapshots get a git-log freshness check; Class-C feedback rules are trusted unless contradicted
+- @../vis/packages/core/conduct/prior-art-discovery.md — F28 counter: run the 5-target discovery pass (shared/scripts, packages/*/skills, state/proposals, slug-glob, signature-grep) before authoring a new tool/script/skill/module
+- @../vis/packages/core/conduct/reversibility-foresight.md — classify action reversibility (trivial/costly/impossible) before acting; confirmation scales with tier
+- @../vis/packages/core/conduct/substrate-consumption.md — read-side complement to precedent.md: consume briefing, MEMORY, learnings, and precedent before acting; counter to F24 substrate-blindness
+- @../vis/packages/core/conduct/sunk-cost-iteration.md — stop-and-re-ask after 2 INCONCLUSIVE/BLOCKED results on the same artifact; iteration is not an authorization to keep patching
+- @../vis/packages/core/conduct/tier-sizing.md — prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent
+- @../vis/packages/web/conduct/web-fetch.md — external URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only
 - @shared/conduct/inference-substrate.md — cross-session evidence accumulation; emit to and read from the inference-engine substrate without corrupting its honest-numbers contract
 
 When a module conflicts with a plugin-local instruction, the plugin wins — but log the override.
@@ -70,7 +70,7 @@ E0 auto-fires inside `/create` (and `/refine`) when the topic depends on externa
 5. **Ask, don't guess.** If a metadata field is unknown, ask the developer or run the engine. Never fabricate scores, costs, or technique lists.
 6. **ESCALATE on image prompts.** DALL-E, Midjourney, SD, Wixie, Nano Banana, etc. are collaborative — wait for the developer's 1–10 rating and visual feedback each round. After 5+ rounds without progress, recommend a different image model.
 7. **ESCALATE on unknown target model.** If the target model ID is not in `shared/models-registry.json`, stop and ask. The registry is the capability source of truth.
-8. **Offer commit + push after registry or shared-artifact edits.** Whenever you edit `shared/models-registry.json`, a `shared/foundations/conduct/*.md` module, `shared/conduct/inference-substrate.md`, or anything a downstream plugin reads as source-of-truth, end the turn by asking whether to commit and push — don't wait for the developer to remember. State the change in one line ("registry bumped to N models, last_updated YYYY-MM-DD") and wait for yes before running git.
+8. **Offer commit + push after registry or shared-artifact edits.** Whenever you edit `shared/models-registry.json`, a `shared/vis/conduct/*.md` module, `shared/conduct/inference-substrate.md`, or anything a downstream plugin reads as source-of-truth, end the turn by asking whether to commit and push — don't wait for the developer to remember. State the change in one line ("registry bumped to N models, last_updated YYYY-MM-DD") and wait for yes before running git.
 
 ## Artifacts per prompt
 
