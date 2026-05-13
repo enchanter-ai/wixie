@@ -27,3 +27,8 @@ docs/assets/package.json
 # (plugins/inference-engine/state/artifacts.jsonl via backfill — see OP06).
 # Nothing here ships.
 state/
+
+# Efficacy harness raw transcripts (verdict.json is the durable artifact).
+# Redundant under the blanket state/ rule above, but kept explicit per the
+# v0 efficacy-sandbox proposal (state/efficacy/<slug>/runs/).
+state/efficacy/*/runs/
