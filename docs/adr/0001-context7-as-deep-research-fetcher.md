@@ -19,7 +19,9 @@ The decision: do we extend the fetcher's `allowed-tools` to include Context7, ga
 
 ## Decision
 
-We will add Context7 MCP as an additional Step-1 retrieval path inside `plugins/deep-research/agents/fetcher.md`, **gated mechanically** to queries whose `sub_question` names a library, framework, SDK, package, or API endpoint. All other sub-questions continue through `WebSearch` + `WebFetch` unchanged. Context7 returns are subjected to the same Test A / Test B / Test C extraction discipline and stamped in `sources.jsonl` with a deterministic identifier (`context7://<library>@<version>#<section>`) rather than a drift-prone URL.
+**If and only if the conditions in [Revisit trigger](#revisit-trigger) below are met,** we will add Context7 MCP as an additional Step-1 retrieval path inside `plugins/deep-research/agents/fetcher.md`, **gated mechanically** to queries whose `sub_question` names a library, framework, SDK, package, or API endpoint. All other sub-questions continue through `WebSearch` + `WebFetch` unchanged. Context7 returns are subjected to the same Test A / Test B / Test C extraction discipline and stamped in `sources.jsonl` with a deterministic identifier (`context7://<library>@<version>#<section>`) rather than a drift-prone URL.
+
+As of 2026-05-15 the trigger conditions are not met — see the workload survey below. The proposed change is therefore **not implemented**. This section describes the proposal so a future reader who reactivates this ADR has the design intact.
 
 ## Alternatives considered
 
