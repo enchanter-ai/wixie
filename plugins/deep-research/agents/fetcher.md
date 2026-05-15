@@ -29,8 +29,15 @@ Run WebSearch once with `<query>`. Take the top 3 results.
 
 ### Step 2 — Rank and filter
 
-For each result, check both tests in order. Keep the result only if both pass.
+For each result, run URL normalization first, then check both tests in order. Keep the result only if both pass.
 
+- **URL normalization (arxiv).** If the URL host is `arxiv.org` AND the path starts with `/pdf/`, extract the arxiv `<id>` (the segment immediately after `/pdf/`, with any trailing `.pdf` stripped and any `vN` version suffix preserved) and rewrite to `https://arxiv.org/abs/<id>`. Apply *before* the source-type and topicality tests so the canonical URL is what's tested, fetched, and recorded. Non-arxiv `.pdf` URLs are not rewritten — let them fall through and drop in Step 3 as unfetchable if needed. Substrate counter: OP06.
+
+  Examples:
+  - `arxiv.org/pdf/2401.12345` → `arxiv.org/abs/2401.12345`
+  - `arxiv.org/pdf/2401.12345v2.pdf` → `arxiv.org/abs/2401.12345v2`
+  - `arxiv.org/abs/2401.12345` → unchanged
+  - `example.com/foo.pdf` → unchanged (non-arxiv)
 - **Source-type test.** Is the URL one of:
   - Official vendor docs (`docs.<vendor>.com`, `developer.<vendor>.com`, known vendor domain)
   - Peer-reviewed paper (`arxiv.org`, `*.acm.org`, `*.ieee.org`, journal domain)
@@ -199,3 +206,4 @@ Treat the schema clauses above as documentation of intent; treat the normalizer 
 | F13 | Findings drift into adjacent topics not in `<sub_question>` | Test A filters these; re-apply when output looks wide |
 | F14 | Old spec returned without date indicator | Extract `date` so downstream can weight freshness |
 | F08 | Called Bash curl instead of WebFetch | WebFetch handles headers, encoding, timeouts — use it |
+| OP06 | Arxiv `/pdf/<id>` URL passed to WebFetch — returns binary, unfetchable | Step 2 URL normalization rewrites to `/abs/<id>` before fetch; if a `/pdf/` URL reaches Step 3, the normalization was skipped — re-run Step 2 |
