@@ -54,11 +54,11 @@ E0-specific wiring follows below.
 | Phase | Tier | E0 wiring |
 |-------|------|-----------|
 | 1 Decompose | Opus (inline) | The caller writes sub-questions + seed queries to `trace.json#phase1` |
-| 2 Cast | Haiku × N | `Agent(general-purpose, haiku, prompt="Run the fetcher at ${CLAUDE_PLUGIN_ROOT}/agents/fetcher.md with query=<q> sub_question=<sq>")` — parallel dispatch in one message. **MCP dispatch (optional, per-fetcher):** when an MCP is the right call for a given (`query`, `sub_question`) pair per the routing table in `@../vis/packages/web/conduct/mcp-research-discipline.md`, the orchestrator appends `mcp=<name>` to the prompt — the fetcher then delegates to `${CLAUDE_PLUGIN_ROOT}/agents/mcp-fetcher.md` which runs the three security gates (manifest audit, version pin, least-privilege creds) before any MCP tool call. Gate failures return `{"error": "<gate>-failed"}` and the orchestrator decides whether to re-dispatch on the static path. **Never let `mcp-fetcher.md` silently fall back to `WebSearch`** — that breaks the F22 capability-fidelity contract. |
+| 2 Cast | Haiku × N | `Agent(general-purpose, haiku, prompt="Run the fetcher at ${CLAUDE_PLUGIN_ROOT}/agents/fetcher.md with query=<q> sub_question=<sq>")` — parallel dispatch in one message. **MCP dispatch (optional, per-fetcher):** when an MCP is the right call for a given (`query`, `sub_question`) pair per the routing table in `@../vis/packages/web/conduct/mcp-research-discipline.md`, the orchestrator appends `mcp=<name>` to the prompt — the fetcher then delegates to `${CLAUDE_PLUGIN_ROOT}/agents/mcp-fetcher.md` which runs the three security gates (manifest audit, version pin, least-privilege creds) before any MCP tool call. Gate failures return `{"error": "<gate>-failed"}` and the orchestrator decides whether to re-dispatch on the static path. **Never let `mcp-fetcher.md` silently fall back to `WebSearch`** — that breaks the F22 capability-fidelity contract. **Inline / single-linear-flow dispatch (G-V8):** when a phase is run as a single sub-agent on one linear contract (e.g., one fetcher.md, one verifier.md, one ciber.md), the contract checklist *is* the work plan — todo lists add no signal. The dispatched agent may ignore harness-injected "consider using TodoWrite" reminders for that run; honest-numbers contract over performative bookkeeping. Append a one-line `# Note: single linear flow — TodoWrite reminders are advisory and may be ignored; follow the contract checklist.` to the inline-mode prompt template when dispatching such a run. |
 | 3 Triangulate | Sonnet | `Agent(general-purpose, sonnet, prompt="Run the triangulator at ${CLAUDE_PLUGIN_ROOT}/agents/triangulator.md with sources_path=<path> round=<N> sub_questions=<json> prior_claim_count=<N>")` |
 | 4 Gap-fill + adversarial | Opus decides, Haiku fetches | Consume triangulator's `negation_queries` for the adversarial family; generate gap-fill from `coverage_gaps`; re-enter Phase 2 |
 | 5 Synthesize | Opus (inline) | Codify triangulator's final claim graph into `claims.json` (schema below) |
-| 5.5 Synthesis-prose shape-check | Orchestrator inline (no agent dispatch) | `Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/dossier-cite-validator.py --dossier <path> --sources <path> [--claims <path>])` — mechanical cite-to-source trace test on Phase 5 prose; **pre-flight check, advisory only**. Orchestrator rewrites flagged sentences (F02.4) before dispatching Phase 6. Phase 6 verifier remains the verdict gate. Per `@../vis/packages/web/conduct/citation-verification.md` § "Synthesis-prose validation (pre-Phase-6)". |
+| 5.5 Synthesis-prose shape-check | Orchestrator inline (no agent dispatch) | `Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/dossier-cite-validator.py --dossier <path> --sources <path> [--claims <path>])` — mechanical cite-to-source trace test on Phase 5 prose; **pre-flight check, advisory only**. Orchestrator rewrites flagged sentences (F02.4) before dispatching Phase 6. Phase 6 verifier remains the verdict gate. Per `@../vis/packages/web/conduct/citation-verification.md` § "Synthesis-prose validation (pre-Phase-6)". **Claims-trace variant (G-V5):** the same script also runs with `--mode claims --claims <path> --sources <path>` to walk `claims[].supporting[]` ↔ `sources.jsonl` mechanically. Use this when `claims.json` exists but `report.md` is not (yet) rendered — same Test A + Test B reduction over each (claim, S-id) pair. Exit code 1 = at least one (claim, S-id) violation; 0 = clean trace. The claims-mode is a stricter mirror of the verifier — keep treating it as advisory unless Phase 6 is also blocked. |
 | 6 Verify | Haiku | `Agent(general-purpose, haiku, prompt="Run the verifier at ${CLAUDE_PLUGIN_ROOT}/agents/verifier.md with target_path=<path> sources_path=<path> refetch_pct=<10\|0>")` |
 | 6c CIBER | Haiku | `Agent(general-purpose, haiku, prompt="Run the CIBER agent at ${CLAUDE_PLUGIN_ROOT}/agents/ciber.md with claims_path=<path> sources_path=<path> top_n=10 k_per_claim=3")` — full depth only; skipped at `--depth quick` |
 
@@ -109,12 +109,13 @@ The orchestrator applies the demotion mechanically (CIBER is read-only; it diagn
 
 1. For each entry in `consistency_failures`:
    - Locate the claim by `claim_id` in `claims.json#claims`.
-   - If `confidence == "high"` → set `confidence: "medium-contested"`.
+   - If `confidence == "high"` → set `confidence: "medium-contested"` (applies to **all three severities**, including `temporal_scope_shift`).
    - Increment `dissemination_score` by `0.25` per failure (cap at `1.0`).
    - Append `contradicting_source_ids` to a new `contests:` array on the claim entry (separate from `supporting:`).
    - Append `{ids: [<claim_id>], topic: "CIBER consistency failure", description: "<failed_reframing>"}` to `claims.json#unresolved_contradictions`.
 
 2. Set `claims.json#ciber_passed = <agent's value>` and record agent output verbatim in `trace.json#phase6c`.
+   - **Severity contract for `ciber_passed`.** Per the CIBER agent's contract, `ciber_passed` is `true` iff `consistency_failures` contains **no entries with `severity ∈ {negation_supported, paraphrase_split}`**. An array containing only `temporal_scope_shift` entries returns `ciber_passed: true` — confidence is demoted per (1) above, but the verdict gate is not flipped. Pre-reversal evidence supporting a now-reversed state is historical, not paraphrase-fragile.
 
 3. Verdict consequence — see "Verdict — wixie's mapping over the vis criteria" below.
 
@@ -163,13 +164,15 @@ The vis `research-pipeline.md` defines the verdict criteria. E0's mapping is ide
 | `HOLD` | Any floor violated (wall-clock, query count, source count, re-fetch sample, missing Phase 6c at full depth — F12.3) | Do not ship; orchestrator re-dispatches the offending phase |
 | `FAIL` | `verify_passed: false` OR `refetch_pass_rate < 0.7` | Regenerate `sources.jsonl` from a fresh Phase 2 |
 
-**CIBER override on the verdict (Phase 6c).** A CIBER consistency failure on a `high`-confidence claim downgrades that claim to `medium-contested` AND forces the brief verdict to `PARTIAL` — even if every other gate passes (`τ ≥ 0.85`, `refetch_pass_rate ≥ 0.9`, all `verifier` violations empty). Rationale: a claim whose paraphrase splits its own source set is not READY-grade ground truth, regardless of how well the original phrasing traced.
+**CIBER override on the verdict (Phase 6c).** A CIBER consistency failure of severity `negation_supported` or `paraphrase_split` on a `high`-confidence claim downgrades that claim to `medium-contested` AND forces the brief verdict to `PARTIAL` — even if every other gate passes (`τ ≥ 0.85`, `refetch_pass_rate ≥ 0.9`, all `verifier` violations empty). Rationale: a claim whose paraphrase splits its own source set is not READY-grade ground truth, regardless of how well the original phrasing traced.
+
+A `temporal_scope_shift` severity demotes the claim's confidence (the wording is time-fragile) but does NOT force PARTIAL — `ciber_passed` remains `true` and the verdict gate is unaffected by this severity alone. Pre-reversal evidence supporting a now-reversed state is historical, not paraphrase-fragile. Surface the timeline (claim's effective date vs source's date) in `claims.json#unresolved_contradictions` so `/create` can carry the temporal qualifier into `<constraints>`.
 
 Mapping precedence (highest wins):
 1. `refetch_pass_rate < 0.7` → `FAIL` (Phase 6b hard fail)
 2. Any `verifier.violations` non-empty → `HOLD`
 3. Full depth AND Phase 6c was not run AND no valid `ciber_skipped` reason recorded → `HOLD` (F12.3); orchestrator re-dispatches Phase 6c
-4. `ciber_passed == false` (any consistency failure on a `high` claim) → `PARTIAL` (CIBER override)
+4. `ciber_passed == false` (consistency failure of severity `negation_supported` or `paraphrase_split` on a `high` claim) → `PARTIAL` (CIBER override). `temporal_scope_shift` entries do NOT flip `ciber_passed` and do NOT trigger this rule.
 5. `0.7 ≤ refetch_pass_rate < 0.9` → `PARTIAL` (Phase 6b flagged)
 6. `τ < 0.85` OR unresolved contradictions present → `PARTIAL`
 7. All gates pass AND `--depth full` AND `ciber_passed: true` → `READY`

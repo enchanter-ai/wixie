@@ -80,6 +80,36 @@ For each kept URL, run WebFetch. If the response is any of:
 
 Do NOT WebFetch any `web.archive.org` URL — the host is blocked at the harness layer. Do NOT use the wildcard form `web/2026*/<url>` (returns calendar HTML). Do NOT use the plain (non-`id_`) snapshot form (returns chrome-wrapped page). The `id_/` form via `curl --compressed` is the only path validated to return clean archived bodies.
 
+#### Step 3 fallback — snippet-only retention (G-V3)
+
+When BOTH the live WebFetch AND the Wayback two-step fall through (curl fails, body < 500 words, or no snapshot exists) AND the original WebSearch result for this URL exposed a snippet (excerpt) that already contains claim-relevant evidence: instead of recording `{"url": "<url>", "error": "unfetchable"}` and dropping the source, retain it as a **snippet-only finding**. Codified in `source-discipline.md` "Snippet-only retention"; calibration anchor is DR-V3's S7 (VentureBeat 429) ad-hoc retention.
+
+Procedure:
+1. Take the WebSearch result snippet you already have from Step 1. Do NOT re-fetch.
+2. Apply Tests A + B + C from Step 6 against the snippet text (paragraph-level tests on a snippet-sized blob). Allow at most **2 findings** per snippet — snippets carry limited information and a third finding is invention.
+3. For each retained finding, copy the snippet sentence verbatim into `quote` (still wrapped in `<untrusted_source url="<url>">...</untrusted_source>`) and set `snippet_only: true` on the finding.
+4. Emit the source object with `"snippet_only": true` at the top level and `"quote_provenance": "snippet"` on each finding. Omit `"via_archive"` (the archive path failed too — record the attempt separately if useful).
+
+```json
+{
+  "url": "https://venturebeat.com/.../...",
+  "date": null,
+  "source_type": "third-party",
+  "snippet_only": true,
+  "findings": [
+    {"claim": "<paraphrase>", "quote": "<untrusted_source url=\"...\">snippet sentence</untrusted_source>", "quote_provenance": "snippet", "snippet_only": true}
+  ]
+}
+```
+
+The triangulator's forced confidence cap (per `source-discipline.md`) ensures claims backed only by snippet-only sources cap at `medium`. The fetcher's job is to honestly flag the provenance — never silently upgrade a snippet to look like a body extract.
+
+If the WebSearch snippet does NOT contain claim-relevant content (just navigation text, a teaser, or an off-topic excerpt), do NOT retain — record `{"url": "<url>", "error": "unfetchable"}` as before. Snippet-only retention is a recovery path for real evidence, not a way to inflate source counts.
+
+#### Step 3 — quote_provenance tagging on the normal path
+
+When the live WebFetch (or Wayback fallback) succeeds and Step 6 extracts findings from the page body, emit `"quote_provenance": "summariser"` on each finding by default — WebFetch returns model-summarised content, not raw HTML char-offsets. For verdict-impacting primary citations (vendor-spec assertions, paper-reported numbers, benchmark figures), prefer the raw-extract path: `Bash: curl -sS -L --max-time 30 --compressed -A "Mozilla/5.0 (compatible)" "<url>"`, extract the sentence by character offset from the returned body, and emit `"quote_provenance": "raw"`. The raw path is recommended, not mandatory — `summariser` provenance is acceptable for non-primary corroboration. Full taxonomy + when to use each value: `source-discipline.md` "Quote provenance".
+
 The `via_archive: true` flag indicates the live web rotted but the citation was historically real. Published evidence (Rao et al., *urlhealth*, arxiv/2604.03173) reports 6-79× recovery of dead URLs via this path. BG-15 measured 3/5 = 60% body-verified recovery on a 5-URL sample (the remaining 2 had no snapshot in the archive — protocol-soundness was 100% when a snapshot existed).
 
 ### Step 4 — Extract `date`
@@ -139,8 +169,9 @@ Return ONLY this JSON array shape. No preamble. No markdown fences. No trailing 
     "date": "<YYYY-MM-DD|YYYY-MM|YYYY|null>",
     "source_type": "official|third-party|community|paper|other",
     "via_archive": false,
+    "snippet_only": false,
     "findings": [
-      {"claim": "<paraphrase>", "quote": "<verbatim sentence>"}
+      {"claim": "<paraphrase>", "quote": "<verbatim sentence>", "quote_provenance": "raw|summariser|snippet"}
     ]
   }
 ]
@@ -148,7 +179,11 @@ Return ONLY this JSON array shape. No preamble. No markdown fences. No trailing 
 
 `via_archive: true` indicates Step 3 fell back to a Wayback Machine snapshot — downstream consumers see that the live web has rotted but the citation was historically real. Omit the field (or `false`) when the live URL fetched normally.
 
-Unfetchable pages (both live AND archive failed) use `{"url": "<url>", "error": "unfetchable"}` — no other fields. One object per page. Total output under 400 words.
+`snippet_only: true` indicates the Step 3 snippet-only retention path was taken (both live and archive failed; finding extracted from WebSearch snippet). Omit (or `false`) when the body was actually fetched. When `snippet_only: true`, every finding's `quote_provenance` must be `"snippet"`.
+
+`quote_provenance` per finding: `"raw"` for `Bash(curl:*)` raw-extract, `"summariser"` for the default WebFetch path (Steps 4–6), `"snippet"` for snippet-only retention. Default when omitted: `"summariser"`. See `source-discipline.md` "Quote provenance".
+
+Unfetchable pages (both live AND archive failed AND no usable snippet) use `{"url": "<url>", "error": "unfetchable"}` — no other fields. One object per page. Total output under 400 words.
 
 <example type="correct">
 ```json
@@ -206,10 +241,11 @@ For every object in your output array, confirm each of the following before emit
 
 - `url` — present, a string.
 - Objects with `error: "unfetchable"` — no other fields besides `url` and `error`.
-- Objects without `error` — exactly four keys: `url`, `date`, `source_type`, `findings`.
+- Objects without `error` — required keys: `url`, `date`, `source_type`, `findings`. Optional keys: `via_archive` (bool), `snippet_only` (bool), `archive_snapshot_url` (string). No other keys.
 - `date` — one of `YYYY-MM-DD`, `YYYY-MM`, `YYYY`, or `null`. Not a narrative string.
 - `source_type` — exactly one of: `official`, `third-party`, `community`, `paper`, `other`.
-- `findings` — an array (may be empty). Each element has exactly two keys: `claim` and `quote`. No `confidence`, `relevance`, or any other key.
+- `findings` — an array (may be empty). Each element has required keys `claim` and `quote`; optional keys `quote_provenance` (`"raw"|"summariser"|"snippet"`) and `snippet_only` (bool, only set when the parent source is `snippet_only`). No `confidence`, `relevance`, or any other key.
+- If `snippet_only: true` on the source, every finding must carry `quote_provenance: "snippet"` and `snippet_only: true`.
 
 If any check fails, fix the object before emitting. Do not emit and flag — fix then emit.
 

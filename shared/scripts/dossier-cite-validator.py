@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """dossier-cite-validator.py — Phase 6 trace-check (Test A + Test B) at write-time.
 
+Author: Enchanter Labs
+
 Closes G-4 in the deep-research gaps roadmap: catches synthesis-prose cites
 that don't trace to a supporting finding in sources.jsonl BEFORE the Phase 6
 verifier rejects the brief.
@@ -9,19 +11,41 @@ Mechanical reproduction of `plugins/deep-research/agents/verifier.md` Steps 2-4
 (web-citation branch only — Test C interval-overlap is out of scope here; the
 target is markdown dossier prose, not code citations).
 
+Two modes:
+  --mode dossier (default, legacy): walks `report.md` prose, extracts S-cite
+    references, and for each cite confirms it resolves to `sources.jsonl` with
+    a finding that passes Test A (subject match) + Test B (action match).
+  --mode claims (G-V5): walks `claims.json#claims[]`, for each claim iterates
+    its `supporting[]` S-id list, confirms each S-id resolves in
+    `sources.jsonl`, and confirms the source's `findings[]` mention the claim's
+    subject + action mechanically (same Test A + Test B logic as the dossier
+    mode, with the claim's `claim` field as the supported_text).
+
 Inputs:
-  --dossier <path.md>     dossier markdown to scan for S-cites
-  --sources <path.jsonl>  sources.jsonl with findings[].claim + findings[].quote
-  --claims  <path.json>   OPTIONAL: claims.json for cite-ID enumeration sanity check
+  --mode    dossier|claims  pick the validation surface (default: dossier)
+  --dossier <path.md>       dossier markdown to scan (mode=dossier)
+  --claims  <path.json>     claims.json to walk (mode=claims; also accepted as
+                            OPTIONAL sanity-check input under mode=dossier)
+  --sources <path.jsonl>    sources.jsonl with findings[].claim + findings[].quote
+
+Backward compat:
+  - If `--mode` is omitted and `--dossier` is supplied, mode defaults to
+    `dossier`. Existing callers (`--dossier <p> --sources <p> [--claims <p>]`)
+    keep working unchanged.
+  - If `--mode claims` is passed, `--claims` becomes required and `--dossier`
+    is ignored (warned in stderr if also supplied).
 
 Output:
-  JSON to stdout:
-    {
-      "total_cites_checked": N,
-      "violations": [{claim_excerpt, cite, reason}, ...],
-      "pass_rate": float,
-      "notes": "..."
-    }
+  - mode=dossier: JSON to stdout with violations[].{cite, line, claim_excerpt, reason}.
+  - mode=claims:  JSON to stdout with violations[].{claim_id, cite, claim_excerpt, reason}.
+    One human-readable violation line per offending (claim_id, S-id) printed to
+    stdout AFTER the JSON block (so machines can parse the JSON head and humans
+    can scan the tail).
+  Exit code:
+    0 = no violations (pass)
+    1 = one or more violations (claims mode only — dossier mode is advisory and
+        always exits 0 for backward compat with the Phase 5.5 pre-flight wiring)
+    2 = required input file missing
 
 Honest-numbers contract:
   - No fuzzy semantic matching. Tests A+B reduce to substring / synonym checks
@@ -40,6 +64,15 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+# Reconfigure stdout/stderr to UTF-8 with replacement so em-dashes and other
+# unicode glyphs in claim text don't crash the validator on Windows cp1252.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, OSError):
+    # Pre-3.7 or non-tty: best-effort only.
+    pass
 
 
 # ---------- citation extraction ---------------------------------------------
@@ -220,31 +253,88 @@ def extract_subject(supported_text: str) -> str:
       3. Else pick the first non-stopword, non-leading-adjective capitalized token.
       4. Else first non-stopword content token of len ≥ 3.
     """
+    candidates = extract_subject_candidates(supported_text, k=1)
+    return candidates[0] if candidates else ""
+
+
+# Throwaway tokens that often start a claim but never carry subject identity.
+# These are skipped over when sweeping for proper-noun candidates so the
+# extractor doesn't anchor on temporal qualifiers, headers, or metadata words.
+LEADING_NON_SUBJECTS = LEADING_ADJECTIVES | {
+    "as", "of", "in", "on", "at", "by", "to", "for", "from", "with",
+    "may", "june", "july", "august", "september", "october", "november",
+    "december", "january", "february", "march", "april",
+    "documented", "published", "anthropic-side", "server-side", "client-side",
+    "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "one", "first", "second", "third", "fourth", "fifth",
+    "stable", "beta", "experimental", "ga", "deprecated",
+    "automated", "manual", "explicit", "implicit",
+    "common", "documented", "known", "reported",
+    "model", "models", "version", "versions", "type", "types",
+    "as", "of", "the", "a", "an",
+}
+
+
+def extract_subject_candidates(supported_text: str, k: int = 4) -> list[str]:
+    """Return up to k candidate subjects, best-first. Mode=claims iterates the
+    list and PASSES on the first candidate whose Test A+B clears on any
+    finding. This is the spec's "obvious synonym counts" leeway translated
+    into a small search — claim text from `claims.json` is more verbose than
+    dossier prose ("As of May 2026 the Anthropic Computer Use API…") so a
+    single hard-coded first-noun pick under-counts the real subject.
+    """
     cleaned = _clean_for_subject(supported_text)
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9._\-+/]*", cleaned)
     content = [t for t in tokens if t.lower() not in ARTICLES_AND_PRONOUNS]
-    # Pass 1: known proper noun (or multi-word group) in the first 8 content tokens.
-    window = " ".join(content[:8]).lower()
+
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def push(c: str) -> None:
+        c = c.strip()
+        if not c:
+            return
+        key = c.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(c)
+
+    # Pass 1: known proper-noun fragments anywhere in the first 12 content tokens
+    # (multi-word groups checked first via length-desc sort).
+    window = " ".join(content[:12]).lower()
     for proper in sorted(_known_proper_nouns(), key=len, reverse=True):
         if re.search(rf"\b{re.escape(proper)}\b", window):
-            return proper
-    # Pass 2: first capitalized non-stopword non-adjective token.
+            push(proper)
+            if len(out) >= k:
+                return out
+
+    # Pass 2: capitalized non-stopword non-leading-non-subject tokens, in order.
     for tok in content:
-        if tok.lower() in LEADING_ADJECTIVES:
+        if tok.lower() in LEADING_NON_SUBJECTS:
             continue
         if tok[0].isupper() and len(tok) > 1:
-            return tok
-    # Pass 3: first non-adjective non-stopword content token.
+            push(tok)
+            if len(out) >= k:
+                return out
+
+    # Pass 3: first non-leading-non-subject content token of len >= 3.
     for tok in content:
-        if tok.lower() in LEADING_ADJECTIVES:
+        if tok.lower() in LEADING_NON_SUBJECTS:
             continue
         if len(tok) >= 3:
-            return tok
-    # Pass 4: anything.
+            push(tok)
+            if len(out) >= k:
+                return out
+
+    # Pass 4: anything len >= 3 (fallback — covers leading-adjective-only claims).
     for tok in content:
         if len(tok) >= 3:
-            return tok
-    return ""
+            push(tok)
+            if len(out) >= k:
+                return out
+
+    return out
 
 
 # Light synonym table — verifier explicitly cites "Perplexity ↔ Perplexity's
@@ -447,18 +537,90 @@ def verify_cite(cite: Cite, sources_idx: dict[str, dict]) -> Violation | None:
     )
 
 
-# ---------- main -------------------------------------------------------------
+# ---------- claims-mode per-cite verdict ------------------------------------
 
-def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dossier", type=Path, required=True)
-    ap.add_argument("--sources", type=Path, required=True)
-    ap.add_argument("--claims", type=Path, required=False, default=None)
-    ap.add_argument("--quiet", action="store_true", help="Suppress per-violation line output (machine-readable JSON only).")
-    args = ap.parse_args(argv)
+@dataclass
+class ClaimsViolation:
+    claim_id: str
+    cite: str
+    claim_excerpt: str
+    reason: str
 
+
+def verify_claim_cite(claim_id: str, claim_text: str, cite_id: str,
+                       sources_idx: dict[str, dict]) -> ClaimsViolation | None:
+    """Mode=claims companion to verify_cite(): same Test A + Test B logic, but
+    the supported_text is the claim's `claim` field rather than a sentence
+    extracted from prose, and the violation carries the claim_id instead of a
+    line number.
+
+    Returns None on PASS; a ClaimsViolation otherwise.
+    """
+    if cite_id not in sources_idx:
+        return ClaimsViolation(
+            claim_id=claim_id,
+            cite=cite_id,
+            claim_excerpt=claim_text[:80],
+            reason="cited ID not in sources.jsonl",
+        )
+    src = sources_idx[cite_id]
+    findings = src.get("findings", []) or []
+    if not findings:
+        return ClaimsViolation(
+            claim_id=claim_id,
+            cite=cite_id,
+            claim_excerpt=claim_text[:80],
+            reason="source has no findings",
+        )
+
+    # Claims-mode subject search: try the top K candidate subjects rather than
+    # one. Claim text is wordier than dossier prose ("As of May 2026 the
+    # Anthropic Computer Use API…") so the verifier-spec leeway for "obvious
+    # synonym" identification of the subject translates here to "try the
+    # likely-subject shortlist; PASS if any (subject, finding) pair clears
+    # Tests A + B."
+    candidates = extract_subject_candidates(claim_text, k=6) or [""]
+
+    any_a_pass = False
+    any_b_pass = False
+    best_overlap = 0
+    last_subject = candidates[0]
+
+    for subject in candidates:
+        last_subject = subject
+        for fnd in findings:
+            f_claim = fnd.get("claim", "") or ""
+            f_quote = fnd.get("quote", "") or ""
+            combined = f_claim + " || " + f_quote
+            a = test_a_subject_match(subject, combined)
+            b_pass, overlap = test_b_action_match(claim_text, combined, subject)
+            if a:
+                any_a_pass = True
+            if b_pass:
+                any_b_pass = True
+            best_overlap = max(best_overlap, overlap)
+            if a and b_pass:
+                return None  # PASS — at least one finding clears both tests
+
+    if not any_a_pass and not any_b_pass:
+        reason = "no finding passes both tests"
+    elif not any_a_pass:
+        reason = f"Test A failed - subject '{last_subject}' not in source's findings"
+    else:
+        reason = f"Test B failed - action/property mismatch (best overlap {best_overlap})"
+    return ClaimsViolation(
+        claim_id=claim_id,
+        cite=cite_id,
+        claim_excerpt=claim_text[:80],
+        reason=reason,
+    )
+
+
+# ---------- dossier-mode runner ---------------------------------------------
+
+def run_dossier_mode(args) -> int:
     for p in (args.dossier, args.sources):
-        if not p.exists():
+        if p is None or not p.exists():
             print(f"ERROR: missing {p}", file=sys.stderr)
             return 2
 
@@ -468,7 +630,6 @@ def main(argv: list[str]) -> int:
 
     # Optional sanity check: every cite ID present in claims.json should also
     # be in sources.jsonl, otherwise the brief generation already drifted.
-    claims_cite_ids: set[str] = set()
     if args.claims and args.claims.exists():
         claims_obj = json.loads(args.claims.read_text(encoding="utf-8"))
         # claims.json may carry a top-level "claims" list, or only contradiction
@@ -476,7 +637,7 @@ def main(argv: list[str]) -> int:
         # validation, so we just record what we find for diagnostics.
         for entry in claims_obj.get("claims", []) or []:
             for sid in entry.get("supporting", []) or []:
-                claims_cite_ids.add(sid)
+                pass  # reserved for future cross-check; currently advisory
 
     violations: list[Violation] = []
     for c in cites:
@@ -488,6 +649,7 @@ def main(argv: list[str]) -> int:
     pass_rate = 0.0 if total == 0 else (total - len(violations)) / total
 
     result = {
+        "mode": "dossier",
         "total_cites_checked": total,
         "unique_cite_ids": sorted({c.cite_id for c in cites}, key=lambda s: int(s[1:])),
         "violations": [
@@ -516,9 +678,124 @@ def main(argv: list[str]) -> int:
         for v in violations:
             sys.stderr.write(f"  L{v.line_no}  {v.cite}  {v.reason}\n    >> {v.claim_excerpt}\n")
 
+    # Dossier mode is advisory (Phase 5.5 pre-flight wiring per SKILL.md).
     # Exit 0 always — caller decides whether violations block. The Phase 6
     # verifier is the gatekeeper; this script is the write-time advisor.
     return 0
+
+
+# ---------- claims-mode runner ----------------------------------------------
+
+def run_claims_mode(args) -> int:
+    for p in (args.claims, args.sources):
+        if p is None or not p.exists():
+            print(f"ERROR: missing {p}", file=sys.stderr)
+            return 2
+    if args.dossier is not None:
+        sys.stderr.write(
+            f"WARN: --dossier ignored in mode=claims (got {args.dossier})\n"
+        )
+
+    sources_idx = load_sources(args.sources)
+    claims_obj = json.loads(args.claims.read_text(encoding="utf-8"))
+    claims_list = claims_obj.get("claims", []) or []
+
+    violations: list[ClaimsViolation] = []
+    total_pairs = 0
+    unique_cite_ids: set[str] = set()
+
+    for entry in claims_list:
+        claim_id = entry.get("id", "C?")
+        claim_text = entry.get("claim", "") or ""
+        supporting = entry.get("supporting", []) or []
+        for sid in supporting:
+            total_pairs += 1
+            unique_cite_ids.add(sid)
+            v = verify_claim_cite(claim_id, claim_text, sid, sources_idx)
+            if v is not None:
+                violations.append(v)
+
+    pass_rate = 0.0 if total_pairs == 0 else (total_pairs - len(violations)) / total_pairs
+
+    result = {
+        "mode": "claims",
+        "total_claims": len(claims_list),
+        "total_claim_cite_pairs_checked": total_pairs,
+        "unique_cite_ids": sorted(unique_cite_ids, key=lambda s: int(s[1:]) if s[1:].isdigit() else 1_000_000),
+        "violations": [
+            {
+                "claim_id": v.claim_id,
+                "cite": v.cite,
+                "claim_excerpt": v.claim_excerpt,
+                "reason": v.reason,
+            }
+            for v in violations
+        ],
+        "violation_count": len(violations),
+        "pass_rate": round(pass_rate, 4),
+        "notes": (
+            f"Validated {total_pairs} (claim, S-id) pairs across {len(claims_list)} "
+            f"claims and {len(unique_cite_ids)} distinct source IDs against "
+            f"{len(sources_idx)} sources. "
+            f"{len(violations)} violations (mechanical Test A + Test B on claim text)."
+        ),
+    }
+
+    print(json.dumps(result, indent=2))
+
+    # Human-readable tail: one line per violation to stdout per the CLI contract.
+    if violations:
+        print("")
+        print(f"{len(violations)} (claim, S-id) violation(s):")
+        for v in violations:
+            print(f"  {v.claim_id}  {v.cite}  {v.reason}")
+            print(f"    >> {v.claim_excerpt}")
+
+    return 0 if not violations else 1
+
+
+# ---------- main -------------------------------------------------------------
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--mode", choices=("dossier", "claims"), default=None,
+                    help="Validation surface. Default: dossier (legacy). G-V5 adds claims.")
+    ap.add_argument("--dossier", type=Path, required=False, default=None,
+                    help="Path to dossier markdown (required for mode=dossier).")
+    ap.add_argument("--sources", type=Path, required=True,
+                    help="Path to sources.jsonl.")
+    ap.add_argument("--claims", type=Path, required=False, default=None,
+                    help="Path to claims.json (required for mode=claims; optional advisory for mode=dossier).")
+    ap.add_argument("--quiet", action="store_true",
+                    help="Suppress per-violation line output (machine-readable JSON only).")
+    args = ap.parse_args(argv)
+
+    # Mode resolution: explicit --mode wins; else infer from inputs.
+    if args.mode is None:
+        if args.dossier is not None and args.claims is None:
+            args.mode = "dossier"
+        elif args.claims is not None and args.dossier is None:
+            # claims-only input set → assume claims mode (G-V5 convenience)
+            args.mode = "claims"
+        elif args.dossier is not None:
+            # both supplied without --mode → preserve legacy behavior
+            args.mode = "dossier"
+        else:
+            print("ERROR: must supply --dossier (mode=dossier) or --claims (mode=claims).",
+                  file=sys.stderr)
+            return 2
+
+    if args.mode == "claims":
+        if args.claims is None:
+            print("ERROR: --mode claims requires --claims <path.json>.", file=sys.stderr)
+            return 2
+        return run_claims_mode(args)
+
+    # mode == "dossier"
+    if args.dossier is None:
+        print("ERROR: --mode dossier requires --dossier <path.md>.", file=sys.stderr)
+        return 2
+    return run_dossier_mode(args)
 
 
 if __name__ == "__main__":

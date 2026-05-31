@@ -80,10 +80,15 @@ For each claim in TOP, after all `k_per_claim` re-framings are matched, compute:
 |---|---|---|
 | **Stable** | No re-framing has `backed_by` non-empty | none — no entry emitted |
 | **Negation supported** | The negation slot (type `negation`) has `backed_by` non-empty | `negation_supported` (F11.2) |
-| **Paraphrase split** | A non-negation re-framing has `backed_by` non-empty AND the backing source(s) DO NOT also back the original claim | `paraphrase_split` (F02.2) |
-| **Both** | Both above conditions hold | `negation_supported` (negation takes precedence — strongest signal) |
+| **Temporal scope shift** | A non-negation re-framing has `backed_by` non-empty AND the backing source(s) DO NOT back the original claim AND the backing source's `date` field pre-dates the original claim's effective date (most recent verified-effective date among supporting sources, falling back to the brief's `generated` date) AND the re-framing represents a scope shift over time (e.g., the original asserts a current state and the backing source asserts a prior state, or vice versa) | `temporal_scope_shift` (F02.2-temporal) |
+| **Paraphrase split** | A non-negation re-framing has `backed_by` non-empty AND the backing source(s) DO NOT also back the original claim AND the temporal-scope-shift discriminator does not apply | `paraphrase_split` (F02.2) |
+| **Multiple** | More than one outcome above holds | Apply precedence: `negation_supported` > `paraphrase_split` > `temporal_scope_shift` (strongest verdict-impact wins) |
 
 A claim with any of the above outcomes emits a `consistency_failures` entry.
+
+**`temporal_scope_shift` discriminator (date check).** When a non-negation re-framing finds backing, check whether the backing source's `date` field pre-dates the original claim's effective date. If yes AND the framing wedge is *when* the state held (not *what* the state was), classify as `temporal_scope_shift` rather than `paraphrase_split`. The factual ground is shared between the original and the re-framing; the wedge is the timeline. Both claim and re-framing are historically accurate at different points. Per `citation-verification.md` § "Multi-aspect interrogation (CIBER)" verdict consequence table, `temporal_scope_shift` demotes confidence but does NOT flip `ciber_passed` to false at the SKILL-level verdict gate — pre-reversal evidence supporting a now-reversed state is historical, not paraphrase-fragile.
+
+**Mapping precedence note.** When a single claim has both a `paraphrase_split` and a `temporal_scope_shift` finding across different re-framings, emit the higher-severity entry (`paraphrase_split`); record the temporal one in `notes` if useful. Only one `consistency_failures` entry per claim.
 
 ### Step 6 — Return
 
@@ -102,7 +107,7 @@ Return ONLY this JSON object. No preamble. No markdown fences. No trailing comme
       "failed_reframing": "<full text of the failing re-framing>",
       "failed_reframing_type": "negation|verb-swap|scope-shift",
       "contradicting_source_ids": ["S?", "S?"],
-      "severity": "negation_supported|paraphrase_split"
+      "severity": "negation_supported|paraphrase_split|temporal_scope_shift"
     }
   ],
   "skipped": [
@@ -112,7 +117,7 @@ Return ONLY this JSON object. No preamble. No markdown fences. No trailing comme
 }
 ```
 
-`ciber_passed` is `true` iff `consistency_failures` is empty. The orchestrator (Phase 6c integration in `SKILL.md`) consumes the failures and applies the demotion + verdict-drop mapping.
+`ciber_passed` is `true` iff `consistency_failures` contains **no entries whose `severity ∈ {negation_supported, paraphrase_split}`**. A `consistency_failures` array containing only `temporal_scope_shift` entries still returns `ciber_passed: true` — those entries demote claim confidence at the orchestrator level but do NOT block the READY verdict (per `citation-verification.md` § verdict-consequence table). The orchestrator (Phase 6c integration in `SKILL.md`) consumes the failures and applies the demotion + verdict-drop mapping; the verdict-drop fires only for `negation_supported` or `paraphrase_split`.
 
 ## Rules
 
@@ -135,6 +140,7 @@ Return ONLY this JSON object. No preamble. No markdown fences. No trailing comme
 | F11.2 | Negation of a high-confidence claim has source backing | Demote `confidence` → `medium-contested`; bump `dissemination_score`; brief verdict → PARTIAL |
 | F11.3 | Survivor-biased synthesis surfaces under paraphrase re-query | Same demotion; flag in `unresolved_contradictions` |
 | F02.2 | Agreement illusion — paraphrase splits the source set | `paraphrase_split` severity; orchestrator surfaces in `<constraints>` to `/create` |
+| F02.2-temporal | Temporal scope-shift — source backs an *earlier* state of the same factual ground; date pre-dates the claim's effective date | `temporal_scope_shift` severity; demote confidence to `medium-contested` but do NOT flip `ciber_passed`; surface both positions and the timeline in `<constraints>` |
 | F25 | CIBER's own paraphrase set is synonym-only (low diversity) | Step 3 diversity guard catches; mark `reframing_quality: low`; record in `skipped` rather than emitting false-positive consistency passes |
 
 Log occurrences to `state/precedent-log.md` per `@../../../vis/packages/core/conduct/precedent.md` when severity is `negation_supported` (highest-value signal for E6 aggregation).

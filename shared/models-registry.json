@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-04-24",
-  "model_count": 255,
+  "last_updated": "2026-05-31",
+  "model_count": 257,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -667,6 +667,16 @@
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Apr 16, 2026. SWE-bench Pro 64.3% (up from 53.4% on 4.6). Vision 2576px / ~3.75MP. New tokenizer emits up to 35% more tokens for same input text — budget accordingly. Pricing unchanged from 4.6."
     },
+    "claude-opus-4-8": {
+      "family": "Claude 4.x",
+      "display_name": "Claude Opus 4.8",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking built-in. Triggers reasoning only when needed. Simple tasks skip reasoning; complex multi-step problems trigger it. Use 'think thoroughly' for explicit requests.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Released May 28, 2026. Agentic coding 69.2% (vs 64.3% on 4.7), multidisciplinary reasoning 57.9% (vs 54.7%). Min cache length 1K tokens. 1M context. 128K max output. Pricing: $5M input / $25M output standard; $10M/$50M fast mode."
+    },
 
     "gpt-5.4": {
       "family": "GPT-5.x",
@@ -822,6 +832,16 @@
       "key_constraint": "Released Apr 2, 2026. Hybrid linear attention + sparse MoE routing. 1M context. Multimodal. Built for agentic coding workflows. Alibaba Cloud API."
     },
 
+    "qwen-3.6-27b": {
+      "family": "Qwen (Alibaba)",
+      "display_name": "Qwen 3.6-27B",
+      "context_window": 262144,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful. 'Think step by step' works well for complex tasks.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "Released Apr 2026. Dense 27B (not MoE). 262K context. Multimodal text/image/video. Apache 2.0 license. Self-hosted friendly: 55.6GB full precision (BF16), 16.8GB at Q4_K_M. 77.2% SWE-Bench Verified, 59.3% Terminal-Bench 2.0 (matches Claude Opus 4.6)."
+    },
     "qwen-3.6-max": {
       "family": "Qwen (Alibaba)",
       "display_name": "Qwen 3.6-Max-Preview",
