@@ -1,0 +1,646 @@
+# Wixie Deployment Configuration — Single Source of Truth
+# Master configuration for dual-model inference orchestration across Wixie agent network
+# Last Updated: 2026-06-01
+# Author: Enchanter Labs
+#
+# Loaded by: bootstrap.ps1, security-validate.py, preflight-checklist.py,
+#            package-for-deployment.ps1, shared/scripts/inference-engine.py,
+#            shared/conduct/xx.md (conduct modules), and plugins/*
+#
+# Usage (Python):
+#   import yaml
+#   with open('.opencode/deployment.config.yaml') as f:
+#       config = yaml.safe_load(f)
+#   context = config['models']['local']['qwen_3_5_27b']['context_window']
+#
+# Usage (Shell/jq):
+#   yq eval '.models.local.qwen_3_5_27b.context_window' .opencode/deployment.config.yaml
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# METADATA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+metadata:
+  config_version: "2.2.0"
+  deployment_name: "Wixie Agent Network"
+  author: "Enchanter Labs"
+  last_updated: "2026-06-01"
+  created: "2026-05-01"
+  description: "Centralized deployment specification for all model versions, ports, context windows, VRAM, and framework versions"
+
+  update_instructions: |
+    When deployment specs change:
+    1. Bump config_version (major.minor.patch)
+    2. Update last_updated to current date
+    3. Modify affected sections (frameworks, models, orchestration, etc.)
+    4. Verify all scripts/modules that consume this file still work
+    5. Commit with: "ops(deployment): <change_summary> (v<version>)"
+    6. Notify: convergence, harden, translate plugins
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FRAMEWORKS & RUNTIME VERSIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+frameworks:
+  lmstudio:
+    name: "LMStudio"
+    version: "0.14.13"
+    role: "Local LLM inference server (desktop application)"
+    status: "stable"
+    url: "https://lmstudio.ai"
+    notes: |
+      Open-source desktop application for running LLMs locally.
+      Primary inference backend for Qwen 3.5-27B.
+      Supports full precision, quantization (GGUF, int4, int5, int8).
+
+  vlmm:
+    name: "vLLM"
+    version: "0.21.0"
+    role: "High-performance batch inference engine"
+    status: "stable"
+    url: "https://github.com/vllm-project/vllm"
+    notes: |
+      Production-grade inference framework with:
+      - Continuous batching
+      - Quantization support (GPTQ, AWQ, AQLM, int4, int8)
+      - Multi-GPU distribution & load balancing
+      - OpenAI-compatible API (/v1/chat/completions, /v1/models)
+      - Speculative decoding
+      Primary inference backend for Gamma 4-24B.
+
+  anthropic_sdk:
+    name: "Anthropic Python SDK"
+    version: "1.31.0"
+    role: "Claude API client (cloud/managed models)"
+    status: "stable"
+    notes: |
+      Used for accessing cloud-hosted Claude models (Opus 4.8, Sonnet 4.6, Haiku 4.5).
+      Supports prompt caching, batch API, Managed Agents, vision.
+      Fallback for local inference outages in production.
+
+  python:
+    name: "Python"
+    version: "3.10+"
+    role: "Scripting runtime"
+    status: "stable"
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOCAL MODELS (Self-Hosted via LMStudio / vLLM)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+models:
+  local:
+    qwen_3_5_27b:
+      # Model Identification
+      display_name: "Qwen 3.5-27B"
+      model_id: "qwen-3.5-27b"
+      family: "Qwen (Alibaba)"
+      version: "3.5.0"
+      release_date: "2026-04-02"
+      type: "dense-text-generation"
+      license: "Apache 2.0"
+
+      # Capabilities & Inference Specs
+      context_window: 102400  # tokens; 100K user-facing
+      max_output_tokens: 8192
+      format: "markdown"
+      reasoning: "standard"
+      cot_approach: "Explicit CoT helpful. 'Think step by step' works well for complex tasks."
+      few_shot: "2-3 examples recommended"
+      multimodal: false
+
+      # Quality Metrics
+      benchmarks:
+        swe_bench_verified: "77.2%"
+        terminal_bench_2_0: "59.3%"
+        mmlu_pro: "Comparable to Claude Opus 4.6"
+
+      # Framework & Infrastructure
+      framework: "lmstudio"
+      framework_version: "0.14.13"
+      inference_server: "http://localhost:1234/v1/chat/completions"
+      health_endpoint: "http://localhost:1234/health"
+      models_endpoint: "http://localhost:1234/v1/models"
+      port: 1234
+      protocol: "http"
+      api_compatible: "OpenAI /v1/chat/completions"
+
+      # VRAM Requirements (per deployment mode)
+      vram_requirements:
+        full_precision:
+          bfloat16_gb: 55.6
+          float16_gb: 56.0
+          float32_gb: 112.0
+          notes: "Requires high-end GPU (H100, RTX 6000 Ada, etc.)"
+        quantized:
+          q4_k_m_gb: 16.8  # Most common (4-bit K-means)
+          q5_k_m_gb: 20.2  # Better quality, still fits 24GB
+          q6_k_gb: 24.0    # High quality, requires 24GB+
+          q2_k_gb: 8.0     # Very aggressive, quality loss
+        recommended: "24GB VRAM minimum for Q4_K_M (RTX 4090, A6000, H100 80GB, or 2x RTX 4080)"
+
+      # Inference Performance
+      inference_latency:
+        bf16_per_token_ms: 15-20
+        q4_k_m_per_token_ms: 8-12
+        q5_k_m_per_token_ms: 10-15
+      tokens_per_second: 8-15
+      peak_throughput_requests_per_min: 100
+
+      # Tier Equivalence (for Wixie routing)
+      tier_equivalent: "sonnet"
+      tier_notes: "Comparable to Claude Sonnet 4.6 in code/analysis tasks"
+
+      # Key Constraints & Notes
+      key_constraints: |
+        - Self-hosted friendly: runs on consumer GPUs (RTX 4090, RTX 3090 Ti, M3 Max)
+        - Dense (non-MoE): deterministic compute, no conditional routing
+        - 77.2% SWE-Bench Verified (matches Claude Opus 4.6)
+        - Apache 2.0 license — no usage restrictions or egress fees
+        - Requires model swap restart (LMStudio single-model)
+
+      # Wixie Orchestration Roles
+      wixie_roles:
+        - "plan_agent: Task decomposition and feasibility gating"
+        - "build_agent: Conduct selection and context formatting"
+        - "synthesis: Compute-heavy multi-step reasoning"
+
+      # SLA & Uptime
+      sla:
+        availability: "99.5% (dev/staging), 99.9% (prod)"
+        p99_latency_ms: 500
+        p95_latency_ms: 300
+
+    gamma_4_24b:
+      # Model Identification
+      display_name: "Gamma 4-24B"
+      model_id: "gamma-4-24b"
+      family: "Gamma (Custom/Proprietary)"
+      version: "4.0.0"
+      release_date: "2026-05-15"
+      type: "dense-text-generation"
+      license: "Proprietary / Check License Terms"
+
+      # Capabilities & Inference Specs
+      context_window: 16384  # tokens
+      max_output_tokens: 2048
+      format: "markdown"
+      reasoning: "standard"
+      cot_approach: "Brief reasoning helpful; optimized for speed over depth."
+      few_shot: "1-2 examples"
+      multimodal: false
+
+      # Quality Metrics
+      benchmarks:
+        inference_speed: "Ultra-optimized for latency"
+        memory_efficiency: "3x smaller than Qwen for Verify tasks"
+        accuracy_vs_qwen: "95-98% for validation/scoring tasks"
+
+      # Framework & Infrastructure
+      framework: "vlmm"
+      framework_version: "0.21.0"
+      inference_server: "http://localhost:8001/v1/chat/completions"
+      health_endpoint: "http://localhost:8001/health"
+      models_endpoint: "http://localhost:8001/v1/models"
+      port: 8001
+      protocol: "http"
+      api_compatible: "OpenAI /v1/chat/completions"
+
+      # VRAM Requirements (per deployment mode)
+      vram_requirements:
+        full_precision:
+          bfloat16_gb: 12.0
+          float16_gb: 12.5
+          float32_gb: 25.0
+        quantized:
+          awq_gb: 4.0  # AWQ 4-bit quantization (recommended vLLM path)
+          gptq_gb: 4.0  # GPTQ 4-bit quantization
+          q4_k_m_gb: 4.5
+          q5_k_m_gb: 5.5
+          q6_k_gb: 6.5
+        recommended: "8GB VRAM minimum for AWQ (RTX 3080, RTX 4070, M2 Pro/Max, M3 Max)"
+
+      # Inference Performance
+      inference_latency:
+        bfloat16_per_token_ms: 8-10
+        awq_per_token_ms: 4-6
+        gptq_per_token_ms: 4-6
+      tokens_per_second: 50-100
+      peak_throughput_requests_per_min: 500
+
+      # Tier Equivalence (for Wixie routing)
+      tier_equivalent: "haiku"
+      tier_notes: "Comparable to Claude Haiku 4.5 — fast, cost-effective validation"
+
+      # Key Constraints & Notes
+      key_constraints: |
+        - Optimized for speed over depth (fast validation loops)
+        - Dense (non-MoE): deterministic routing
+        - ~3x memory efficiency vs Qwen for same tasks
+        - vLLM continuous batching: excellent for parallel requests
+        - Model swap via API (no restart required)
+
+      # Wixie Orchestration Roles
+      wixie_roles:
+        - "verify_agent: 5-axis scoring and verdict calibration"
+        - "fast_validation: Edge deployment / latency-critical paths"
+        - "batch_processing: Continuous batching via vLLM"
+
+      # SLA & Uptime
+      sla:
+        availability: "99.8% (dev/staging), 99.95% (prod)"
+        p99_latency_ms: 200
+        p95_latency_ms: 100
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLOUD/API MODELS (Anthropic, OpenAI, etc.) — Backup/Fallback
+# ═══════════════════════════════════════════════════════════════════════════════
+
+cloud_models:
+  anthropic:
+    claude_opus_4_8:
+      display_name: "Claude Opus 4.8"
+      model_id: "claude-opus-4-8"
+      family: "Claude 4.x"
+      version: "4.8"
+      release_date: "2026-05-28"
+      type: "text-generation"
+
+      context_window: 1000000
+      max_output_tokens: 131072
+      format: "xml"
+      reasoning: "adaptive-thinking"
+
+      pricing:
+        input_base: "$5/M tokens"
+        output_base: "$25/M tokens"
+        input_fast: "$10/M tokens"
+        output_fast: "$50/M tokens"
+
+      tier_equivalent: "opus"
+      use_case: "High-stakes synthesis, fallback for local outage"
+
+    claude_sonnet_4_6:
+      display_name: "Claude Sonnet 4.6"
+      model_id: "claude-sonnet-4-6"
+      family: "Claude 4.x"
+      version: "4.6"
+      release_date: "2026-01-15"
+
+      context_window: 200000
+      max_output_tokens: 4096
+      format: "xml"
+      reasoning: "standard"
+
+      pricing:
+        input: "$3/M tokens"
+        output: "$15/M tokens"
+
+      tier_equivalent: "sonnet"
+      use_case: "High-quality synthesis when local Qwen unavailable"
+
+    claude_haiku_4_5:
+      display_name: "Claude Haiku 4.5"
+      model_id: "claude-haiku-4-5"
+      family: "Claude 4.x"
+      version: "4.5"
+      release_date: "2025-07-01"
+
+      context_window: 200000
+      max_output_tokens: 1024
+      format: "xml"
+      reasoning: "standard"
+
+      pricing:
+        input: "$0.80/M tokens"
+        output: "$4/M tokens"
+
+      tier_equivalent: "haiku"
+      use_case: "Fallback for Gamma outage, cost-sensitive tasks"
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INFERENCE ENDPOINTS & LOAD BALANCING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+inference_endpoints:
+  local_lmstudio:
+    name: "LMStudio Local (QwenSynth)"
+    host: "localhost"
+    port: 1234
+    protocol: "http"
+    base_url: "http://localhost:1234/v1"
+    status: "active"
+
+    models_hosted:
+      - "qwen_3_5_27b"
+
+    health_check:
+      endpoint: "/health"
+      interval_seconds: 30
+      timeout_seconds: 5
+
+    rate_limits:
+      requests_per_minute: 100
+      tokens_per_minute: 500000
+      concurrent_requests: 4
+
+    authentication: "none"
+    notes: |
+      - Desktop LMStudio running on local GPU
+      - Single-model (restart required for model swap)
+      - No load balancing (single GPU)
+      - Development/testing primary endpoint
+
+  local_vlmm:
+    name: "vLLM Server (GammaSynth)"
+    host: "localhost"
+    port: 8001
+    protocol: "http"
+    base_url: "http://localhost:8001/v1"
+    status: "active"
+
+    models_hosted:
+      - "gamma_4_24b"
+
+    health_check:
+      endpoint: "/health"
+      interval_seconds: 30
+      timeout_seconds: 5
+
+    rate_limits:
+      requests_per_minute: 500
+      tokens_per_minute: 1000000
+      concurrent_requests: 8
+
+    authentication: "none"
+    notes: |
+      - vLLM with continuous batching
+      - Supports quantization, LoRA adapters
+      - Auto-scales with batch size
+      - Swap models via API (no restart)
+      - Production-ready inference engine
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ORCHESTRATION: AGENT ROLES & ROUTING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+orchestration:
+  agents:
+    plan_agent:
+      role: "Decomposition & Feasibility Gate"
+      description: |
+        Analyzes user prompt, breaks it into subtasks, determines if the task
+        is within capabilities and budget constraints. Routes downstream.
+
+      primary_model: "qwen_3_5_27b"
+      framework: "lmstudio"
+      port: 1234
+      tier: "sonnet"
+
+      constraints:
+        max_iterations: 3
+        timeout_seconds: 60
+        context_budget: "80K tokens"
+
+      success_criteria: |
+        - Clear task decomposition
+        - Feasibility assessment with confidence
+        - Resource estimate (time, tokens, VRAM)
+
+    build_agent:
+      role: "Conduct Selection & Context Formatting"
+      description: |
+        Selects appropriate conduct modules from shared/conduct/,
+        formats context per target model specs, prepares prompt structure.
+
+      primary_model: "qwen_3_5_27b"
+      framework: "lmstudio"
+      port: 1234
+      tier: "sonnet"
+
+      constraints:
+        max_iterations: 2
+        timeout_seconds: 90
+        context_budget: "100K tokens"
+
+      success_criteria: |
+        - Conduct modules correctly referenced from shared/models-registry.json
+        - Context U-curve compliance (top-200 tokens + lower-200 tokens)
+        - Format matches target model (XML for Claude, Markdown for GPT, etc.)
+
+    verify_agent:
+      role: "5-Axis Scoring & Verdict Calibration"
+      description: |
+        Evaluates response against 5 axes (Accuracy, Structure, Tone, Coverage, Completeness).
+        Assigns confidence (σ), determines DEPLOY/HOLD/FAIL verdict.
+
+      primary_model: "gamma_4_24b"
+      framework: "vlmm"
+      port: 8001
+      tier: "haiku"
+
+      constraints:
+        max_iterations: 1
+        timeout_seconds: 30
+        context_budget: "15K tokens"
+
+      success_criteria: |
+        - All 5 axes scored 0-10 with calibration notes
+        - 8/8 SAT assertions pass (DEPLOY bar)
+        - Confidence (σ) < 0.45 for DEPLOY
+        - Honest numbers (no score inflation)
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPLOYMENT ENVIRONMENTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+environments:
+  development:
+    name: "Local Development"
+    location: "Developer's workstation"
+    inference_endpoints:
+      - "local_lmstudio"
+      - "local_vlmm"
+
+    defaults:
+      model_qwen: "qwen_3_5_27b"
+      model_gamma: "gamma_4_24b"
+      timeout_seconds: 120
+      log_level: "debug"
+
+    notes: |
+      - LMStudio + vLLM running locally
+      - Full VRAM dedicated (no competition)
+      - Real-time iteration on prompts/conduct
+      - Port collision check required before startup
+
+  staging:
+    name: "Staging / Testnet"
+    location: "Cloud VM (compute-optimized)"
+    inference_endpoints:
+      - name: "vLLM Fleet (3x H100)"
+        models: ["qwen_3_5_27b", "gamma_4_24b"]
+
+    defaults:
+      model_qwen: "qwen_3_5_27b"
+      model_gamma: "gamma_4_24b"
+      timeout_seconds: 60
+      log_level: "info"
+
+    notes: |
+      - Shared inference nodes
+      - Load balancing across 3 H100s
+      - 1500 req/min sustained throughput
+      - Fallback to Anthropic API on failure
+
+  production:
+    name: "Production (Enchanter Network)"
+    location: "Multi-region distributed"
+    inference_endpoints:
+      - name: "vLLM Fleet US-East (8x A100)"
+        models: ["qwen_3_5_27b", "gamma_4_24b"]
+        region: "us-east-1"
+      - name: "vLLM Fleet EU-West (4x H100)"
+        models: ["qwen_3_5_27b"]
+        region: "eu-west-1"
+      - name: "Anthropic API (backup)"
+        models: ["claude_opus_4_8", "claude_sonnet_4_6", "claude_haiku_4_5"]
+
+    defaults:
+      model_qwen: "qwen_3_5_27b"
+      model_gamma: "gamma_4_24b"
+      timeout_seconds: 45
+      log_level: "warn"
+
+    notes: |
+      - Geo-distributed for low latency
+      - Auto-fallback to Anthropic API on local outage
+      - SLA: 99.9% uptime, p99 latency < 2s
+      - Circuit breaker pattern for failover
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPLOYMENT VERSIONS & RELEASE NOTES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+deployment_versions:
+  v2_2_0:
+    date: "2026-06-01"
+    status: "current"
+    framework_versions:
+      lmstudio: "0.14.13"
+      vlmm: "0.21.0"
+      anthropic_sdk: "1.31.0"
+
+    model_versions:
+      qwen_3_5_27b: "3.5.0"
+      gamma_4_24b: "4.0.0"
+
+    changes: |
+      - Unified ports: qwen→1234, gamma→8001 (was 8000→8001)
+      - Expanded VRAM breakdown (full precision, quantized, recommended)
+      - Added inference latency, throughput metrics
+      - Added tier equivalence notes (sonnet, haiku)
+      - Added SLA/uptime targets per model
+      - Added wixie_roles for orchestration routing
+      - Added usage examples (Python YAML, Shell)
+      - Port health check endpoints documented
+      - API compatibility notes (OpenAI /v1/chat/completions)
+
+  v2_1_0:
+    date: "2026-05-20"
+    status: "superseded"
+    changes: |
+      - Initial LMStudio/vLLM structure
+      - Port references (8000, 8001)
+      - Basic VRAM requirements
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# QUICK REFERENCE & USAGE GUIDE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+quick_reference:
+  local_models:
+    - "qwen_3_5_27b: 102K context, port 1234, Sonnet-tier, LMStudio, 16.8GB (Q4_K_M)"
+    - "gamma_4_24b: 16K context, port 8001, Haiku-tier, vLLM, 4GB (AWQ)"
+
+  cloud_fallback:
+    - "claude_opus_4_8: 1M context, adaptive-thinking, $5M/$25M, prod failover"
+    - "claude_sonnet_4_6: 200K context, standard, $3M/$15M, secondary fallover"
+    - "claude_haiku_4_5: 200K context, standard, $0.80M/$4M, cost-sensitive"
+
+  orchestration:
+    - "plan_agent → qwen_3_5_27b:1234 (decomposition, feasibility)"
+    - "build_agent → qwen_3_5_27b:1234 (conduct selection, formatting)"
+    - "verify_agent → gamma_4_24b:8001 (5-axis scoring)"
+
+  vram_minimums:
+    - "qwen_3_5_27b: 16.8GB (Q4_K_M), 24GB (Q5_K_M), 55.6GB (BF16)"
+    - "gamma_4_24b: 4GB (AWQ/GPTQ), 12GB (BF16)"
+
+  frameworks:
+    - "LMStudio 0.14.13 (desktop LLM runner for Qwen)"
+    - "vLLM 0.21.0 (high-perf batch inference for Gamma)"
+    - "Anthropic SDK 1.31.0 (Claude API client, fallback)"
+
+  health_endpoints:
+    - "http://localhost:1234/health (LMStudio)"
+    - "http://localhost:8001/health (vLLM)"
+
+  models_endpoints:
+    - "http://localhost:1234/v1/models (list Qwen)"
+    - "http://localhost:8001/v1/models (list Gamma)"
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# USAGE EXAMPLES FOR SCRIPTS & CONDUCT MODULES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+usage_examples: |
+  # Python (YAML loader)
+  import yaml
+
+  with open('.opencode/deployment.config.yaml') as f:
+      config = yaml.safe_load(f)
+
+  context_window = config['models']['local']['qwen_3_5_27b']['context_window']
+  # → 102400
+
+  port = config['models']['local']['qwen_3_5_27b']['port']
+  # → 1234
+
+  vram_min_gb = config['models']['local']['gamma_4_24b']['vram_requirements']['recommended'].split()[0]
+  # → "8GB"
+
+  server_url = config['inference_endpoints']['local_vlmm']['base_url']
+  # → "http://localhost:8001/v1"
+
+  # Shell / jq (for scripts)
+  yq eval '.models.local.qwen_3_5_27b.context_window' .opencode/deployment.config.yaml
+  # → 102400
+
+  yq eval '.models.local.gamma_4_24b.port' .opencode/deployment.config.yaml
+  # → 8001
+
+  # Conduct module reference (in shared/conduct/xxx.md)
+  # "Qwen 3.5-27B (context_window: 102K per .opencode/deployment.config.yaml)"
+  # "Use port 1234 for LMStudio endpoint (per deployment.config.yaml)"
+  # "VRAM: 16.8GB Q4_K_M (see deployment.config.yaml for full precision specs)"
