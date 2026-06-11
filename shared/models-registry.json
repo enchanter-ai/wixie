@@ -1,6 +1,6 @@
 {
   "last_updated": "2026-06-11",
-  "model_count": 266,
+  "model_count": 269,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -2727,6 +2727,37 @@
       "cot_approach": "Explicit CoT helpful for complex code tasks. Latency-optimized 'Flash' tier.",
       "few_shot": "2-3 code examples recommended",
       "key_constraint": "Released Jun 2, 2026. Coding/software-engineering model in the Microsoft AI MAI family, speed-optimized. Context window and pricing not disclosed at launch — verify before production."
+    },
+
+    "mai-image-2-5": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Image-2.5",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Released Jun 2, 2026. Image generation + editing model in Microsoft AI's in-house MAI family. Natural-language prompts. Detailed specs (resolution, API surface) not disclosed at launch."
+    },
+    "mai-image-2-5-flash": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Image-2.5-Flash",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Released Jun 2, 2026. Latency/cost-optimized variant of MAI-Image-2.5. Natural-language prompts. Trades fine detail for speed."
+    },
+    "diffusion-gemma-26b": {
+      "family": "Gemma (Google)",
+      "display_name": "DiffusionGemma 26B-A4B",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Released Jun 10, 2026. Open-source diffusion model for image generation. MoE 26B total / ~4B active (A4B). Natural-language prompts. Part of the Gemma open-model line."
     }
   }
 }
