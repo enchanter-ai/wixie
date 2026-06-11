@@ -1,6 +1,6 @@
 {
   "last_updated": "2026-06-11",
-  "model_count": 269,
+  "model_count": 272,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -2758,6 +2758,37 @@
       "cot_approach": "Not applicable.",
       "few_shot": "Not applicable",
       "key_constraint": "Released Jun 10, 2026. Open-source diffusion model for image generation. MoE 26B total / ~4B active (A4B). Natural-language prompts. Part of the Gemma open-model line."
+    },
+
+    "mai-transcribe-1-5": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Transcribe-1.5",
+      "context_window": 200,
+      "format": "plain-text",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Released Jun 2, 2026. Speech-to-text (ASR) model in Microsoft AI's in-house MAI family. Language coverage and latency specs not disclosed at launch."
+    },
+    "mai-voice-2": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Voice-2",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Released Jun 2, 2026. Speech synthesis / voice generation (TTS) model in the Microsoft AI MAI family. Plain text or natural-language input. Voice inventory and SSML support not disclosed at launch."
+    },
+    "mai-voice-2-flash": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Voice-2-Flash",
+      "context_window": 1000,
+      "format": "natural-language",
+      "reasoning": "not-applicable",
+      "cot_approach": "Not applicable.",
+      "few_shot": "Not applicable",
+      "key_constraint": "Announced Jun 2, 2026 as 'coming soon'. Latency-optimized variant of MAI-Voice-2 for realtime/agent use. Verify availability before targeting."
     }
   }
 }
