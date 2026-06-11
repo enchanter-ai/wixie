@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-05-31",
-  "model_count": 257,
+  "last_updated": "2026-06-11",
+  "model_count": 266,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -2630,6 +2630,103 @@
       "cot_approach": "Not applicable.",
       "few_shot": "Not applicable",
       "key_constraint": "Symbolic + audio classical/cinematic music gen. Style reference or preset-driven (not free-text). MIDI export. Pro plan = full copyright ownership."
+    },
+
+    "claude-fable-5": {
+      "family": "Claude (Mythos-class)",
+      "display_name": "Claude Fable 5",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking built-in (inherits Opus 4.8 behavior). Use 'think thoroughly' for explicit deep reasoning. Do NOT use 'think step by step'.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Released Jun 9, 2026. First publicly available Mythos-class model — a tier ABOVE Opus 4.8. API id claude-fable-5; also on Amazon Bedrock. 1M context, 128K max output. Pricing $10/M input, $50/M output (2x Opus 4.8). Third-party benchmarks: SWE-Bench Pro 80.3%, Terminal-Bench 2.1 88.0%, Humanity's Last Exam w/tools 64.5%. Hard safety limits: cybersecurity/bio/chem/distillation queries are rerouted to Opus 4.8, not answered. Same XML format as Claude 4.x."
+    },
+    "claude-mythos-5": {
+      "family": "Claude (Mythos-class)",
+      "display_name": "Claude Mythos 5",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking built-in. Use 'think thoroughly' for explicit deep reasoning.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Released Jun 2026. NOT generally available — the safeguards-lifted sibling of Fable 5, restricted to ~50 vetted infrastructure providers and cybersecurity researchers via Project Glasswing. Same capabilities and 1M/128K limits as Fable 5 but without the high-risk-domain safety classifiers. ESCALATE: do not target this model unless the developer confirms Project Glasswing access."
+    },
+
+    "gemini-3.5-flash": {
+      "family": "Gemini",
+      "display_name": "Gemini 3.5 Flash",
+      "context_window": 1048576,
+      "format": "xml-or-markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "Dynamic thinking enabled by default. Avoid forcing explicit CoT; tune via thinking budget where exposed.",
+      "few_shot": "ALWAYS REQUIRED — Google's guidance applies despite reasoning-native status",
+      "key_constraint": "GA May 19, 2026. New default in Gemini app and AI Mode in Search. 1,048,576 input / 65,536 output. Text/image/audio/video in, text out. Pricing $1.50/M input, $9.00/M output, $0.15/M cached ($1.65/$9.90 non-global regions). Outperforms 3.1 Pro on coding/agentic suite (76.2% Terminal-Bench 2.1, 83.6% MCP Atlas) at ~4x speed. Temperature MUST stay at 1.0."
+    },
+
+    "gpt-5.5-instant": {
+      "family": "GPT-5.x",
+      "display_name": "GPT-5.5 Instant",
+      "context_window": 922000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Latency-tuned base variant — benefits from explicit CoT on complex tasks. For deep reasoning prefer GPT-5.5 Thinking/Pro.",
+      "few_shot": "Separate # Examples section with input/output pairs",
+      "key_constraint": "Released May 5, 2026. New ChatGPT default (replaced GPT-5.3 Instant). Sharper accuracy, more concise answers, stronger image/STEM, better web-search use. API context ~922K input / 128K output (1M+ total); ChatGPT surface 272K, Codex 400K. Sandwich method still applies — follows instructions literally."
+    },
+
+    "qwen-3.7-max": {
+      "family": "Qwen (Alibaba)",
+      "display_name": "Qwen 3.7-Max",
+      "context_window": 1000000,
+      "format": "markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "Reasoning model — emits internal chain of thought before answering. Do NOT stack explicit 'think step by step'.",
+      "few_shot": "2-3 examples for format calibration",
+      "key_constraint": "Announced May 20, 2026 (Alibaba Cloud Summit); API May 19. 1M context (up from 256K on 3.6-Max), 65,536 max output. TEXT-ONLY. CLOSED-WEIGHTS. Pricing $2.50/M input, $7.50/M output. Artificial Analysis Intelligence Index 56.6. OpenAI + Anthropic protocol compatible (drop-in). Open-weight smaller variants expected Jun-Jul 2026."
+    },
+
+    "minimax-m3": {
+      "family": "MiniMax",
+      "display_name": "MiniMax M3",
+      "context_window": 1000000,
+      "format": "markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "Built-in. Agent/coding-tuned; supply tool-use traces over explicit CoT.",
+      "few_shot": "Helpful for agent tool-use",
+      "key_constraint": "Released Jun 1, 2026. First open-weights model combining frontier coding, 1M context (min guaranteed 512K), and native multimodality (text/image/video in, text out). MIT license — commercial use permitted. MiniMax Sparse Attention (MSA): KV-block selection, ~1/20 the per-token cost at 1M vs prior gen. Pricing $0.60/M input, $2.40/M output (launch promo ~$0.30/$1.20). SWE-Bench Pro 59.0%, Terminal-Bench 2.1 66.0%, BrowseComp 83.5."
+    },
+
+    "gemma-4-12b": {
+      "family": "Gemma (Google)",
+      "display_name": "Gemma 4 12B",
+      "context_window": 256000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helps; multimodal input. No native thinking channel.",
+      "few_shot": "Required",
+      "key_constraint": "Released Jun 2026. ~11.95B dense, open-weight. 256K context. Encoder-free unified multimodal — text/image/audio/video in, text out (replaces vision/audio encoders with direct linear projections). 140+ languages. Laptop-deployable; always few-shot for the small-model size class."
+    },
+
+    "mai-thinking-1": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Thinking-1",
+      "context_window": null,
+      "format": "markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "Reasoning model — built-in deliberation. Avoid stacking explicit CoT.",
+      "few_shot": "Avoid on reasoning paths",
+      "key_constraint": "Released Jun 2, 2026. Reasoning member of Microsoft AI's first in-house MAI model family. Context window and pricing not disclosed at launch — verify before production. No exact family-match prompting profile yet; treat like o-series/reasoning-native for technique selection."
+    },
+    "mai-code-1-flash": {
+      "family": "Microsoft AI (MAI)",
+      "display_name": "MAI-Code-1-Flash",
+      "context_window": null,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Explicit CoT helpful for complex code tasks. Latency-optimized 'Flash' tier.",
+      "few_shot": "2-3 code examples recommended",
+      "key_constraint": "Released Jun 2, 2026. Coding/software-engineering model in the Microsoft AI MAI family, speed-optimized. Context window and pricing not disclosed at launch — verify before production."
     }
   }
 }
