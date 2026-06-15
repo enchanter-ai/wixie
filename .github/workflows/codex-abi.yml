@@ -1,0 +1,16 @@
+name: codex-abi
+on: [pull_request, push]
+jobs:
+  codex-layer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: enchanter-ai/vis
+          path: .canonical
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Verify committed Codex layer matches Claude Code source
+        run: python .canonical/packages/core/scripts/codex-sync.py . --check

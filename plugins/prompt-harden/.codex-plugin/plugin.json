@@ -1,0 +1,29 @@
+{
+  "name": "prompt-harden",
+  "version": "0.1.0",
+  "description": "Tests prompts against 12 adversarial attack patterns \u2014 injection, jailbreak, data extraction, encoding bypass, and more. Reports which attacks succeed and suggests specific defenses.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "security",
+    "adversarial"
+  ],
+  "interface": {
+    "displayName": "Prompt Harden",
+    "shortDescription": "Tests prompts against 12 adversarial attack patterns \u2014 injection, jailbreak, da\u2026",
+    "longDescription": "Tests prompts against 12 adversarial attack patterns \u2014 injection, jailbreak, data extraction, encoding bypass, and more. Reports which attacks succeed and suggests specific defenses.",
+    "developerName": "Enchanter Labs",
+    "category": "Engineering",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Prompt Harden on my project"
+    ]
+  },
+  "skills": "./skills/"
+}

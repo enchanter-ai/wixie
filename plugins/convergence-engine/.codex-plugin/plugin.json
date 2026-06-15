@@ -1,0 +1,30 @@
+{
+  "name": "convergence-engine",
+  "version": "0.1.0",
+  "description": "Autonomous prompt perfection. Runs the Gauss Convergence loop \u2014 score, identify weakest axis, fix, re-score \u2014 up to 100 iterations until DEPLOY quality.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "convergence",
+    "optimization"
+  ],
+  "interface": {
+    "displayName": "Convergence Engine",
+    "shortDescription": "Autonomous prompt perfection. Runs the Gauss Convergence loop \u2014 score, identify\u2026",
+    "longDescription": "Autonomous prompt perfection. Runs the Gauss Convergence loop \u2014 score, identify weakest axis, fix, re-score \u2014 up to 100 iterations until DEPLOY quality.",
+    "developerName": "Enchanter Labs",
+    "category": "Engineering",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Convergence Engine on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

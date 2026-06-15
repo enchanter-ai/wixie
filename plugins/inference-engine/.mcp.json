@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wixie-inference-engine-scripts": {
+      "cwd": ".",
+      "command": "python",
+      "args": [
+        "./mcp/server.py"
+      ]
+    }
+  }
+}

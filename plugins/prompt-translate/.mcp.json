@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wixie-prompt-translate-scripts": {
+      "cwd": ".",
+      "command": "python",
+      "args": [
+        "./mcp/server.py"
+      ]
+    }
+  }
+}

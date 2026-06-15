@@ -1,0 +1,28 @@
+{
+  "name": "full",
+  "version": "3.0.0",
+  "description": "Meta-plugin that installs every Wixie plugin at once via dependency resolution. Installs: convergence-engine, prompt-crafter, prompt-harden, prompt-refiner, prompt-tester, prompt-translate.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "meta",
+    "bundle",
+    "install-all"
+  ],
+  "interface": {
+    "displayName": "Full",
+    "shortDescription": "Meta-plugin that installs every Wixie plugin at once via dependency resolution.\u2026",
+    "longDescription": "Meta-plugin that installs every Wixie plugin at once via dependency resolution. Installs: convergence-engine, prompt-crafter, prompt-harden, prompt-refiner, prompt-tester, prompt-translate.",
+    "developerName": "Enchanter Labs",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Full on my project"
+    ]
+  }
+}

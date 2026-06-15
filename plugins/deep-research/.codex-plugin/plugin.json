@@ -1,0 +1,32 @@
+{
+  "name": "deep-research",
+  "version": "0.1.0",
+  "description": "E0 engine \u2014 produces a verified, cited claims artifact before prompts are engineered. Decomposes the query, fans out parallel Haiku fetchers, triangulates claims across independent sources, synthesizes, and verifies every claim traces to a fetched quote. Auto-fires inside /create when the topic depends on external or time-sensitive facts.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "deep-research",
+    "triangulation",
+    "citation-grounding",
+    "hallucination-prevention",
+    "pre-prompt-research"
+  ],
+  "interface": {
+    "displayName": "Deep Research",
+    "shortDescription": "E0 engine \u2014 produces a verified, cited claims artifact before prompts are engin\u2026",
+    "longDescription": "E0 engine \u2014 produces a verified, cited claims artifact before prompts are engineered. Decomposes the query, fans out parallel Haiku fetchers, triangulates claims across independent sources, synthesizes, and verifies every claim traces to a fetched quote. Auto-fires inside /create when the topic depends on external or time-sensitive facts.",
+    "developerName": "Enchanter Labs",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Deep Research on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

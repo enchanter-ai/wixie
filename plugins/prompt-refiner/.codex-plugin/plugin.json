@@ -1,0 +1,30 @@
+{
+  "name": "prompt-refiner",
+  "version": "0.1.0",
+  "description": "Improves existing prompts while preserving intent. Diagnoses weaknesses, checks model fit, re-selects techniques, and runs the Convergence Engine to push toward DEPLOY quality.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "refinement",
+    "improvement"
+  ],
+  "interface": {
+    "displayName": "Prompt Refiner",
+    "shortDescription": "Improves existing prompts while preserving intent. Diagnoses weaknesses, checks\u2026",
+    "longDescription": "Improves existing prompts while preserving intent. Diagnoses weaknesses, checks model fit, re-selects techniques, and runs the Convergence Engine to push toward DEPLOY quality.",
+    "developerName": "Enchanter Labs",
+    "category": "Engineering",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Prompt Refiner on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

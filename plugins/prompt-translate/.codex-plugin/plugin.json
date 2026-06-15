@@ -1,0 +1,30 @@
+{
+  "name": "prompt-translate",
+  "version": "0.1.0",
+  "description": "Converts prompts optimized for one model into the optimal format for another. XML to Markdown, CoT to no-CoT, verbose to minimal. Preserves intent and domain content; only changes prompt engineering.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "translation",
+    "adaptation"
+  ],
+  "interface": {
+    "displayName": "Prompt Translate",
+    "shortDescription": "Converts prompts optimized for one model into the optimal format for another. X\u2026",
+    "longDescription": "Converts prompts optimized for one model into the optimal format for another. XML to Markdown, CoT to no-CoT, verbose to minimal. Preserves intent and domain content; only changes prompt engineering.",
+    "developerName": "Enchanter Labs",
+    "category": "Engineering",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Prompt Translate on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

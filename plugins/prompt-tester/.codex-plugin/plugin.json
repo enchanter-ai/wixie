@@ -1,0 +1,30 @@
+{
+  "name": "prompt-tester",
+  "version": "0.1.0",
+  "description": "Executes tests.json regression cases against prompts. Runs each test case through the prompt, checks output against expected_contains assertions, and reports pass/fail with failure reasons.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "testing",
+    "regression"
+  ],
+  "interface": {
+    "displayName": "Prompt Tester",
+    "shortDescription": "Executes tests.json regression cases against prompts. Runs each test case throu\u2026",
+    "longDescription": "Executes tests.json regression cases against prompts. Runs each test case through the prompt, checks output against expected_contains assertions, and reports pass/fail with failure reasons.",
+    "developerName": "Enchanter Labs",
+    "category": "Engineering",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Prompt Tester on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

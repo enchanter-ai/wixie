@@ -1,0 +1,30 @@
+{
+  "name": "prompt-crafter",
+  "version": "0.1.0",
+  "description": "Creates production-ready prompts. Scans project context, asks targeted questions, selects from 16 techniques, adapts format to 64 models, then runs the Convergence Engine until DEPLOY quality.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "prompt-engineering",
+    "crafting",
+    "creation"
+  ],
+  "interface": {
+    "displayName": "Prompt Crafter",
+    "shortDescription": "Creates production-ready prompts. Scans project context, asks targeted question\u2026",
+    "longDescription": "Creates production-ready prompts. Scans project context, asks targeted questions, selects from 16 techniques, adapts format to 64 models, then runs the Convergence Engine until DEPLOY quality.",
+    "developerName": "Enchanter Labs",
+    "category": "Engineering",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Prompt Crafter on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

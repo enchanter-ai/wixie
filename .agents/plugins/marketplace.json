@@ -1,0 +1,116 @@
+{
+  "name": "wixie",
+  "interface": {
+    "displayName": "Wixie"
+  },
+  "plugins": [
+    {
+      "name": "convergence-engine",
+      "source": {
+        "source": "local",
+        "path": "./plugins/convergence-engine"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "deep-research",
+      "source": {
+        "source": "local",
+        "path": "./plugins/deep-research"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "full",
+      "source": {
+        "source": "local",
+        "path": "./plugins/full"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "inference-engine",
+      "source": {
+        "source": "local",
+        "path": "./plugins/inference-engine"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "prompt-crafter",
+      "source": {
+        "source": "local",
+        "path": "./plugins/prompt-crafter"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "prompt-harden",
+      "source": {
+        "source": "local",
+        "path": "./plugins/prompt-harden"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "prompt-refiner",
+      "source": {
+        "source": "local",
+        "path": "./plugins/prompt-refiner"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "prompt-tester",
+      "source": {
+        "source": "local",
+        "path": "./plugins/prompt-tester"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "prompt-translate",
+      "source": {
+        "source": "local",
+        "path": "./plugins/prompt-translate"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    }
+  ]
+}

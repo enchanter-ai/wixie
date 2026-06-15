@@ -1,0 +1,33 @@
+{
+  "name": "inference-engine",
+  "version": "0.1.0",
+  "description": "Evidence-accumulation substrate for the enchanter-ai ecosystem. Runs Wald SPRT + Beta-Binomial + EMA over an append-only artifact stream; elevates patterns that recur across sessions; renders per-plugin briefings consumed at session start. Complements \u2014 does not replace \u2014 existing per-plugin Gauss-Accumulation-class engines.",
+  "author": {
+    "name": "Enchanter Labs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "inference",
+    "evidence-accumulation",
+    "pattern-elevation",
+    "sprt",
+    "beta-binomial",
+    "cross-session-learning"
+  ],
+  "interface": {
+    "displayName": "Inference Engine",
+    "shortDescription": "Evidence-accumulation substrate for the enchanter-ai ecosystem. Runs Wald SPRT\u2026",
+    "longDescription": "Evidence-accumulation substrate for the enchanter-ai ecosystem. Runs Wald SPRT + Beta-Binomial + EMA over an append-only artifact stream; elevates patterns that recur across sessions; renders per-plugin briefings consumed at session start. Complements \u2014 does not replace \u2014 existing per-plugin Gauss-Accumulation-class engines.",
+    "developerName": "Enchanter Labs",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Inference Engine on my project"
+    ]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

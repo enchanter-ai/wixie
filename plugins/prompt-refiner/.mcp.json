@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wixie-prompt-refiner-scripts": {
+      "cwd": ".",
+      "command": "python",
+      "args": [
+        "./mcp/server.py"
+      ]
+    }
+  }
+}
