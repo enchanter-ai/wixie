@@ -4,7 +4,7 @@
 
 # Wixie — Agent Contract
 
-Audience: Claude. Wixie engineers prompts — crafts, converges, tests, hardens, translates — via a managed Opus/Sonnet/Haiku network across 64 target models.
+Audience: Claude. Wixie engineers prompts — crafts, converges, tests, hardens, translates — via a managed Opus/Sonnet/Haiku network across 272 target models.
 
 ## Shared behavioral modules
 
