@@ -10,7 +10,7 @@ url: "https://github.com/enchanter-ai/wixie"
 license: MIT
 version: "3.0.0"
 date-released: "2026-04-20"
-abstract: "The first prompt engineering platform that learns from itself — convergence-driven crafting, testing, hardening, and translation across 64 target models."
+abstract: "The first prompt engineering platform that learns from itself — convergence-driven crafting, testing, hardening, and translation across 272 target models."
 keywords:
   - claude-code
   - enchanter-ai
