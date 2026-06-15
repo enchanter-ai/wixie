@@ -227,4 +227,34 @@ Phase 3: Generate recommendations based on synthesis
 
 ---
 
+## Composable Clause Templates
+
+Optional, drop-in reinforcements for the Constraints and Fallback components above. Compose them when the task domain calls for it — they are not mandatory. Derived from observed lab/product system-prompt practice (see `state/briefs/system-prompt-patterns/`).
+
+### Impossibility Block (domain scoping)
+
+Declare what the prompt **cannot** do upfront, as hard impossibilities — not as runtime failures. Shrinks scope creep and pre-empts hallucinated capability.
+
+> *"You cannot: create downloadable files, access the local filesystem, send emails, or run code outside the provided tools. If asked, state the limit plainly and offer the nearest supported alternative."*
+
+Use for: narrow-domain agents, integrations, anything embedded in a host app.
+
+### Auditability Mandate (show-your-work)
+
+Forbid unsourced derived claims — every computed or asserted value must reference its source or be reproducible.
+
+> *"Any derived number must reference its source (a formula, a cited figure, or a stated assumption) — never a value you computed silently and presented as fact."*
+
+Use for: analysis, data-extraction, financial/quantitative, decision-making.
+
+### Source-Tier Clause (allow/deny lists)
+
+Constrain external evidence to an explicit allow-list; name the banned tiers so the model can't rationalize around them.
+
+> *"Cite only primary/official sources (e.g., official docs, filings, first-party release notes). Do NOT cite aggregators or secondary commentary (e.g., content farms, forum summaries, SEO listicles). Timestamp every externally-sourced value."*
+
+Use for: research, fact-grounded prompts, anything that folds an E0 brief into `<context>`.
+
+---
+
 *End of prompt anatomy reference. Return to the creation workflow after applying components.*
