@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: plugin
 
@@ -35,7 +35,7 @@ jobs:
           echo "ref=main" >> "$GITHUB_OUTPUT"
 
       - name: checkout vis (sibling layout)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: enchanter-ai/vis
           path: vis
