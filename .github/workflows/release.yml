@@ -15,7 +15,7 @@ jobs:
     outputs:
       digest: ${{ steps.hash.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build artifact
         run: |
           # Write to /tmp first to avoid "file changed as we read it" when tar
