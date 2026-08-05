@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-06-11",
-  "model_count": 272,
+  "last_updated": "2026-08-05",
+  "model_count": 278,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -675,7 +675,28 @@
       "reasoning": "adaptive-thinking",
       "cot_approach": "Adaptive thinking built-in. Triggers reasoning only when needed. Simple tasks skip reasoning; complex multi-step problems trigger it. Use 'think thoroughly' for explicit requests.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Released May 28, 2026. Agentic coding 69.2% (vs 64.3% on 4.7), multidisciplinary reasoning 57.9% (vs 54.7%). Min cache length 1K tokens. 1M context. 128K max output. Pricing: $5M input / $25M output standard; $10M/$50M fast mode."
+      "key_constraint": "Released May 28, 2026. Agentic coding 69.2% (vs 64.3% on 4.7), multidisciplinary reasoning 57.9% (vs 54.7%). Min cache length 1K tokens. 1M context. 128K max output. Pricing: $5M input / $25M output standard; $10M/$50M fast mode. Superseded as flagship by Claude Opus 5 (Jul 24, 2026)."
+    },
+
+    "claude-opus-5": {
+      "family": "Claude 5",
+      "display_name": "Claude Opus 5",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking built-in — reasons only when the task needs it. Do NOT add 'think step by step'; raise the effort level instead. Use 'think thoroughly' for explicit deep reasoning.",
+      "few_shot": "3-5 examples in <example> tags; keep prompts minimal — Opus 5 needs less scaffolding than 4.x.",
+      "key_constraint": "Released Jul 24, 2026. Current Claude flagship. 1M context, 128K max output. Pricing $5/M input, $25/M output. Anthropic removed 80%+ of Claude Code's system prompt for Opus 5 with no measurable eval loss — prefer minimal, curated context over prescriptive scaffolding. Avoid aggressive MUST/CRITICAL (overtriggers)."
+    },
+    "claude-sonnet-5": {
+      "family": "Claude 5",
+      "display_name": "Claude Sonnet 5",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking built-in. Raise the effort level rather than adding explicit CoT phrases.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Released Jun 30, 2026. 1M context, 128K max output. Intro pricing $2/M input, $10/M output through Aug 31, 2026; standard $3/M input, $15/M output after. Price/performance workhorse tier of the Claude 5 family."
     },
 
     "gpt-5.4": {
@@ -708,7 +729,18 @@
       "reasoning": "standard",
       "cot_approach": "Pro variant has extended reasoning depth — avoid explicit CoT stacking.",
       "few_shot": "Separate # Examples section with input/output pairs",
-      "key_constraint": "Released Apr 23, 2026. Higher-accuracy tier of GPT-5.5. API pricing $30/M input, $180/M output — 6x the base 5.5 cost. Use only when base 5.5 quality is insufficient; sandwich method still applies."
+      "key_constraint": "Released Apr 23, 2026. Higher-accuracy tier of GPT-5.5. API pricing $30/M input, $180/M output — 6x the base 5.5 cost. Use only when base 5.5 quality is insufficient; sandwich method still applies. Superseded as flagship by GPT-5.6 (Sol)."
+    },
+
+    "gpt-5.6-sol": {
+      "family": "GPT-5.x",
+      "display_name": "GPT-5.6 (Sol)",
+      "context_window": 1000000,
+      "format": "markdown",
+      "reasoning": "standard",
+      "cot_approach": "Built-in router selects reasoning depth; base benefits from light CoT. Avoid stacking explicit CoT on the Thinking variant.",
+      "few_shot": "Separate # Examples section with input/output pairs",
+      "key_constraint": "Current OpenAI flagship as of mid-2026 — leads several benchmark categories alongside Fable 5 and Gemini 3.1 Pro. 1M context. Exact release date and full pricing not yet confirmed in this registry — VERIFY before production targeting. Supersedes GPT-5.5."
     },
 
     "gpt-image-2": {
@@ -755,6 +787,27 @@
       "key_constraint": "Fast/cheap tier of the 3.1 family. Temperature MUST stay at 1.0. Powers Nano Banana 2 image gen and 3.1 Flash TTS (30 conversational voices)."
     },
 
+    "gemini-3.5-pro": {
+      "family": "Gemini",
+      "display_name": "Gemini 3.5 Pro (Preview)",
+      "context_window": 2000000,
+      "format": "xml-or-markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "Extended thinking built-in; Deep Think for hardest problems. Avoid forcing explicit CoT.",
+      "few_shot": "ALWAYS REQUIRED",
+      "key_constraint": "Previewed May 2026, ~2M-token context (roughly doubles the 3.1 window). Delayed / still in partner testing as of Jul 2026 — NOT GA. Temperature MUST stay at 1.0. Verify availability before targeting; 3.1 Pro remains the shipping Pro slot."
+    },
+    "gemini-3.6-flash": {
+      "family": "Gemini",
+      "display_name": "Gemini 3.6 Flash",
+      "context_window": 1000000,
+      "format": "xml-or-markdown",
+      "reasoning": "standard",
+      "cot_approach": "'Plan before responding' for complex tasks. Thinking mode available.",
+      "few_shot": "ALWAYS REQUIRED",
+      "key_constraint": "Stable GA Jul 21, 2026. Fast/cheap tier of the 3.x family, successor to 3.1 Flash. 1M context. Temperature MUST stay at 1.0."
+    },
+
     "grok-4.20": {
       "family": "Grok (xAI)",
       "display_name": "Grok 4.20",
@@ -774,7 +827,18 @@
       "reasoning": "reasoning-native",
       "cot_approach": "16-agent Heavy system handles reasoning internally.",
       "few_shot": "2-3 examples recommended",
-      "key_constraint": "Released Apr 17, 2026. Native video input/processing. Slide generation in-chat. 16-agent Heavy carries over from 4.20. 2M context. Beta — verify specs before production."
+      "key_constraint": "Released Apr 17, 2026. Native video input/processing. Slide generation in-chat. 16-agent Heavy carries over from 4.20. 2M context. Beta — verify specs before production. Superseded as flagship by Grok 4.5 (Jul 8, 2026)."
+    },
+
+    "grok-4.5": {
+      "family": "Grok (xAI)",
+      "display_name": "Grok 4.5",
+      "context_window": 2000000,
+      "format": "markdown",
+      "reasoning": "reasoning-native",
+      "cot_approach": "Heavy multi-agent reasoning handled internally. Avoid forcing external CoT.",
+      "few_shot": "2-3 examples recommended",
+      "key_constraint": "Released Jul 8, 2026. Coding-focused current Grok flagship. Reported pricing ~$1.25/M input, $2.50/M output; cached input as low as $0.20/M. 2M context per family — verify exact specs before production."
     },
 
     "llama-5": {
