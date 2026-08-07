@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-06-11",
-  "model_count": 272,
+  "last_updated": "2026-08-07",
+  "model_count": 274,
   "update_instructions": "When model specs change (new context windows, new models, deprecated models), update this file and bump last_updated. The plugin reads this file as the single source of truth for all model data.",
   "models": {
     "claude-opus-4-6": {
@@ -676,6 +676,26 @@
       "cot_approach": "Adaptive thinking built-in. Triggers reasoning only when needed. Simple tasks skip reasoning; complex multi-step problems trigger it. Use 'think thoroughly' for explicit requests.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released May 28, 2026. Agentic coding 69.2% (vs 64.3% on 4.7), multidisciplinary reasoning 57.9% (vs 54.7%). Min cache length 1K tokens. 1M context. 128K max output. Pricing: $5M input / $25M output standard; $10M/$50M fast mode."
+    },
+    "claude-opus-5": {
+      "family": "Claude 5.x",
+      "display_name": "Claude Opus 5",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking ON by default (omitting the thinking param runs adaptive, unlike Opus 4.8). Full effort ladder low/medium/high/xhigh/max; low+medium punch above their weight. Raw chain-of-thought is never returned (summaries only). Disabling thinking is capped at effort <= high.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Drop-in upgrade at Opus 4.8 pricing ($5M input / $25M output; fast mode $10M/$50M, Claude-API-only). 1M context (default+max). 128K max output. Min cache length 512 tokens (down from 1K). Safety classifiers can return stop_reason:refusal — handle before reading content. Separate rate-limit bucket from the Opus 4.x pool. Tends to longer output + self-verification: add conciseness + scope-discipline instructions, delete verification scaffolding."
+    },
+    "claude-sonnet-5": {
+      "family": "Claude 5.x",
+      "display_name": "Claude Sonnet 5",
+      "context_window": 1000000,
+      "format": "xml",
+      "reasoning": "adaptive-thinking",
+      "cot_approach": "Adaptive thinking ON by default (omitting the thinking param runs adaptive, unlike Sonnet 4.6). First Sonnet-tier model with the full low/medium/high/xhigh/max effort ladder; keep high default, raise to xhigh for hardest coding/agentic. Non-default temperature/top_p/top_k are rejected (400) — steer via prompting.",
+      "few_shot": "3-5 examples in <example> tags",
+      "key_constraint": "Near-Opus quality on coding/agentic at Sonnet cost. Pricing $3M input / $15M output ($2M/$10M intro through 2026-08-31). 1M context. 128K max output. New tokenizer emits ~30% more tokens for same text vs Sonnet 4.6 — re-baseline budgets. High-res vision 2576px. Follows instructions more literally than 4.6."
     },
 
     "gpt-5.4": {
