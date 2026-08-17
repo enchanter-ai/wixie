@@ -113,6 +113,8 @@ Every elevated pattern ships with three numbers that mean something:
 
 No vanity counters. No "99.4% sure". The engine's verdict is honest: `elevated`, `noise`, or `retired`, with the evidence visible.
 
+**Current-state caveat:** as of this writing, every pattern in `state/catalog.json` still carries `β = 1.0` — no session-without-recurrence has ever incremented the negative side of the Beta-Binomial update. The posterior mean today is effectively `α / (α + 1)`: a count of positive observations, not yet a two-sided calibration. The mechanism is real and wired up (see U3 above); the negative-evidence half simply hasn't fired in production yet. Treat elevated-pattern confidence accordingly until β starts moving.
+
 ### Stdlib only
 
 Wald SPRT, Beta-Binomial posteriors, beta-quantile via regularized incomplete beta, EMA decay, reservoir sampling — all in `math`, `hashlib`, `json`, `random`, `pathlib`. No scipy. No numpy. No pandas. No npm. The `bash + jq + Python stdlib` brand contract held at every step.

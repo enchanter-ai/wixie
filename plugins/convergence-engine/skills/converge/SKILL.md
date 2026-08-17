@@ -13,6 +13,8 @@ allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergenc
 
 Autonomous prompt optimization. Like gradient descent for prompts — each iteration reduces deviation from perfection.
 
+**Scoring provenance:** the deviation/score comes from `shared/scripts/self-eval.py` and `convergence.py` — stdlib regex/structure heuristics with zero model API calls. A DEPLOY verdict means the heuristic and the 8 SAT assertions are satisfied, not that a model judged the output. `shared/scripts/efficacy-replay.py` is the only script here that actually calls a model.
+
 ## Usage
 
 The user provides a prompt file path or a prompt folder. Run the full pipeline.

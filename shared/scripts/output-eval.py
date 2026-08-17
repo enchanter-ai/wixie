@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Wixie Output Evaluator — heuristic-based output scorer. Stdlib only, zero API calls."""
+"""Wixie Output Evaluator — heuristic-based output scorer. Stdlib only, zero API calls.
+
+Caveat: this is a regex/structure lint, not a model-based quality oracle. It never
+calls a model to judge output; it pattern-matches against the axes below. Treat scores
+as a cheap proxy signal, not a verified-quality verdict. For a harness that actually
+calls a model, see shared/scripts/efficacy-replay.py.
+"""
 import sys, re, os, json
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

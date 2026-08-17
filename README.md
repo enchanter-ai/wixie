@@ -27,6 +27,8 @@ The first prompt engineering platform that learns from itself.
 > Scored 9.4/10. DEPLOY. All 8 assertions pass. Dark-themed PDF audit report delivered.
 >
 > Time: under 2 minutes. Manual effort: zero.
+>
+> *Scoring note: the 9.4/10 and the "auto-fixed" axis are heuristic-linter output (`output-eval.py` / `convergence.py`, zero model API calls) — see [Output Test Engine](#output-test-engine) for what is and isn't model-verified.*
 
 ## TL;DR
 
@@ -77,6 +79,8 @@ Not for:
 Wixie doesn't generate prompts. It **engineers** them — then stress-tests, hardens, and translates them across 64 models.
 
 The core innovation is the **Convergence Engine** powered by the **Gauss Convergence Method**: like gradient descent for prompts, each iteration measures the standard deviation from perfection, forms a hypothesis about which fix will reduce it, applies the fix, checks for regression, and auto-reverts if things got worse. It learns from every iteration and persists those learnings across sessions.
+
+> **What "measures" and "learns" mean here:** the deviation is computed by a stdlib regex/structure heuristic (`shared/scripts/output-eval.py`, `convergence.py`) — no model API call scores the prompt. "Learning" means logging which heuristic-detected axis moved after a fix to `learnings.md`, not model-verified quality improvement. The one script that actually calls a model is `shared/scripts/efficacy-replay.py`.
 
 The diagram below shows the four-agent pipeline: a user request flows into the **Opus orchestrator** (scan → ask → technique select → generate), which hands off to the **Sonnet optimizer** (convergence, hypothesis-driven fixes, binary assertions, auto-revert) and the **Haiku reviewer** (validation, freshness, format, registry). An approved prompt then enters the **hybrid output tester** (pre-flight → generate → evaluate → fix).
 
@@ -132,6 +136,8 @@ VERDICT: DEPLOY
 ```
 
 Next time you refine that prompt, the engine reads `learnings.md` and avoids repeating failed strategies. It gets smarter with every use.
+
+*Caveat: every score, hypothesis outcome, and axis in the loop above comes from the offline heuristic scorer, not a model judging its own output. The auto-fixer inserts text keyed to the same regexes the scorer checks — a closed loop, useful as a lint gate but not a substitute for model-verified evaluation. Real model output is only scored by [Output Test Engine](#output-test-engine)'s Phase 2/3, and only `efficacy-replay.py` runs a genuine model-vs-model comparison.*
 
 ### It works with image prompts too
 
@@ -212,7 +218,7 @@ Without `./scripts/bootstrap.sh`, conduct imports will silently miss and Claude 
 | prompt-crafter | `/create` | Creates production-ready prompts | reviewer (Haiku) |
 | prompt-refiner | `/refine` | Improves existing prompts | reviewer (Haiku) |
 | convergence-engine | `/converge` | 100-iteration autonomous optimizer | optimizer (Sonnet) + reviewer (Haiku) |
-| prompt-tester | `/test-prompt` | Runs test assertions, pass/fail | executor (Sonnet) |
+| prompt-tester | `/test-prompt` | Runs test assertions against a self-simulated response, pass/fail | executor (Sonnet) |
 | prompt-harden | `/harden` | 12 attack patterns, defense suggestions | red-team (Sonnet) |
 | prompt-translate | `/translate-prompt` | Converts between 64 models | adapter (Sonnet) |
 
@@ -337,25 +343,27 @@ python output-sim.py <prompt-folder>              # Predict output quality
 python self-check-inject.py prompt.xml --inject   # Add self-QA rubric
 ```
 
-Five scoring axes (offline, zero cost): Structural Completeness, Specificity, Prior Art Grounding, Assertion Tests, Coherence. Tested against real 10K-word Opus output: **9.9/10 heuristic, 97% schema compliance**.
+Five scoring axes (offline, zero cost): Structural Completeness, Specificity, Prior Art Grounding, Assertion Tests, Coherence. Tested against real 10K-word Opus output: **9.9/10 heuristic, 97% schema compliance** — a regex/structure score of a static sample, not a model-judged quality rating.
 
 ## vs Everything Else
 
 | | Wixie | Promptfoo | AutoResearch | PromptLayer | Manual |
 |---|---|---|---|---|---|
 | Create prompts | 16 techniques, 64 models | - | - | - | trial and error |
-| Optimize (convergence) | 100 iterations, self-learning | - | unbounded | - | - |
+| Optimize (convergence) | 100 iterations, heuristic-scored, self-logging | - | unbounded | - | - |
 | Test prompts | pass/fail assertions | YAML eval suite | hypothesis | basic metrics | - |
 | Harden prompts | 12 attack patterns | red-team module | - | - | - |
 | Translate prompts | 64 models, auto-adapted | - | - | - | manual rewrite |
 | Image LLM support | 27 image models + collab loop | - | - | - | - |
 | Video/Audio support | Runway, Seedance, ElevenLabs, Suno | - | - | - | - |
 | Multi-agent pipeline | Opus + Sonnet + Haiku | - | single agent | - | - |
-| Self-learning | learnings.md persistence | - | learnings.md | - | - |
+| Self-learning¹ | learnings.md persistence | - | learnings.md | - | - |
 | Auto-revert | yes (regression protection) | - | git-based | - | - |
 | PDF audit report | dark theme, single page | - | - | dashboard | - |
 | Dependencies | Python stdlib only | Node.js | Python | SaaS | - |
 | Price | Free (MIT) | Free / Pro | Free | $$$ | Free |
+
+¹ "Self-learning" here means a heuristic hypothesis/outcome log (`learnings.md`), not model-verified reinforcement. See [How It Works](#how-it-works) and [Output Test Engine](#output-test-engine) for what is and isn't model-based.
 
 ## Agent Conduct (13 Modules)
 

@@ -11,7 +11,9 @@ allowed-tools: Read Write
 
 # Prompt Test Runner
 
-Execute a prompt's test suite against the actual model. Each test case in `tests.json` is run and the output is checked against `expected_contains` assertions.
+Execute a prompt's test suite by self-simulating the target model. Each test case in `tests.json` is run and the output is checked against `expected_contains` assertions.
+
+**Not a real API call.** Step 3.2 has the executing Claude agent role-play as the target model rather than calling its API — so "Target model: claude-opus-4-6" in the report format means "simulated as," not "verified against a live call to." Use `shared/scripts/efficacy-replay.py` when a claim needs a genuine model-vs-model result.
 
 ## How It Works
 
@@ -40,7 +42,7 @@ For each test in `tests.json`:
 ```
 
 1. **Combine** the prompt with the test input. The prompt is the system/instruction, the input is the user message.
-2. **Execute** by generating a response using YOUR OWN capabilities (you ARE a language model — run the prompt yourself as if you were the target model).
+2. **Execute** by generating a response using YOUR OWN capabilities (you ARE a language model — run the prompt yourself as if you were the target model). This is a self-simulation, not a call to the target model's own API — treat pass/fail as a proxy signal, not proof the target model itself behaves this way.
 3. **Check assertions**: verify every string in `expected_contains` appears somewhere in the output (case-insensitive).
 4. **Record** pass/fail per assertion, per test case.
 

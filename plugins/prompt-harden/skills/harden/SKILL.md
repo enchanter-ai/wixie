@@ -13,6 +13,8 @@ allowed-tools: Read Write
 
 Test a prompt's resistance to adversarial attacks and suggest defenses.
 
+**Not a real API call.** The executing agent plays both attacker and defender by self-simulating the target model's response (Step 3), rather than calling the target model's own API with the crafted attack. RESISTANT/VULNERABLE verdicts reflect how Claude, acting as the prompt, handles the input — not a confirmed result from the deployed model. `shared/scripts/efficacy-replay.py` is the only script in this repo that actually calls a model.
+
 ## Step 1: Load the Prompt
 
 Same as other plugins — accept file path, folder path, or prompt name.
