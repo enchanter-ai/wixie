@@ -1,0 +1,70 @@
+crow-on-git — free-ground-truth change-durability experiment
+window_days=60  survival_threshold=0.5  repos=['wixie', 'mimir', 'hydra', 'emu', 'beholder', 'sylph', 'vis', 'crow', 'lich', 'robit']
+
+==============================================================================
+DATASET
+==============================================================================
+  n commits (matured)     : 870
+  durable (y=1)           : 617
+  bad / did-not-stick(y=0): 253  (reverted=0 rewritten=253)
+  base rate P(bad)        : 29.1%  Wilson95=[  26,  32]
+  by repo:
+     beholder     n=95   bad=25
+     crow         n=79   bad=27
+     emu          n=34   bad=3
+     hydra        n=130  bad=30
+     mimir        n=140  bad=5
+     robit        n=44   bad=33
+     sylph        n=91   bad=21
+     vis          n=89   bad=59
+     wixie        n=168  bad=50
+
+==============================================================================
+SIGNALS vs durability label   (positive class = bad, y=0)
+==============================================================================
+signal               fired  TP  FP  FN  TN    prec      prec95  recall       rec95     F1
+-----------------------------------------------------------------------------------------
+gutted_test              0   0   0 253 617   n/a            0.0% [   0,   1]   n/a
+trivial_assertions       1   0   1 253 616   0.0% [   0,  79]   0.0% [   0,   1]   n/a
+weak_crypto             11   4   7 249 610  36.4% [  15,  65]   1.6% [   1,   4]  0.030
+wildcard_cors            2   0   2 253 615   0.0% [   0,  66]   0.0% [   0,   1]   n/a
+exposed_secrets          8   0   8 253 609   0.0% [   0,  32]   0.0% [   0,   1]   n/a
+debug_enabled            3   0   3 253 614   0.0% [   0,  56]   0.0% [   0,   1]   n/a
+very_short_file         70  24  46 229 571  34.3% [  24,  46]   9.5% [   6,  14]  0.149
+crow_critical            8   0   8 253 609   0.0% [   0,  32]   0.0% [   0,   1]   n/a
+crow_high               13   4   9 249 608  30.8% [  13,  58]   1.6% [   1,   4]  0.030
+crow_flag_any           88  26  62 227 555  29.5% [  21,  40]  10.3% [   7,  15]  0.152
+big_diff               409  98 311 155 306  24.0% [  20,  28]  38.7% [  33,  45]  0.296
+many_files             209  68 141 185 476  32.5% [  27,  39]  26.9% [  22,  33]  0.294
+is_test_change          75  10  65 243 552  13.3% [   7,  23]   4.0% [   2,   7]  0.061
+is_config_change        98  11  87 242 530  11.2% [   6,  19]   4.3% [   2,   8]  0.063
+is_source_code         218  56 162 197 455  25.7% [  20,  32]  22.1% [  17,  28]  0.238
+
+==============================================================================
+VERDICT
+==============================================================================
+Dataset power: n=870, bad=253 (reverted=0, rewritten=253).
+- The EXPLICIT-REVERT ground-truth channel is EMPTY: no commit in the
+  target history was reverted. All 'bad' labels come from the
+  line-survival (rewrite/churn) channel only.
+
+Base rate P(bad)=29.1%. A signal beats chance only if its
+precision CI lower-bound exceeds the base rate.
+
+SIGNALS THAT SEPARATE: NONE. No signal's precision CI lower-bound
+clears the base rate — no candidate predictor is demonstrably better
+than guessing at this n.
+Fired but NOT demonstrably better than chance: trivial_assertions, weak_crypto, wildcard_cors, exposed_secrets, debug_enabled, very_short_file, crow_critical, crow_high, crow_flag_any, big_diff, many_files, is_test_change, is_config_change, is_source_code
+Never fired on this corpus (zero signal): gutted_test
+
+------------------------------------------------------------------------------
+CROW-B RECOMMENDATION (re-found crow on git survival?):
+  crow detectors fired but did not separate durable from bad.
+  => NOT YET justified to build the git-survival trust model.
+
+  Bottom line: the org has the measurement machinery (this harness runs)
+  but THIN GROUND TRUTH — near-zero reverts and few security regressions
+  in clean self-authored repos. Free git ground truth exists, but this
+  particular corpus is the wrong population to prove a change-quality
+  detector. Validate crow-B on a large multi-contributor OSS repo with
+  real reverts before committing to the re-founding.
