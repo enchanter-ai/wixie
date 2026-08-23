@@ -116,7 +116,7 @@ FOUND_SHA=$(git -C "$VIS_DIR" rev-parse HEAD)
 # Tolerates surrounding markdown (e.g., "- @../vis/...md — desc").
 mapfile -t IMPORT_PATHS < <(
   grep -oE '@\.\./vis/[A-Za-z0-9._/-]+' "$CLAUDE_MD" | \
-    sed 's#^@\.\./vis/##' | sort -u
+    sed 's#^@\.\./vis/##' | LC_ALL=C sort -u
 )
 
 if [[ "${#IMPORT_PATHS[@]}" -eq 0 ]]; then
