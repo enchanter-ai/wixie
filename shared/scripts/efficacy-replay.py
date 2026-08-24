@@ -18,8 +18,24 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"
+CORPUS_ROOT = REPO_ROOT / "shared" / "eval-corpus"
 MAX_TURNS = 3
 MAX_TOKENS = 2048
+
+
+def resolve_claude_bin() -> str:
+    """
+    Resolve the `claude` CLI binary.
+
+    Honors WIXIE_EFFICACY_CLAUDE_BIN so an automated test can point the harness at a
+    fake CLI that emits canned stream-json — the single seam that keeps CI from
+    burning tokens or requiring the network. In real runs the env var is unset and
+    the real `claude` on PATH is used.
+    """
+    override = os.environ.get("WIXIE_EFFICACY_CLAUDE_BIN")
+    if override:
+        return override
+    return shutil.which("claude") or "claude"
 
 
 def wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -115,7 +131,7 @@ def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
     `meta` carries the raw stdout/stderr/returncode for the persisted artifact.
     """
     assert len(turns) == 1, "v0.3 CLI mode supports single-turn fixtures only; multi-turn requires SDK"
-    claude_bin = shutil.which("claude") or "claude"
+    claude_bin = resolve_claude_bin()
     # Scrub Claude-Code env vars so the harness is isolated from the developer's session,
     # but preserve the git-bash escape hatch the CLI needs on Windows.
     env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE_", "CLAUDECODE"))}
@@ -221,12 +237,195 @@ def run_fixture(slug: str, n: int, model: str) -> dict:
     return verdict
 
 
+# ---------------------------------------------------------------------------
+# Corpus mode — measured DEPLOY bar for /converge and /test-prompt.
+#
+# The legacy fixture path above answers "does a conduct MODULE change behavior?"
+# (treatment vs. control system prompt, capability-absence taxonomy). Corpus mode
+# reuses the same real-model engine (resolve_claude_bin + claude -p, parse_stream_json,
+# wilson_ci) to answer a different question: "does THIS PROMPT produce the expected
+# behavior on a fixed eval corpus, measured — not linted?" A prompt-under-test is
+# supplied as the treatment system prompt; each corpus case carries expect/reject
+# regex checks; the pass rate gets a Wilson 95% CI, and accept/reject is decided on
+# the CI lower bound rather than on a heuristic linter score.
+# ---------------------------------------------------------------------------
+
+DEFAULT_CONTROL_SYSTEM = "You are a helpful assistant. Answer the user's request directly."
+
+
+def classify_corpus(trace: list[dict], case: dict) -> dict:
+    """
+    General correctness classifier for a corpus case.
+
+    PASS  — every regex in case["expect_patterns"] matches the assistant text AND
+            no regex in case["reject_patterns"] matches.
+    FAIL  — any reject_pattern matches, or a required expect_pattern is missing.
+
+    Unlike the capability-fidelity taxonomy there is no NEITHER arm: for prompt
+    correctness, "expected behavior absent" is a real failure, so every trial scores.
+    """
+    text_blob = "\n".join(
+        block.get("text", "") for turn in trace if turn["role"] == "assistant"
+        for block in turn["content"] if block.get("type") == "text"
+    )
+    expect = case.get("expect_patterns", [])
+    reject = case.get("reject_patterns", [])
+    matched_reject = [p for p in reject if re.search(p, text_blob, re.I | re.M)]
+    if matched_reject:
+        return {"outcome": "REJECTED_PATTERN", "score": "FAIL", "matched_reject": matched_reject}
+    missing_expect = [p for p in expect if not re.search(p, text_blob, re.I | re.M)]
+    if missing_expect:
+        return {"outcome": "MISSING_EXPECT", "score": "FAIL", "missing_expect": missing_expect}
+    return {"outcome": "CORRECT", "score": "PASS"}
+
+
+def run_corpus_trial(system_text: str, user_turn: str, model: str, seed: int) -> tuple[list[dict], dict]:
+    """
+    One `claude -p` invocation with `system_text` as the appended system prompt and
+    `user_turn` as the prompt. Tools are disabled (--disallowed-tools '*') so the
+    measurement observes the model's TEXT behavior on the prompt, not tool use.
+    Returns (trace, meta). Mirrors run_trial's env-scrubbing and stream-json parsing.
+    """
+    claude_bin = resolve_claude_bin()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE_", "CLAUDECODE"))}
+    env["CLAUDE_EFFICACY_SEED"] = str(seed)
+    if "CLAUDE_CODE_GIT_BASH_PATH" in os.environ:
+        env["CLAUDE_CODE_GIT_BASH_PATH"] = os.environ["CLAUDE_CODE_GIT_BASH_PATH"]
+    with tempfile.TemporaryDirectory() as sandbox_cwd:
+        sys_file = Path(sandbox_cwd) / "system.md"
+        sys_file.write_text(system_text, encoding="utf-8")
+        cmd = [
+            claude_bin, "-p", user_turn,
+            "--bare",
+            "--no-session-persistence",
+            "--setting-sources", "",
+            "--append-system-prompt-file", str(sys_file),
+            "--disallowed-tools", "*",
+            "--model", model,
+            "--output-format", "stream-json",
+            "--verbose",
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=sandbox_cwd, timeout=180)
+    trace = parse_stream_json(proc.stdout)
+    meta = {"cmd": cmd, "returncode": proc.returncode, "stdout_raw": proc.stdout, "stderr_raw": proc.stderr}
+    return trace, meta
+
+
+def _measure_arm(system_text: str, cases: list[dict], n: int, model: str,
+                 runs_dir: Path, ts: str, arm: str) -> dict:
+    passes = 0
+    details = []
+    for case in cases:
+        for seed in range(n):
+            trace, meta = run_corpus_trial(system_text, case["input"], model, seed)
+            (runs_dir / f"{ts}-{arm}-{case['id']}-{seed}.json").write_text(
+                json.dumps({"trace": trace, "meta": meta}, indent=2, default=str), encoding="utf-8")
+            cls = classify_corpus(trace, case)
+            if cls["score"] == "PASS":
+                passes += 1
+            details.append({"case": case["id"], "seed": seed, **cls})
+    total = len(cases) * n
+    rate = passes / total if total else 0.0
+    lo, hi = wilson_ci(passes, total)
+    return {"passes": passes, "total": total, "rate": rate,
+            "ci_95_low": lo, "ci_95_high": hi, "trials": details}
+
+
+def accept_predicate(treatment: dict, control: dict | None, floor: float) -> dict:
+    """
+    Measured accept/reject on the Wilson CI lower bound — this is the DEPLOY-relevant
+    signal, replacing the heuristic linter score.
+
+      ACCEPT  — treatment CI lower bound >= floor
+                AND (no control, OR treatment CI low > control CI high  ← measured lift)
+      REJECT  — otherwise.
+
+    Reporting the CI lower bound (not the point rate) is the honest-numbers move: a
+    high rate on few trials with a wide CI does not clear the bar.
+    """
+    floor_ok = treatment["ci_95_low"] >= floor
+    lift_ok = True if control is None else treatment["ci_95_low"] > control["ci_95_high"]
+    verdict = "ACCEPT" if (floor_ok and lift_ok) else "REJECT"
+    return {
+        "verdict": verdict,
+        "floor": floor,
+        "floor_ok": floor_ok,
+        "lift_ok": lift_ok,
+        "treatment_ci_95_low": treatment["ci_95_low"],
+        "control_ci_95_high": (control["ci_95_high"] if control else None),
+    }
+
+
+def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_control: bool) -> dict:
+    cdir = CORPUS_ROOT / corpus_name
+    corpus = json.loads((cdir / "corpus.json").read_text(encoding="utf-8"))
+    cases = corpus["cases"]
+    for c in cases:
+        if "id" not in c or "input" not in c:
+            raise RuntimeError(f"corpus case malformed (needs id+input): {c}")
+    prompt_text = prompt_path.read_text(encoding="utf-8")
+    floor = float(corpus.get("accept", {}).get("rate_floor", 0.75))
+    runs_dir = cdir / "runs"
+    runs_dir.mkdir(exist_ok=True)
+    ts = time.strftime("%Y%m%dT%H%M%S")
+
+    treatment = _measure_arm(prompt_text, cases, n, model, runs_dir, ts, "treatment")
+    control = None
+    if with_control:
+        control_sys = corpus.get("control_system", DEFAULT_CONTROL_SYSTEM)
+        control = _measure_arm(control_sys, cases, n, model, runs_dir, ts, "control")
+
+    decision = accept_predicate(treatment, control, floor)
+    verdict = {
+        "corpus": corpus_name, "prompt": str(prompt_path),
+        "harness_version": "v0.3-cli-corpus", "model": model,
+        "n_per_case": n, "cases": len(cases), "ts": ts,
+        "treatment": treatment, "control": control,
+        "decision": decision,
+    }
+    (cdir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
+    return verdict
+
+
+def _print_corpus_summary(verdict: dict) -> None:
+    slim = {k: v for k, v in verdict.items() if k not in ("treatment", "control")}
+    slim["treatment_summary"] = {k: verdict["treatment"][k]
+                                 for k in ("passes", "total", "rate", "ci_95_low", "ci_95_high")}
+    if verdict["control"]:
+        slim["control_summary"] = {k: verdict["control"][k]
+                                   for k in ("passes", "total", "rate", "ci_95_low", "ci_95_high")}
+    print(json.dumps(slim, indent=2, default=str))
+    print(f"\nfull verdict: shared/eval-corpus/{verdict['corpus']}/verdict.json")
+
+
 def main() -> int:
+    argv = sys.argv[1:]
+    if argv and argv[0] == "corpus":
+        ap = argparse.ArgumentParser(prog="efficacy-replay.py corpus")
+        ap.add_argument("corpus_name")
+        ap.add_argument("--prompt", required=True, help="path to the prompt-under-test")
+        ap.add_argument("-n", type=int, default=5, help="trials per corpus case per arm")
+        ap.add_argument("--model", default="claude-haiku-4-5-20251001")
+        ap.add_argument("--with-control", action="store_true",
+                        help="also run a baseline arm and require measured lift over it")
+        args = ap.parse_args(argv[1:])
+        if not (CORPUS_ROOT / args.corpus_name).exists():
+            print(f"no corpus at {CORPUS_ROOT / args.corpus_name}", file=sys.stderr)
+            return 2
+        prompt_path = Path(args.prompt)
+        if not prompt_path.exists():
+            print(f"no prompt file at {prompt_path}", file=sys.stderr)
+            return 2
+        verdict = run_corpus(args.corpus_name, prompt_path, args.n, args.model, args.with_control)
+        _print_corpus_summary(verdict)
+        # exit 0 on ACCEPT, 1 on REJECT — lets a skill / CI branch on the measured bar.
+        return 0 if verdict["decision"]["verdict"] == "ACCEPT" else 1
+
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
     ap.add_argument("-n", type=int, default=10)
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     if not (EFFICACY_ROOT / args.slug).exists():
         print(f"no fixture at {EFFICACY_ROOT / args.slug}", file=sys.stderr)
         return 2

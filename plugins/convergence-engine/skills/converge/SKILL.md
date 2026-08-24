@@ -6,14 +6,14 @@ description: >
   failure resilience until the prompt reaches DEPLOY quality.
   Auto-triggers on: "/converge", "converge this prompt", "optimize until perfect",
   "iterate until deploy", "run convergence".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py *) Read Write Edit Agent
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py *) Read Write Edit Agent
 ---
 
 # Convergence Engine
 
 Autonomous prompt optimization. Like gradient descent for prompts — each iteration reduces deviation from perfection.
 
-**Scoring provenance:** the deviation/score comes from `shared/scripts/self-eval.py` and `convergence.py` — stdlib regex/structure heuristics with zero model API calls. A DEPLOY verdict means the heuristic and the 8 SAT assertions are satisfied, not that a model judged the output. `shared/scripts/efficacy-replay.py` is the only script here that actually calls a model.
+**Scoring provenance — two layers.** `shared/scripts/self-eval.py` and `convergence.py` are stdlib regex/structure heuristics with zero model API calls; they run as a **fast pre-check** (Step 2) that catches gross problems cheaply. They are NO LONGER the DEPLOY-relevant signal. The DEPLOY decision now comes from a **measured** step (Step 2.5): `shared/scripts/efficacy-replay.py corpus` runs the converged prompt against the fixed `shared/eval-corpus/deploy-bar` corpus with real `claude -p` calls and accepts/rejects on a Wilson 95% CI lower bound. Heuristic PASS is necessary but not sufficient; the measured ACCEPT is what clears DEPLOY.
 
 ## Usage
 
@@ -53,6 +53,27 @@ This runs up to 100 iterations:
 - Re-scores and repeats
 - Exits on DEPLOY (overall ≥ 9, all axes ≥ 7) or plateau (3 identical scores)
 
+This is a **fast heuristic pre-check only** — it never calls a model. A heuristic DEPLOY
+print is a green light to proceed to the measured step, not a DEPLOY verdict on its own.
+
+### Step 2.5: Measure against the eval corpus (the DEPLOY-relevant signal)
+
+Run the converged prompt against the fixed corpus with **real** `claude -p` calls and accept/reject
+on the Wilson 95% CI. This is what turns DEPLOY from a self-satisfiable linter into a measurement.
+
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py corpus deploy-bar \
+  --prompt <prompt-file> -n 5 --with-control
+```
+
+- Reads `shared/eval-corpus/deploy-bar/corpus.json` (add per-domain corpora with the same schema).
+- Each case scores PASS/FAIL on expect/reject regexes over real model output; pass rate gets a Wilson CI.
+- `--with-control` adds a baseline arm and additionally requires **measured lift** over it.
+- **ACCEPT** (exit 0) = treatment CI lower bound ≥ `rate_floor` (and, with control, CI low > control CI high).
+  **REJECT** (exit 1) = otherwise → the verdict is **HOLD**, regardless of the heuristic score. Re-run convergence.
+- Honest-numbers: if the `claude` CLI is unavailable, the measure step cannot run — report that and hold
+  at the heuristic pre-check verdict; do NOT claim a measured DEPLOY. Full artifact: `shared/eval-corpus/deploy-bar/verdict.json`.
+
 ### Step 3: Update artifacts
 
 After convergence:
@@ -91,9 +112,11 @@ If issues found, fix and re-run convergence (max 3 review cycles).
 Tell the user:
 ```
 Convergence complete: X.X → Y.Y in N iterations
-Verdict: DEPLOY / BEST EFFORT
-[axis scores]
+Heuristic pre-check: PASS / HOLD  [axis scores]
+Measured (deploy-bar, n=N): ACCEPT / REJECT  (treatment CI low L.LL, floor 0.75[, lift over control])
+Verdict: DEPLOY (measured ACCEPT) / HOLD (measured REJECT) / HOLD (measure step unavailable)
 ```
+DEPLOY requires the measured **ACCEPT**, not just a heuristic pass.
 
 ## Rules
 - Do NOT ask for permission. Run everything autonomously.
