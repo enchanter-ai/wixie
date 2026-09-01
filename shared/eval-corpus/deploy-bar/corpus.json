@@ -37,7 +37,7 @@
         "(empty|invalid|no (input|date)|cannot parse|not (a )?(valid|recognized))"
       ],
       "reject_patterns": [
-        "\\b2\\d{3}-\\d{2}-\\d{2}\\b"
+        "\\b(date is|i'?ll (assume|use|default)|result:?|returns?)\\s+[\"']?\\d{4}-\\d{2}-\\d{2}"
       ]
     },
     {
