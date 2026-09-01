@@ -21,6 +21,10 @@ EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"
 CORPUS_ROOT = REPO_ROOT / "shared" / "eval-corpus"
 MAX_TURNS = 3
 MAX_TOKENS = 2048
+# Per-trial subprocess timeout (seconds). 180 fits the tiny generic deploy-bar cases,
+# but a heavy DOMAIN prompt (e.g. a 3500-5500-word architecture spec) legitimately needs
+# longer; override with WIXIE_EFFICACY_TIMEOUT to avoid a spurious TimeoutExpired crash.
+TRIAL_TIMEOUT = int(os.environ.get("WIXIE_EFFICACY_TIMEOUT", "180"))
 
 
 def resolve_claude_bin() -> str:
@@ -185,7 +189,7 @@ def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
         proc = subprocess.run(
             cmd, capture_output=True, text=True,
             encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows locale (cp1252) would crash on non-cp1252 bytes
-            env=env, cwd=sandbox_cwd, timeout=180,
+            env=env, cwd=sandbox_cwd, timeout=TRIAL_TIMEOUT,
         )
     trace = parse_stream_json(proc.stdout)
     meta = {
@@ -343,7 +347,7 @@ def run_corpus_trial(system_text: str, user_turn: str, model: str, seed: int) ->
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True,
                                encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows cp1252 would crash on non-cp1252 bytes
-                               env=env, cwd=sandbox_cwd, timeout=180)
+                               env=env, cwd=sandbox_cwd, timeout=TRIAL_TIMEOUT)
     trace = parse_stream_json(proc.stdout)
     meta = {"cmd": cmd, "returncode": proc.returncode, "stdout_raw": proc.stdout, "stderr_raw": proc.stderr}
     return trace, meta
