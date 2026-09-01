@@ -2,7 +2,7 @@
 
 **Creates production-ready prompts. Zero manual iteration.**
 
-Give it a task description. It scans your project context, asks targeted questions, selects from 16 techniques, adapts format to 64 models, then runs the Convergence Engine autonomously until the prompt hits DEPLOY quality.
+Give it a task description. It scans your project context, asks targeted questions, selects from 16 techniques, adapts format to 274 models, then runs the Convergence Engine autonomously until the prompt hits DEPLOY quality.
 
 ## Install
 

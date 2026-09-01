@@ -4,7 +4,7 @@
     "name": "enchanter-ai"
   },
   "metadata": {
-    "description": "End-to-end prompt engineering platform. Create, optimize, test, harden, and translate prompts across 64 models with multi-agent pipelines.",
+    "description": "End-to-end prompt engineering platform. Create, optimize, test, harden, and translate prompts across 274 models with multi-agent pipelines.",
     "version": "4.0.0"
   },
   "plugins": [

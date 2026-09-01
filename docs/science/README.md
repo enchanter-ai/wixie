@@ -107,7 +107,7 @@ Translation applies a composition:
 
 <p align="center"><img src="../assets/math/sci-adapt-composition.svg" alt="P' = A_{M_t} ∘ T_{M_t} ∘ F_{M_s -> M_t}(P)"></p>
 
-The 64-model registry provides per-model constraints: format, reasoning type, CoT approach, few-shot requirement, key constraint.
+The 274-model registry provides per-model constraints: format, reasoning type, CoT approach, few-shot requirement, key constraint.
 
 **Implementation:** `plugins/prompt-translate/skills/translate/SKILL.md`
 
