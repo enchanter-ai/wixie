@@ -27,7 +27,7 @@ Every engine implements a named mathematical model:
 | **Gauss Convergence** | Standard deviation minimization | Iterates up to 100 times, each cycle reduces deviation from perfection |
 | **Boolean Satisfiability** | Hybrid SAT + continuous optimization | 8 binary assertions overlaid on 5-axis scoring |
 | **Game-Theoretic Security** | Zero-sum adversarial testing | 12 attack patterns with quality-preserving defense injection |
-| **Constraint-Preserving Transformation** | Semantic-invariant model translation | Convert prompts across 64 models without losing intent |
+| **Constraint-Preserving Transformation** | Semantic-invariant model translation | Convert prompts across 274 models without losing intent |
 | **Hidden Markov Detection** | State transition pattern recognition | Detect unproductive loops (read loops, edit reverts, test failures) |
 | **Information-Theoretic Compression** | Entropy-bounded output reduction | Compress tool output while preserving semantic content above fidelity threshold |
 | **Gauss Accumulation** | Cross-session knowledge persistence | Strategy success rates, pattern detection, unreliable strategy avoidance |
@@ -38,7 +38,7 @@ The math isn't documentation. It runs as code.
 
 ### Wixie — Prompt Engineering Platform
 
-7 agents. 64 models. Create, optimize, test, harden, and translate prompts.
+7 agents. 274 models. Create, optimize, test, harden, and translate prompts.
 
 ```
 /plugin marketplace add enchanter-ai/wixie

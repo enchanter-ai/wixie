@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- Model registry expanded from 64 to **274** models (`shared/models-registry.json`, `model_count: 274`, `last_updated: 2026-08-07`). Documentation across `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and `docs/` updated to match the registry, which remains the single source of truth for model count and specs.
+
 ## [4.0.0] — rename: wixie identity, standardized origin format
 
 ### Added

@@ -81,7 +81,7 @@ Six named engines, each with a formal derivation in [docs/science/README.md](sci
 |----|------|---------|
 | E1 | Gauss Convergence | Iterative optimization — accept an iteration only if σ drops. |
 | E2 | Boolean Satisfiability Overlay | The 8-assertion SAT gate layered on continuous scores. |
-| E3 | Cross-Domain Adaptation | Constraint-preserving prompt translation across 64 models. |
+| E3 | Cross-Domain Adaptation | Constraint-preserving prompt translation across 274 models. |
 | E4 | Adversarial Robustness | 12-attack harden suite, OWASP LLM Top 10 coverage. |
 | E5 | Static-Dynamic Dual Verification | Structure scoring + real-output assertion testing. |
 | E6 | Gauss Accumulation | Cross-session learning — `learnings.md` compounding over time. |

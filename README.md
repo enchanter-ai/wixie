@@ -7,7 +7,7 @@
 <p>
   <a href="LICENSE.txt"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-3fb950?style=for-the-badge"></a>
   <img alt="6 plugins" src="https://img.shields.io/badge/Plugins-6-bc8cff?style=for-the-badge">
-  <img alt="64 models" src="https://img.shields.io/badge/Models-64-58a6ff?style=for-the-badge">
+  <img alt="274 models" src="https://img.shields.io/badge/Models-274-58a6ff?style=for-the-badge">
   <img alt="7 agents" src="https://img.shields.io/badge/Agents-7-d29922?style=for-the-badge">
   <img alt="Gauss Convergence Method" src="https://img.shields.io/badge/Gauss-Convergence-f0883e?style=for-the-badge">
   <a href="https://www.repostatus.org/#active"><img alt="Project Status: Active" src="https://www.repostatus.org/badges/latest/active.svg"></a>
@@ -17,7 +17,7 @@
 
 The first prompt engineering platform that learns from itself.
 
-**6 plugins. 7 agents. 64 models. Gauss Convergence Method. One command.**
+**6 plugins. 7 agents. 274 models. Gauss Convergence Method. One command.**
 
 > "Build me a B2B ticket routing system like Zendesk."
 >
@@ -60,7 +60,7 @@ Not for:
 - [The Full Lifecycle](#the-full-lifecycle)
 - [Install](#install)
 - [Quickstart](#quickstart)
-- [6 Plugins, 7 Agents, 64 Models](#6-plugins-7-agents-64-models)
+- [6 Plugins, 7 Agents, 274 Models](#6-plugins-7-agents-274-models)
 - [What You Get Per Prompt](#what-you-get-per-prompt)
 - [Roadmap](#roadmap)
 - [The Science Behind Wixie](#the-science-behind-wixie)
@@ -76,7 +76,7 @@ Not for:
 
 ## How It Works
 
-Wixie doesn't generate prompts. It **engineers** them — then stress-tests, hardens, and translates them across 64 models.
+Wixie doesn't generate prompts. It **engineers** them — then stress-tests, hardens, and translates them across 274 models.
 
 The core innovation is the **Convergence Engine** powered by the **Gauss Convergence Method**: like gradient descent for prompts, each iteration measures the standard deviation from perfection, forms a hypothesis about which fix will reduce it, applies the fix, checks for regression, and auto-reverts if things got worse. It learns from every iteration and persists those learnings across sessions.
 
@@ -104,7 +104,7 @@ No permission prompts. No manual iteration. You describe what you need, the agen
 
 ### It supports every model you actually use
 
-**64 models** across text, code, image, video, and audio. Not just the big 3.
+**274 models** across text, code, image, video, and audio. Not just the big 3.
 
 Text LLMs: Claude (Opus/Sonnet/Haiku), GPT (4.1/4o/5), o-series (o1/o3/o4-mini), Gemini (2.5/3), DeepSeek (R1/V3), Grok, Qwen, Llama, Mistral, Cohere, Jamba, Amazon Nova, Phi, Yi, Codestral, Perplexity.
 
@@ -211,7 +211,7 @@ cd wixie
 ```
 
 Without `./scripts/bootstrap.sh`, conduct imports will silently miss and Claude Code's `@`-loader will fail-soft. Always bootstrap first.
-## 6 Plugins, 7 Agents, 64 Models
+## 6 Plugins, 7 Agents, 274 Models
 
 | Plugin | Command | What | Agent |
 |--------|---------|------|-------|
@@ -220,7 +220,7 @@ Without `./scripts/bootstrap.sh`, conduct imports will silently miss and Claude 
 | convergence-engine | `/converge` | 100-iteration autonomous optimizer | optimizer (Sonnet) + reviewer (Haiku) |
 | prompt-tester | `/test-prompt` | Runs test assertions against a self-simulated response, pass/fail | executor (Sonnet) |
 | prompt-harden | `/harden` | 12 attack patterns, defense suggestions | red-team (Sonnet) |
-| prompt-translate | `/translate-prompt` | Converts between 64 models | adapter (Sonnet) |
+| prompt-translate | `/translate-prompt` | Converts between 274 models | adapter (Sonnet) |
 
 ## What You Get Per Prompt
 
@@ -249,7 +249,7 @@ prompts/b2b-ticket-router/
 └── learnings.md        Convergence hypothesis/outcome log
 ```
 
-The **PDF audit report** includes: quality score bars, 8 binary assertion results, technique pills, model profile from the 64-model registry, prompt statistics, audit findings (CRITICAL/WARNING), cost estimate, and an honest verdict with next steps.
+The **PDF audit report** includes: quality score bars, 8 binary assertion results, technique pills, model profile from the 274-model registry, prompt statistics, audit findings (CRITICAL/WARNING), cost estimate, and an honest verdict with next steps.
 
 ### State surface
 
@@ -283,7 +283,7 @@ Accept the next iteration only if sigma drops. Auto-revert on regression. Conver
 
 <p align="center"><img src="docs/assets/math/adapt-constraints.svg" alt="Semantic(P') = Semantic(P) AND Techniques(P') ∩ AntiPatterns(M_t) = empty"></p>
 
-Constraint-preserving prompt transformation across 64 models. Composition of format converter, technique selector, and model adapter.
+Constraint-preserving prompt transformation across 274 models. Composition of format converter, technique selector, and model adapter.
 
 ### Engine 4: Adversarial Robustness
 
@@ -349,11 +349,11 @@ Five scoring axes (offline, zero cost): Structural Completeness, Specificity, Pr
 
 | | Wixie | Promptfoo | AutoResearch | PromptLayer | Manual |
 |---|---|---|---|---|---|
-| Create prompts | 16 techniques, 64 models | - | - | - | trial and error |
+| Create prompts | 16 techniques, 274 models | - | - | - | trial and error |
 | Optimize (convergence) | 100 iterations, heuristic-scored, self-logging | - | unbounded | - | - |
 | Test prompts | pass/fail assertions | YAML eval suite | hypothesis | basic metrics | - |
 | Harden prompts | 12 attack patterns | red-team module | - | - | - |
-| Translate prompts | 64 models, auto-adapted | - | - | - | manual rewrite |
+| Translate prompts | 274 models, auto-adapted | - | - | - | manual rewrite |
 | Image LLM support | 27 image models + collab loop | - | - | - | - |
 | Video/Audio support | Runway, Seedance, ElevenLabs, Suno | - | - | - | - |
 | Multi-agent pipeline | Opus + Sonnet + Haiku | - | single agent | - | - |

@@ -17,7 +17,7 @@ To install this plugin on its own: `/plugin install prompt-translate@wixie`. `pr
 
 ## Why
 
-You wrote a perfect Claude Opus prompt. Now the team wants to use GPT-4.1. Without translation, you're rewriting from scratch — restructuring XML to Markdown, replacing "think thoroughly" with "think step by step", adding the sandwich method. Prompt-translate does this automatically using the 64-model registry.
+You wrote a perfect Claude Opus prompt. Now the team wants to use GPT-4.1. Without translation, you're rewriting from scratch — restructuring XML to Markdown, replacing "think thoroughly" with "think step by step", adding the sandwich method. Prompt-translate does this automatically using the 274-model registry.
 
 ## Usage
 

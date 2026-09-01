@@ -22,7 +22,7 @@ The [SUPPORT.md](../SUPPORT.md) page has the exact links for each.
 
 No. Wixie is an independent open-source plugin for [Claude Code](https://github.com/anthropics/claude-code) (Anthropic's CLI). It's published by [enchanter-ai](https://github.com/enchanter-ai) under the MIT license and is not affiliated with, endorsed by, or supported by Anthropic.
 
-## Can I use Wixie with models outside the 64-model registry?
+## Can I use Wixie with models outside the 274-model registry?
 
 Partially. The convergence engine and SAT assertions work on any prompt text, but format adaptation (XML for Claude, Markdown-sandwich for GPT, minimal for o-series, always-few-shot for Gemini) relies on the registry entry. If your target model is not listed in `shared/models-registry.json`, Wixie will stop and ask rather than guess — see the "ESCALATE on unknown target model" rule in [CLAUDE.md](../CLAUDE.md). Adding a new registry entry is a normal contribution path; the schema lives alongside the existing entries.
 

@@ -45,7 +45,7 @@ wixie/
 ├── shared/
 │   ├── references/                    Technique engine, model profiles, formats
 │   ├── scripts/                       convergence.py, self-eval.py, token-count.py, report-gen.py, html-to-pdf.py
-│   ├── models-registry.json           64 models (single source of truth)
+│   ├── models-registry.json           274 models (single source of truth)
 │   └── *.py                           Shared utilities
 ├── prompts/                           Generated prompts (gitignored except index.json)
 └── tests/                             12 tests across 3 plugins

@@ -16,7 +16,7 @@ Claude Code resolves the six dependencies and installs:
 - `prompt-harden` — 12 adversarial attack patterns
 - `prompt-refiner` — improves existing prompts
 - `prompt-tester` — runs `tests.json` assertions
-- `prompt-translate` — ports prompts between 64 models
+- `prompt-translate` — ports prompts between 274 models
 
 If you want to cherry-pick a single plugin (e.g. just `prompt-harden`), you can — but the plugins hand off to each other at runtime, so you'll typically want them all.
 
