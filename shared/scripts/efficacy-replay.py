@@ -38,6 +38,37 @@ def resolve_claude_bin() -> str:
     return shutil.which("claude") or "claude"
 
 
+# Parent-session env vars that carry the Claude Code AUTH/IPC channel — NOT
+# conversation context. When the harness runs *inside* a Claude Code session on a
+# subscription (OAuth) setup, the spawned `claude -p` authenticates through this
+# channel; scrubbing it (as the blanket CLAUDE_* strip did) forces
+# authentication_failed — every trial returns the synthetic "Not logged in" text and
+# scores 0, producing a measurement artifact rather than a prompt-quality signal.
+# Preserving only these two keeps the child isolated from the developer's session
+# CONTEXT while letting it authenticate. In a plain terminal / CI they are simply
+# absent and stored-credential auth applies unchanged. Session id is deliberately NOT
+# preserved, so the child never attaches to the parent's conversation.
+_AUTH_PASSTHROUGH = ("CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN")
+
+
+def harness_env(seed: int) -> dict:
+    """
+    Build the scrubbed subprocess env shared by both trial runners.
+
+    Strips the parent session's CLAUDE_*/CLAUDECODE context vars (measurement
+    isolation) but preserves the auth/IPC channel in _AUTH_PASSTHROUGH and the
+    Windows git-bash escape hatch, then stamps the per-trial seed.
+    """
+    env = {
+        k: v for k, v in os.environ.items()
+        if not k.startswith(("CLAUDE_", "CLAUDECODE")) or k in _AUTH_PASSTHROUGH
+    }
+    env["CLAUDE_EFFICACY_SEED"] = str(seed)
+    if "CLAUDE_CODE_GIT_BASH_PATH" in os.environ:
+        env["CLAUDE_CODE_GIT_BASH_PATH"] = os.environ["CLAUDE_CODE_GIT_BASH_PATH"]
+    return env
+
+
 def wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
     if n == 0:
         return (0.0, 0.0)
@@ -132,16 +163,17 @@ def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
     """
     assert len(turns) == 1, "v0.3 CLI mode supports single-turn fixtures only; multi-turn requires SDK"
     claude_bin = resolve_claude_bin()
-    # Scrub Claude-Code env vars so the harness is isolated from the developer's session,
-    # but preserve the git-bash escape hatch the CLI needs on Windows.
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE_", "CLAUDECODE"))}
-    env["CLAUDE_EFFICACY_SEED"] = str(seed)
-    if "CLAUDE_CODE_GIT_BASH_PATH" in os.environ:
-        env["CLAUDE_CODE_GIT_BASH_PATH"] = os.environ["CLAUDE_CODE_GIT_BASH_PATH"]
+    env = harness_env(seed)
     with tempfile.TemporaryDirectory() as sandbox_cwd:
         cmd = [
             claude_bin, "-p", turns[0],
-            "--bare",
+            # --bare intentionally OMITTED. Per `claude --help`, --bare forces Anthropic auth
+            # to ANTHROPIC_API_KEY / apiKeyHelper only — "OAuth and keychain are never read" —
+            # which directly defeats this harness's stated purpose of running on the principal's
+            # Claude Code subscription OAuth. Measurement isolation is instead preserved by
+            # --setting-sources "" (no user/project/local settings, so no hooks/plugins) plus the
+            # empty temp cwd (no CLAUDE.md auto-discovered) plus --disallowed-tools. Dropping
+            # --bare keeps the target clean while letting subscription OAuth authenticate.
             "--no-session-persistence",
             "--setting-sources", "",
             "--append-system-prompt-file", str(system_path),
@@ -287,16 +319,19 @@ def run_corpus_trial(system_text: str, user_turn: str, model: str, seed: int) ->
     Returns (trace, meta). Mirrors run_trial's env-scrubbing and stream-json parsing.
     """
     claude_bin = resolve_claude_bin()
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE_", "CLAUDECODE"))}
-    env["CLAUDE_EFFICACY_SEED"] = str(seed)
-    if "CLAUDE_CODE_GIT_BASH_PATH" in os.environ:
-        env["CLAUDE_CODE_GIT_BASH_PATH"] = os.environ["CLAUDE_CODE_GIT_BASH_PATH"]
+    env = harness_env(seed)
     with tempfile.TemporaryDirectory() as sandbox_cwd:
         sys_file = Path(sandbox_cwd) / "system.md"
         sys_file.write_text(system_text, encoding="utf-8")
         cmd = [
             claude_bin, "-p", user_turn,
-            "--bare",
+            # --bare intentionally OMITTED. Per `claude --help`, --bare forces Anthropic auth
+            # to ANTHROPIC_API_KEY / apiKeyHelper only — "OAuth and keychain are never read" —
+            # which directly defeats this harness's stated purpose of running on the principal's
+            # Claude Code subscription OAuth. Measurement isolation is instead preserved by
+            # --setting-sources "" (no user/project/local settings, so no hooks/plugins) plus the
+            # empty temp cwd (no CLAUDE.md auto-discovered) plus --disallowed-tools. Dropping
+            # --bare keeps the target clean while letting subscription OAuth authenticate.
             "--no-session-persistence",
             "--setting-sources", "",
             "--append-system-prompt-file", str(sys_file),
