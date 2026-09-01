@@ -1,0 +1,31 @@
+{
+  "name": "mcp-client-golden",
+  "description": "DOMAIN corpus for the mcp-client-golden-architecture prompt — a proof-of-concept that a per-prompt corpus can MEASURE a historical DEPLOY verdict where the generic deploy-bar corpus cannot. One trigger case; expect_patterns encode the prompt's own success_criteria that are regex-detectable (all 10 plugin names in Phase 1, at least ADR-001, a normative MUST citation, and the signature Comparison Anchor section). Run with --with-control: a plain assistant cannot name the 10 plugins, so a passing treatment shows MEASURED LIFT — the discrimination the generic corpus lacked.",
+  "control_system": "You are a helpful assistant. Answer the user's request directly.",
+  "accept": { "rate_floor": 0.75 },
+  "cases": [
+    {
+      "id": "golden-arch-spec",
+      "input": "Produce the Golden-Architecture MCP Client specification and implementation blueprint exactly as specified in your instructions.",
+      "expect_patterns": [
+        "\\bcrow\\b",
+        "\\bdjinn\\b",
+        "\\bemu\\b",
+        "\\bgorgon\\b",
+        "\\bhydra\\b",
+        "\\blich\\b",
+        "\\bnaga\\b",
+        "\\bpech\\b",
+        "\\bschematic\\b",
+        "\\bsylph\\b",
+        "ADR-001",
+        "\\bMUST\\b",
+        "Chosen coordination pattern"
+      ],
+      "reject_patterns": [
+        "\\bas an AI\\b",
+        "\\bI (can'?t|cannot|am unable to) (help|assist|do|provide)\\b"
+      ]
+    }
+  ]
+}
