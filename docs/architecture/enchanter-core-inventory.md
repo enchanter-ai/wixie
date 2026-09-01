@@ -8,14 +8,14 @@ Cross-repo survey: what to port, what to defer, what to leave behind when buildi
 |---|---|---|
 | `inference-engine.py` | `wixie/shared/scripts/` | The only production statistics layer. SPRT, Beta-Binomial, EMA, atomic JSONL, SHA-1 fingerprinting. No deps. |
 | `catalog.json` + 128 elevated patterns | `wixie/plugins/inference-engine/state/` | Irreplaceable cross-session accumulated knowledge. |
-| `models-registry.json` | `wixie/shared/` | 255 models, capability profiles. Every tier-routing decision starts here. |
+| `models-registry.json` | `wixie/shared/` | 274 models, capability profiles. Every tier-routing decision starts here. |
 | `convergence.py` + `self-eval.py` | `wixie/shared/scripts/` | 5-axis scoring + 8 SAT assertions + auto-revert. The DEPLOY-bar engine. |
 | `vis` conduct (10 modules) | `vis/packages/core/conduct/` | Canonical behavioral rules. |
 
 ## Repo-by-repo (one-line each)
 
 - **vis** — Spec-only. 21 conduct modules, 12 algorithm engines, F-code taxonomy, ABI test fixtures
-- **wixie** — Prompt engineering runtime. The most complete plugin. Inference engine + 7-stage skill pipeline + 255-model registry
+- **wixie** — Prompt engineering runtime. The most complete plugin. Inference engine + 7-stage skill pipeline + 274-model registry
 - **hydra** — Security/red-team. 12 plugins, the richest hook example (pre-tool-use deny, secret scan, vuln detect, egress monitor). Aho-Corasick pattern engine
 - **lich** — Code quality review. Cousot interval propagation + Falleri structural diff (GumTree) + 5 language adapters
 - **sylph** — PR lifecycle. 6 git-host adapters + 7 CI adapters. Atomic state pattern. The cleanest test suite
@@ -52,7 +52,7 @@ Djinn, Hydra, Sylph all ship `.sh` AND `.py` variants of the same hooks. Python 
 
 ### 6. Model registry drift
 
-255 models, dated 2026-04-24. With current model release cadence the registry drifts within weeks. Need an automated update contract — manual `last_updated` bumps don't scale.
+274 models, dated 2026-08-07. With current model release cadence the registry drifts within weeks. Need an automated update contract — manual `last_updated` bumps don't scale.
 
 ## Tiered porting catalog
 
