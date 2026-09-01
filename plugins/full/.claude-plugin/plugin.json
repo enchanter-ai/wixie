@@ -1,6 +1,6 @@
 {
   "name": "full",
-  "description": "Meta-plugin that installs every Wixie plugin at once via dependency resolution. Installs: convergence-engine, prompt-crafter, prompt-harden, prompt-refiner, prompt-tester, prompt-translate.",
+  "description": "Meta-plugin that installs the six core Wixie prompt-engineering plugins at once via dependency resolution. Installs: convergence-engine, prompt-crafter, prompt-harden, prompt-refiner, prompt-tester, prompt-translate. Does not include the opt-in inference-engine or deep-research plugins.",
   "version": "3.0.0",
   "author": { "name": "enchanter-ai" },
   "license": "MIT",
