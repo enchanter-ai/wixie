@@ -184,6 +184,7 @@ def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
         ]
         proc = subprocess.run(
             cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows locale (cp1252) would crash on non-cp1252 bytes
             env=env, cwd=sandbox_cwd, timeout=180,
         )
     trace = parse_stream_json(proc.stdout)
@@ -340,7 +341,9 @@ def run_corpus_trial(system_text: str, user_turn: str, model: str, seed: int) ->
             "--output-format", "stream-json",
             "--verbose",
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=sandbox_cwd, timeout=180)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows cp1252 would crash on non-cp1252 bytes
+                               env=env, cwd=sandbox_cwd, timeout=180)
     trace = parse_stream_json(proc.stdout)
     meta = {"cmd": cmd, "returncode": proc.returncode, "stdout_raw": proc.stdout, "stderr_raw": proc.stderr}
     return trace, meta
