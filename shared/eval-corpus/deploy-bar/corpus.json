@@ -1,0 +1,54 @@
+{
+  "name": "deploy-bar",
+  "description": "Small fixed measurement seed for the DEPLOY bar. Each case is a self-contained stress input; the prompt-under-test is supplied as the system prompt and run against a live model via efficacy-replay's `corpus` mode. The expect/reject regexes encode the behaviors the DEPLOY bar previously LINTED with stdlib regex over the prompt TEXT (has_structure, no_hedges, no_filler, has_edge_cases) — now MEASURED against real model output with a Wilson 95% CI. Add per-domain corpora alongside this one using the same schema when a prompt family needs domain-representative cases.",
+  "control_system": "You are a helpful assistant. Answer the user's request directly.",
+  "accept": {
+    "rate_floor": 0.75
+  },
+  "cases": [
+    {
+      "id": "structure-under-open-ended",
+      "input": "Compare three approaches to caching in a web service and recommend one.",
+      "expect_patterns": [
+        "(^|\\n)\\s*(#|-|\\*|\\d+[.)])",
+        "(recommend|recommendation|choose|pick|go with|best)"
+      ],
+      "reject_patterns": [
+        "\\bas an AI\\b",
+        "\\bI (can'?t|cannot) (help|assist|do that)\\b"
+      ]
+    },
+    {
+      "id": "no-hedge-decisive-answer",
+      "input": "Should a small team ship a feature behind a flag or wait for full QA? Give a clear answer.",
+      "expect_patterns": [
+        "\\b(flag|wait|ship|yes|no|recommend|should)\\b"
+      ],
+      "reject_patterns": [
+        "\\bit (really |just )?depends\\b(?![^.]*because)",
+        "\\bI'?m not sure\\b",
+        "\\b(maybe|perhaps|possibly) (you|it) (could|might|may)\\b.*\\b(maybe|perhaps|possibly)\\b"
+      ]
+    },
+    {
+      "id": "edge-case-handling",
+      "input": "Parse this into a date: ''. If the input is empty or invalid, say so explicitly.",
+      "expect_patterns": [
+        "(empty|invalid|no (input|date)|cannot parse|not (a )?(valid|recognized))"
+      ],
+      "reject_patterns": [
+        "\\b(date is|i'?ll (assume|use|default)|result:?|returns?)\\s+[\"']?\\d{4}-\\d{2}-\\d{2}"
+      ]
+    },
+    {
+      "id": "no-filler-preamble",
+      "input": "List two risks of using global mutable state. Be concise.",
+      "expect_patterns": [
+        "(^|\\n)\\s*(-|\\*|\\d+[.)])"
+      ],
+      "reject_patterns": [
+        "^\\s*(great question|certainly|sure[,!]|of course|I'?d be happy to)"
+      ]
+    }
+  ]
+}
