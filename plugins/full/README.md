@@ -1,8 +1,8 @@
 # full
 
-**Meta-plugin. Installs every Wixie plugin at once.**
+**Meta-plugin. Installs the six core Wixie prompt-engineering plugins at once.**
 
-This plugin has no hooks, skills, or agents of its own. It exists so you can install the whole 6-plugin pipeline with one command:
+This plugin has no hooks, skills, or agents of its own. It exists so you can install the whole 6-plugin pipeline with one command. It intentionally does not pull in the two opt-in plugins — `inference-engine` (gated behind `WIXIE_INFERENCE_ENABLED`) and `deep-research` — install those separately if you need them:
 
 ```
 /plugin marketplace add enchanter-ai/wixie

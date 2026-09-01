@@ -3,7 +3,7 @@
 <p>
   <a href="../../LICENSE.txt"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-3fb950?style=for-the-badge"></a>
   <img alt="5 engines (U1-U6)" src="https://img.shields.io/badge/Engines-U1%E2%80%93U6-bc8cff?style=for-the-badge">
-  <img alt="4 skills + 2 agents" src="https://img.shields.io/badge/Surfaces-4%20skills%20%2B%202%20agents-58a6ff?style=for-the-badge">
+  <img alt="5 skills + 2 agents" src="https://img.shields.io/badge/Surfaces-5%20skills%20%2B%202%20agents-58a6ff?style=for-the-badge">
   <img alt="Zero runtime deps (bash plus jq plus stdlib)" src="https://img.shields.io/badge/Deps-0-f85149?style=for-the-badge">
   <img alt="Honest numbers contract" src="https://img.shields.io/badge/Honest-Numbers-f0883e?style=for-the-badge">
   <a href="https://www.repostatus.org/#wip"><img alt="Project Status: WIP" src="https://www.repostatus.org/badges/latest/wip.svg"></a>
@@ -13,7 +13,7 @@
 
 The cross-session evidence substrate for AI-assisted development. Turns every self-caught failure into a compounding asset the whole ecosystem reads at session start.
 
-**5 formal engines. 4 skills. 2 agents. 95% credible intervals on every elevated pattern. Zero runtime deps.**
+**5 formal engines. 5 skills. 2 agents. 95% credible intervals on every elevated pattern. Zero runtime deps.**
 
 > On 2026-04-21 the agent shipped a Wixie prompt after one draft and reacted to five user pushbacks instead of running the full lifecycle. The correction was logged as F07.
 >
@@ -53,7 +53,7 @@ Not for:
 - [The Full Lifecycle](#the-full-lifecycle)
 - [Install](#install)
 - [Quickstart](#quickstart)
-- [4 Skills, 2 Agents, 5 Engines](#4-skills-2-agents-5-engines)
+- [5 Skills, 2 Agents, 5 Engines](#5-skills-2-agents-5-engines)
 - [What You Get Per Session](#what-you-get-per-session)
 - [The Math Behind Inference Engine](#the-math-behind-inference-engine)
 - [Architecture](#architecture)
@@ -186,9 +186,10 @@ Or via skills:
 /inference-reconcile     # re-run the catalog
 /inference-brief wixie    # render the briefing
 /inference-query F07     # search the catalog
+/freshness-check         # flag registry entries past sunset_date
 ```
 
-## 4 Skills, 2 Agents, 5 Engines
+## 5 Skills, 2 Agents, 5 Engines
 
 | Sub-plugin / Skill           | Owns                                       | Trigger          | Agent tier |
 |------------------------------|--------------------------------------------|------------------|------------|
@@ -196,6 +197,7 @@ Or via skills:
 | `skills/inference-reconcile/`| Full reconcile: U1 + U2 + U3 + U5 + U6     | skill-invoked    | Sonnet     |
 | `skills/inference-brief/`    | Per-plugin briefing render                 | skill-invoked    | Haiku      |
 | `skills/inference-query/`    | Catalog search by code / tag / pattern_id  | skill-invoked    | —          |
+| `skills/freshness-check/`    | Flags registry entries whose sunset_date has elapsed | skill-invoked | — |
 
 | Agent         | Tier   | Role                                                                     |
 |---------------|--------|--------------------------------------------------------------------------|
@@ -216,6 +218,7 @@ Or via skills:
 | `/inference-reconcile`   | Sonnet            |
 | `/inference-brief <p>`   | Haiku             |
 | `/inference-query <t>`   | none — direct call|
+| `/freshness-check`       | none — direct call|
 
 ## What You Get Per Session
 
@@ -330,7 +333,8 @@ wixie/plugins/inference-engine/
 │   ├── inference-emit/SKILL.md          /inference-emit
 │   ├── inference-reconcile/SKILL.md     /inference-reconcile
 │   ├── inference-brief/SKILL.md         /inference-brief <plugin>
-│   └── inference-query/SKILL.md         /inference-query <term>
+│   ├── inference-query/SKILL.md         /inference-query <term>
+│   └── freshness-check/SKILL.md         /freshness-check
 ├── hooks/hooks.json                     advisory PostToolUse notifier
 └── state/
     ├── artifacts.jsonl                  append-only master log (rotation deferred)

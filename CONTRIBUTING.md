@@ -48,7 +48,7 @@ wixie/
 │   ├── models-registry.json           274 models (single source of truth)
 │   └── *.py                           Shared utilities
 ├── prompts/                           Generated prompts (gitignored except index.json)
-└── tests/                             12 tests across 3 plugins
+└── tests/                             15 tests across 6 plugins
 ```
 
 ## Adding a Model
