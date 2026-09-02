@@ -180,9 +180,9 @@ If no research was needed, all three fields are `null`.
 
 Before generating, confirm the prompt's **direction** with the developer — grill-me style, one decision at a time. Default-on. This stops Wixie from auto-deciding the load-bearing choices and building the wrong prompt three phases deep.
 
-Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Reflect the understood direction in one line, then ask **one question per call** — intent, scope, target model (post Phase 2.5), output format, technique family, and every load-bearing assumption — each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). Do NOT enter Phase 3 until the direction is confirmed; carry any overrides forward into 3A technique selection and 3B formatting.
+Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Reflect the understood direction in one line, resolve the **coarse** choices fast (state your inference on intent / scope / model / format / technique and invite a correction — don't burn a full question on each), then **deep-grill the task-specific forks** — the real ambiguities, edge cases, and failure modes of *this* prompt, plus every load-bearing assumption — **one question per call**, each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). A generic scope/model/format question is too shallow on its own: if a question would fit any prompt, it's the wrong question — find the ones that only fit this one. Do NOT enter Phase 3 until the direction is confirmed; carry overrides forward into 3A technique selection and 3B formatting.
 
-Offer *"proceed with all recommendations"* after the first question or two so an aligned developer isn't over-grilled. A trivial inline prompt may skip this gate.
+Offer *"proceed with all recommendations"* for the coarse tier once the deep forks are settled — not before them. A trivial inline prompt may skip this gate.
 
 ---
 

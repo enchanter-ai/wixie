@@ -8,20 +8,24 @@ Audience: Claude, inside `/create`, `/refine`, `/converge`. The gate that confir
 
 1. **Reflect the understood direction in one line** before asking anything: intent + target model + scope + output format. e.g. *"Direction so far: a production-grade invoice-field extractor for Claude Opus, strict JSON out. Confirming a few choices before I build."*
 
-2. **Grill one decision at a time.** Use the interactive question tool, **one question per call** — never batch the direction decisions into a single call (batching defeats the gate). Ask only about the choices Wixie would otherwise pick autonomously and that change the *direction*:
-   - **Intent / goal** — reflect back what the prompt is meant to *do*; confirm or correct.
-   - **Scope** — minimal / standard / production-grade.
-   - **Target model** — post model-fit check: confirm the model, or switch.
-   - **Output format / structure** — the shape the caller depends on.
-   - **Technique approach** — the *family* (reasoning-heavy CoT / few-shot / structured extraction / role+constraints / …), not the full 16-technique selection.
-   - **Load-bearing assumptions** — every assumption Wixie is about to bake in gets surfaced as a question, not buried. If you are assuming it, ask it.
+2. **Grill one decision at a time, and go deep.** Use the interactive question tool, **one question per call** — never batch (batching defeats the gate). The point is not a cookie-cutter *scope / model / format* trio — those are the shallow end and, on their own, waste the developer's attention. Grill the **specific, load-bearing forks this particular prompt must resolve**: the real ambiguities, edge cases, and failure modes of *this* task in *this* domain, the ones the prompt would otherwise get quietly wrong.
+
+   **Two tiers:**
+   - **Coarse direction (resolve fast, don't over-ask).** Intent, scope, target model (post model-fit), output format, technique family. Where you can infer these from the task + `CLAUDE.md`, **state the inference in one line and invite a correction** rather than spending a full question on it. Only ask when a choice is genuinely open or high-stakes.
+   - **Deep grill (the real work — 3–6 questions).** Derive these from the domain's actual decision points and failure modes. Each question resolves one concrete fork where a reasonable agent could pick wrong. Every assumption Wixie is about to bake in gets surfaced here as a question, not buried.
+
+   **Generic vs. deep** — for a "extract action items from a transcript" prompt:
+   - *Too generic (avoid):* "What scope — minimal / standard / comprehensive?"
+   - *Deep (prefer):* "'I'll ship the deck **if** Marketing sends assets by Tuesday' — conditional item (emit with the condition), firm item, or skip?" · "Two people assigned the same task — one row with two owners or two rows?" · "'Follow up next week' with no meeting date in the transcript — `null`, or a relative-date placeholder?" · "A task someone *did* during the meeting (past tense) — action item or not?" · "Verbatim task text or a normalized paraphrase?"
+
+   Depth is task-specific by construction: read the domain, enumerate where it breaks, and ask about those. If your questions would fit any prompt, they are too shallow — throw them out and find the ones that only fit this one.
 
 3. **Attach one decisive recommendation to each question.** A single line, produced by the **orchestrator model — Opus-5 by default** (overridable: if the developer names another recommender, use it; the fallback is always Opus-5). Format the first option as the recommendation and mark it, e.g. `Rec (Opus-5): strict JSON — the downstream parser can't accept prose`. The developer picks it, overrides it, or edits. The recommendation is a lever for a fast decision, never an excuse to auto-pick.
 
 4. **Block until the direction is confirmed.** Do not advance to generation / refinement / the convergence loop until every direction decision is settled. When the developer overrides a choice, update the working direction and carry it forward into the rest of the lifecycle (technique selection, formatting, metadata).
 
 5. **Escape hatches.**
-   - *"Proceed with all recommendations"* — collapse the remaining questions by accepting every Opus-5 rec, and continue. Offer this after the first one or two questions so an aligned developer isn't over-grilled.
+   - *"Proceed with all recommendations"* — accept the outstanding Opus-5 recs and continue. Offer this for the **coarse-direction tier**, not as a blanket collapse *before* the deep task-specific forks are asked — those forks are the reason the gate exists, so don't let the escape hatch skip them. Once the deep forks are settled, an aligned developer can wave the rest through.
    - *Trivial inline prompt* — a single-model, single-session throwaway may skip the gate entirely (same bar as "`/create` is overkill — write it inline").
 
 ## Per-stage placement
