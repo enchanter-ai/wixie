@@ -97,6 +97,14 @@ Proceeding with refinement...
 
 ---
 
+## Phase 1.5: Direction Lock (Do Not Skip)
+
+A refine can change a prompt's direction as much as a create. Before applying fixes, confirm the refinement **direction** with the developer — grill-me style, one decision at a time. Default-on.
+
+Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Reflect the diagnosis in one line, then ask **one question per call** — which diagnosed weaknesses to fix (from 1C), which axes to move, keep-or-switch the target model (post 1B.5), and any assumption behind the planned fix — each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). Do NOT enter Phase 2 until the direction is confirmed.
+
+---
+
 ## Phase 2: Refinement
 
 ### 2A: Re-select Techniques

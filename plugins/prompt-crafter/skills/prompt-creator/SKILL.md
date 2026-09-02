@@ -176,6 +176,16 @@ If no research was needed, all three fields are `null`.
 
 ---
 
+## Phase 2.8: Direction Lock (Do Not Skip)
+
+Before generating, confirm the prompt's **direction** with the developer — grill-me style, one decision at a time. Default-on. This stops Wixie from auto-deciding the load-bearing choices and building the wrong prompt three phases deep.
+
+Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Reflect the understood direction in one line, then ask **one question per call** — intent, scope, target model (post Phase 2.5), output format, technique family, and every load-bearing assumption — each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). Do NOT enter Phase 3 until the direction is confirmed; carry any overrides forward into 3A technique selection and 3B formatting.
+
+Offer *"proceed with all recommendations"* after the first question or two so an aligned developer isn't over-grilled. A trivial inline prompt may skip this gate.
+
+---
+
 ## Phase 3: Generation
 
 Three sub-steps, executed in order.

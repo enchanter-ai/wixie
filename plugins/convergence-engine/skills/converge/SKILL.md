@@ -40,6 +40,12 @@ If the user provides:
 - A prompt name → look in `${CLAUDE_PLUGIN_ROOT}/../../prompts/<name>/prompt.*`
 - Nothing → list available prompts from `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json` and ask user to pick
 
+### Step 1.5: Direction Lock (once, before the loop)
+
+Convergence runs autonomously — no per-iteration asks (see Rules). But confirm the **direction** once, before the loop starts, so the loop optimizes toward the right target.
+
+Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Grill the developer, **one question per call** — which axes to prioritize, the goal (ship-bar vs. explore), and the stop condition (σ / overall targets or max iterations) — each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). Once confirmed, run Step 2 autonomously; do **not** grill per-hypothesis.
+
 ### Step 2: Run convergence
 
 ```bash
