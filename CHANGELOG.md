@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 - **Direction Lock (grill-me) by default** across `/create`, `/refine`, and `/converge`. Before generating, refining, or entering the convergence loop, Wixie now confirms the prompt's *direction* one decision at a time — intent, scope, target model, output format, technique family, and every load-bearing assumption — each with a decisive orchestrator recommendation (Opus-5 by default, overridable). Stops Wixie from auto-deciding the load-bearing choices and building the wrong prompt. Shared protocol: `shared/references/direction-lock.md`; wired into the crafter (Phase 2.8), refiner (Phase 1.5), and convergence (Step 1.5, once before the loop); contract rule #9 in `CLAUDE.md`.
 
+### Fixed
+- **`convergence.py` DEPLOY verdict now enforces the full bar.** It previously deployed on scores alone ("DEPLOY by scores only, assertions are bonus"), ignoring both σ and the 8/8 SAT assertions — shipping prompts the documented DEPLOY bar rejects (an honest-numbers violation in the engine itself). The verdict now requires `overall ≥ 9.0` **and** all axes `≥ 7.0` **and** σ ≤ the dynamic floor (reusing `self-eval.dynamic_sigma_floor`) **and** 8/8 assertions; anything short is **HOLD** (previously mislabelled "BEST EFFORT"). The final report now prints the σ line. Also fixed the `has_task` assertion regex, which false-negatived on extraction/transformation verbs (`extract`, `classify`, `summarize`, `translate`, `parse`, …) — a clear task was scored as missing.
+
 ### Changed
 - Model registry expanded from 64 to **274** models (`shared/models-registry.json`, `model_count: 274`, `last_updated: 2026-08-07`). Documentation across `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and `docs/` updated to match the registry, which remains the single source of truth for model count and specs.
 

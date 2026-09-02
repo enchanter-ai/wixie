@@ -16,7 +16,7 @@ Usage:
 
 Stdlib only. No pip installs.
 """
-import sys, os, re, json, copy
+import sys, os, re, json, copy, statistics
 from datetime import datetime
 from collections import Counter
 
@@ -43,7 +43,20 @@ def score_prompt(text):
 
 
 def is_deploy(scores):
+    """Scores gate only. The full DEPLOY bar (sigma + 8/8 assertions) is deploy_verdict()."""
     return scores["overall"] >= 9.0 and all(scores[a] >= 7.0 for a in AXES)
+
+
+def deploy_verdict(scores, assertions, text):
+    """The full DEPLOY bar per the contract: overall >= 9.0 AND every axis >= 7.0 AND
+    sigma <= the dynamic floor (self-eval.dynamic_sigma_floor) AND all 8 SAT assertions
+    pass. Returns (deploy_bool, sigma, floor). Honest-numbers contract: a prompt that
+    fails sigma or any assertion is HOLD, not DEPLOY — regardless of overall score."""
+    sigma = statistics.pstdev([scores[a] for a in AXES])
+    floor = _eval.dynamic_sigma_floor(text)
+    all_assertions_pass = all(a[1] for a in assertions)
+    deploy = is_deploy(scores) and sigma <= floor and all_assertions_pass
+    return deploy, sigma, floor
 
 
 # ─── Binary Assertions ────────────────────────────────────────────────────────
@@ -55,7 +68,7 @@ def run_assertions(text):
 
     results.append(("has_role", bool(re.search(r'\b(you are|act as|role:|your role|your job)\b', tl)),
                      "Prompt defines a role or persona"))
-    results.append(("has_task", bool(re.search(r'\b(task:|objective:|goal:|your job|you will|you should|analyze|generate|create|build)\b', tl)),
+    results.append(("has_task", bool(re.search(r'\b(task:|objective:|goal:|your job|you will|you should|analyze|generate|create|build|extract|classify|summari[sz]e|translate|rewrite|convert|parse|identify|detect|evaluate|score|rank|label|produce|write|compose|answer|respond)\b', tl)),
                      "Prompt defines a clear task"))
     results.append(("has_format", bool(re.search(r'\b(output format|respond in|format:|json|xml|markdown)\b|<output|<format', tl)),
                      "Prompt specifies output format"))
@@ -581,7 +594,7 @@ def run(prompt_path, max_iterations=100, verbose=False):
 
     print(f"\n{'=' * 60}")
     print(f"  WIXIE CONVERGENCE ENGINE (Gauss Method)")
-    print(f"  Target: DEPLOY (overall >= 9.0, all axes >= 7.0)")
+    print(f"  Target: DEPLOY (overall >= 9.0, all axes >= 7.0, sigma <= floor, 8/8 assertions)")
     print(f"  Max iterations: {max_iterations}")
     if num_sessions:
         print(f"  Prior knowledge: {num_sessions} sessions, {num_negs} negative examples, {len(confidence)} confidence scores")
@@ -608,29 +621,24 @@ def run(prompt_path, max_iterations=100, verbose=False):
             best_score = overall
             best_text = text
 
-        # Check DEPLOY (scores + all assertions pass)
-        if is_deploy(scores) and len(failed) == 0:
-            print(f"  Iteration {iteration}: {overall}/10 — DEPLOY ({len(passed)}/{len(assertions)} assertions pass)")
-            _save(prompt_path, best_text)
-            _print_final(scores, assertions, iteration)
-            save_learnings(prompt_dir, learnings, prev_learnings, best_text)
+        # DEPLOY only when the FULL bar is met: scores + sigma <= floor + 8/8 assertions.
+        # (Previously this deployed on scores alone, ignoring sigma and failed assertions —
+        # an honest-numbers violation: it shipped prompts the DEPLOY bar rejects.)
+        deploy, sigma, floor = deploy_verdict(scores, assertions, text)
+        if deploy:
+            print(f"  Iteration {iteration}: {overall}/10 — DEPLOY ({len(passed)}/{len(assertions)} assertions, sigma {sigma:.2f} <= {floor:.2f})")
+            _save(prompt_path, text)
+            _print_final(scores, assertions, iteration, text)
+            save_learnings(prompt_dir, learnings, prev_learnings, text)
             return scores
 
-        # Check DEPLOY by scores only (assertions are bonus)
-        if is_deploy(scores):
-            print(f"  Iteration {iteration}: {overall}/10 — DEPLOY (scores OK, {len(failed)} assertion(s) remaining)")
-            _save(prompt_path, best_text)
-            _print_final(scores, assertions, iteration)
-            save_learnings(prompt_dir, learnings, prev_learnings, best_text)
-            return scores
-
-        # Plateau detection
+        # Plateau detection — stalled with the bar unmet: report HOLD honestly, don't fake DEPLOY.
         if len(history) >= 3 and history[-1] == history[-2] == history[-3]:
             plateau_count += 1
             if plateau_count >= 1:
-                print(f"  Iteration {iteration}: {overall}/10 — PLATEAU")
+                print(f"  Iteration {iteration}: {overall}/10 — PLATEAU (HOLD — bar not met)")
                 _save(prompt_path, best_text)
-                _print_final(scores, assertions, iteration)
+                _print_final(scores, assertions, iteration, best_text)
                 save_learnings(prompt_dir, learnings, prev_learnings, best_text)
                 return scores
 
@@ -711,7 +719,7 @@ def run(prompt_path, max_iterations=100, verbose=False):
     print(f"\n  Max iterations ({max_iterations}) reached. Best: {best_score}/10")
     _save(prompt_path, best_text)
     scores = score_prompt(best_text)
-    _print_final(scores, run_assertions(best_text), max_iterations)
+    _print_final(scores, run_assertions(best_text), max_iterations, best_text)
     save_learnings(prompt_dir, learnings, prev_learnings, best_text)
     return scores
 
@@ -721,7 +729,7 @@ def _save(path, text):
         f.write(text)
 
 
-def _print_final(scores, assertions, iterations):
+def _print_final(scores, assertions, iterations, text):
     print(f"\n{'=' * 60}")
     print(f"  FINAL SCORES (after {iterations} iteration{'s' if iterations != 1 else ''})")
     print(f"{'=' * 60}")
@@ -732,6 +740,12 @@ def _print_final(scores, assertions, iterations):
         print(f"  {(a + ':').ljust(22)}{val:4.0f}/10  {bar}")
     print(f"\n  {'OVERALL:'.ljust(22)}{scores['overall']:4.1f}/10")
 
+    # Sigma gate (matches self-eval: pstdev of the 5 axes vs the word-count-aware floor)
+    sigma = statistics.pstdev([scores[a] for a in AXES])
+    floor = _eval.dynamic_sigma_floor(text)
+    sigma_pass = sigma <= floor
+    print(f"  {'SIGMA:'.ljust(22)}{sigma:4.2f} (floor {floor:.2f})  {'PASS' if sigma_pass else 'FAIL'}")
+
     # Assertions summary
     passed = sum(1 for a in assertions if a[1])
     total = len(assertions)
@@ -739,8 +753,9 @@ def _print_final(scores, assertions, iterations):
     for name, ok, desc in assertions:
         print(f"    {'PASS' if ok else 'FAIL'}  {desc}")
 
-    deploy = is_deploy(scores)
-    print(f"\n  VERDICT: {'DEPLOY' if deploy else 'BEST EFFORT'}")
+    # Full DEPLOY bar: scores + sigma + all assertions. Anything short is HOLD.
+    deploy = is_deploy(scores) and sigma_pass and passed == total
+    print(f"\n  VERDICT: {'DEPLOY' if deploy else 'HOLD'}")
     print(f"{'=' * 60}\n")
 
 
