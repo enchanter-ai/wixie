@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [3.0.0] — multi-agent pipeline, 64-model registry
 
-The current shipped release. See [README.md](README.md) for the complete feature surface.
+Superseded by [4.0.0](#400--rename-wixie-identity-standardized-origin-format). See [README.md](README.md) for the complete feature surface.
 
 ### Highlights
 - 6 plugins spanning the prompt lifecycle: `prompt-crafter`, `prompt-refiner`, `convergence-engine`, `prompt-tester`, `prompt-harden`, `prompt-translate`.
@@ -39,5 +39,6 @@ The current shipped release. See [README.md](README.md) for the complete feature
 - Self-learning across sessions via `learnings.md` (E6).
 - Dark-themed single-page PDF audit report per prompt.
 
-[Unreleased]: https://github.com/enchanter-ai/wixie/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/enchanter-ai/wixie/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/enchanter-ai/wixie/releases/tag/v4.0.0
 [3.0.0]: https://github.com/enchanter-ai/wixie/releases/tag/v3.0.0
