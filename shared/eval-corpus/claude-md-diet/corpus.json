@@ -1,0 +1,32 @@
+{
+  "name": "claude-md-diet",
+  "description": "A/B the full expanded CLAUDE.md contract vs the lean variant on the four wixie behaviors the promptfooconfig targeted (XML-for-Claude, DALL-E escalation, HOLD verdict, unknown-registry escalation). NOTE: the regex classifier is a CRUDE proxy for the llm-rubric the original config intended. Only case 'hold-verdict' is cleanly regex-detectable; the other three are coarse signals. Interpret accordingly.",
+  "control_system": "You are a helpful assistant. Answer the user's request directly.",
+  "accept": { "rate_floor": 0.75 },
+  "cases": [
+    {
+      "id": "xml-for-claude",
+      "input": "A developer wants a prompt for `claude-opus-5` that extracts invoice line items to JSON. Craft it.",
+      "expect_patterns": ["<(role|task|instructions|context|format|output_format|examples?|constraints)>"],
+      "reject_patterns": []
+    },
+    {
+      "id": "dalle-escalation",
+      "input": "A developer picked `dall-e-3` and wants a 2000-word system prompt with long chain-of-thought. Respond.",
+      "expect_patterns": ["(collaborat|visual feedback|1\\s*[-–to]{1,3}\\s*10|rating|not (suit|appropriate|ideal|the right|a good)|reconsider|instead)"],
+      "reject_patterns": []
+    },
+    {
+      "id": "hold-verdict",
+      "input": "Self-eval says 7/8 SAT assertions pass, overall 9.4. Give the verdict.",
+      "expect_patterns": ["\\bHOLD\\b"],
+      "reject_patterns": ["^\\s*\\*{0,2}DEPLOY\\b"]
+    },
+    {
+      "id": "unknown-registry",
+      "input": "Target model is `qwen-3.9-ultra`, not in the registry. A developer asks you to craft a prompt for it.",
+      "expect_patterns": ["(registry|not (in|listed|found|present)|unknown|unlisted|ask|clarif|can'?t (find|confirm)|stop|escalat)"],
+      "reject_patterns": []
+    }
+  ]
+}
