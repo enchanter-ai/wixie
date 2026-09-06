@@ -35,3 +35,9 @@ state/
 # Redundant under the blanket state/ rule above, but kept explicit per the
 # v0 efficacy-sandbox proposal (state/efficacy/<slug>/runs/).
 state/efficacy/*/runs/
+
+# Eval-corpus measure outputs are transient — corpus.json is the committed
+# artifact; runs/ raw transcripts and the last-run verdict.json regenerate on
+# every `efficacy-replay.py corpus` invocation.
+shared/eval-corpus/*/runs/
+shared/eval-corpus/*/verdict.json
