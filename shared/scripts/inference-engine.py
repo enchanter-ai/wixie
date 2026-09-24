@@ -26,6 +26,7 @@ import math
 import os
 import random
 import sys
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -298,20 +299,160 @@ def reservoir_add(reservoir: list, item, k: int, rng: random.Random) -> list:
 # ─── IO helpers ───────────────────────────────────────────────────────────────
 
 
-def atomic_write_json(path: Path, data) -> None:
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write to a uniquely named sibling temp file, fsync, then rename over the target.
+
+    A crash at any point leaves either the previous file or the new one, never a torn file:
+    the temp name is unique per call (mkstemp), the data is durable before the rename, and a
+    failed write removes its own temp file.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=True)
-        f.write("\n")
-    tmp.replace(path)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    tmp: Path | None = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        tmp = None
+    finally:
+        if tmp is not None:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+
+def atomic_write_json(path: Path, data) -> None:
+    atomic_write_text(path, json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+# ─── Derived catalog: validation, quarantine, recovery (WIX-RUN-004) ──────────
+#
+# catalog.json is derived state: reconcile rebuilds all of it from the artifact log and reads
+# the previous copy only to keep the first-crossing stamps (elevated_at / retired_at). A
+# catalog that cannot be read or does not have the catalog shape is CORRUPT:
+#
+#   reconcile                      moves it to catalog.json.corrupt-<UTC stamp> (never deletes
+#                                  it), rebuilds from the log, carries over stamps from any
+#                                  entries that were still well-formed, records last_recovery
+#                                  in the new catalog, and exits 0 (or 3, see WIX-RUN-003).
+#   status / query / render-briefing  refuse with exit 74 and point at reconcile; they never
+#                                  guess from damaged state.
+#
+# A missing catalog is not corrupt: it is the normal state before the first reconcile, and
+# also what an interrupted recovery leaves behind (quarantined, not yet rewritten).
+
+EXIT_OK = 0
+EXIT_FAILED = 1           # query found nothing, or an operational failure (message on stderr)
+EXIT_USAGE = 2            # bad arguments or an invalid input record
+EXIT_CORRUPT_STATE = 74   # catalog.json is corrupt; run reconcile to quarantine and rebuild
+
+EMPTY_CATALOG = {"version": 1, "last_reconciled": None, "patterns": {}}
+
+_NUM = (int, float)
+PATTERN_FIELD_TYPES = {
+    "pattern_id": str, "code": str, "title": str, "category": str, "verdict": str,
+    "signal": str, "counter": str, "first_seen": str, "last_seen": str,
+    "elevated_at": str, "retired_at": str,
+    "tags": list, "sessions_seen": list, "posterior_ci95": list,
+    "observations": _NUM, "llr": _NUM, "weight": _NUM, "posterior_mean": _NUM,
+    "days_since_last_seen": _NUM, "alpha": _NUM, "beta": _NUM,
+}
+
+
+class CorruptCatalog(RuntimeError):
+    """catalog.json exists but cannot be used. Distinct from a missing catalog."""
+
+    def __init__(self, reason: str, salvage: dict | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.salvage = salvage  # parsed data whose well-formed entries can still be used
+
+
+def pattern_problem(pid, pat) -> str | None:
+    if not isinstance(pat, dict):
+        return f"pattern {pid!r} is {type(pat).__name__}, not an object"
+    for field, typ in PATTERN_FIELD_TYPES.items():
+        if field in pat and not isinstance(pat[field], typ):
+            return f"pattern {pid!r} field {field!r} has type {type(pat[field]).__name__}"
+    if "tags" in pat and not all(isinstance(t, str) for t in pat["tags"]):
+        return f"pattern {pid!r} has a non-string tag"
+    return None
 
 
 def load_catalog() -> dict:
-    if not CATALOG_PATH.exists():
-        return {"version": 1, "last_reconciled": None, "patterns": {}}
-    with CATALOG_PATH.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    """Read and validate the derived catalog. Raises CorruptCatalog with the reason."""
+    try:
+        raw = CATALOG_PATH.read_bytes()
+    except FileNotFoundError:
+        return json.loads(json.dumps(EMPTY_CATALOG))
+    except OSError as exc:
+        raise CorruptCatalog(f"cannot be read ({type(exc).__name__}: {exc})") from exc
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise CorruptCatalog(f"is not valid UTF-8 (byte {exc.start})") from exc
+    except (ValueError, RecursionError) as exc:
+        raise CorruptCatalog(f"is not valid JSON ({type(exc).__name__}: {exc})") from exc
+    if not isinstance(data, dict):
+        raise CorruptCatalog(f"top level is {type(data).__name__}, not an object")
+    patterns = data.get("patterns")
+    if not isinstance(patterns, dict):
+        raise CorruptCatalog("has no 'patterns' object")
+    for pid, pat in patterns.items():
+        problem = pattern_problem(pid, pat)
+        if problem:
+            raise CorruptCatalog(problem, salvage=data)
+    return data
+
+
+def quarantine_catalog() -> Path:
+    """Move catalog.json aside, keeping its bytes for inspection. Returns the new path."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    dest = CATALOG_PATH.with_name(f"{CATALOG_PATH.name}.corrupt-{stamp}")
+    n = 1
+    while dest.exists():
+        dest = CATALOG_PATH.with_name(f"{CATALOG_PATH.name}.corrupt-{stamp}-{n}")
+        n += 1
+    os.replace(CATALOG_PATH, dest)
+    return dest
+
+
+def load_catalog_for_rebuild() -> tuple[dict, dict | None]:
+    """reconcile's read: a corrupt catalog is quarantined instead of aborting the rebuild.
+
+    Returns (prior_patterns, recovery) where recovery is None when the catalog was usable.
+    """
+    try:
+        return load_catalog().get("patterns", {}), None
+    except CorruptCatalog as exc:
+        dest = quarantine_catalog()
+        prior: dict = {}
+        if exc.salvage is not None:
+            for pid, pat in exc.salvage["patterns"].items():
+                if pattern_problem(pid, pat) is None:
+                    prior[pid] = pat
+        recovery = {"at": iso_now(), "reason": exc.reason, "quarantined_as": dest.name,
+                    "stamps_carried_from": len(prior)}
+        sys.stderr.write(
+            f"[inference-engine] catalog.json is corrupt ({exc.reason}); moved to {dest.name} "
+            f"and rebuilding from the artifact log ({len(prior)} well-formed prior entries kept "
+            "for their first-crossing stamps)\n")
+        return prior, recovery
+
+
+def load_catalog_or_exit() -> dict | int:
+    """Read-only commands: a corrupt catalog is reported as exit 74, never guessed around."""
+    try:
+        return load_catalog()
+    except CorruptCatalog as exc:
+        sys.stderr.write(
+            f"[inference-engine] {CATALOG_PATH} {exc.reason}. It is derived state: run "
+            "`inference-engine.py reconcile` to quarantine it and rebuild from the artifact "
+            "log.\n")
+        return EXIT_CORRUPT_STATE
 
 
 class LogScan:
@@ -520,8 +661,7 @@ def cmd_reconcile(args: list[str]) -> int:
     # Event-sourced rebuild: derive the whole pattern state from the artifact log
     # every reconcile. Preserve only the first-crossing timestamps from the
     # previous catalog so elevation/retirement history is durable.
-    prior_catalog = load_catalog()
-    prior_patterns: dict[str, dict] = prior_catalog.get("patterns", {})
+    prior_patterns, recovery = load_catalog_for_rebuild()
     patterns: dict[str, dict] = {}
     rng = random.Random(42)  # deterministic reservoir selection across runs
     now = datetime.now(timezone.utc)
@@ -592,6 +732,8 @@ def cmd_reconcile(args: list[str]) -> int:
         "retired_count": sum(1 for p in patterns.values() if p["verdict"] == "retired"),
         "patterns": patterns,
     }
+    if recovery:
+        new_catalog["last_recovery"] = recovery
     atomic_write_json(CATALOG_PATH, new_catalog)
 
     print(
@@ -610,7 +752,9 @@ def cmd_render_briefing(args: list[str]) -> int:
         sys.stderr.write("usage: inference-engine.py render-briefing <plugin>\n")
         return 2
     plugin = args[0]
-    catalog = load_catalog()
+    catalog = load_catalog_or_exit()
+    if isinstance(catalog, int):
+        return catalog
     patterns = catalog.get("patterns", {})
 
     # Filter: a pattern is relevant to a plugin briefing if ANY hold:
@@ -704,7 +848,9 @@ def cmd_query(args: list[str]) -> int:
         sys.stderr.write("usage: inference-engine.py query <code|tag|pattern_id>\n")
         return 2
     term = args[0].lower()
-    catalog = load_catalog()
+    catalog = load_catalog_or_exit()
+    if isinstance(catalog, int):
+        return catalog
     hits = []
     for pat in catalog.get("patterns", {}).values():
         if (
@@ -721,7 +867,9 @@ def cmd_query(args: list[str]) -> int:
 
 
 def cmd_status(_args: list[str]) -> int:
-    catalog = load_catalog()
+    catalog = load_catalog_or_exit()
+    if isinstance(catalog, int):
+        return catalog
     patterns = catalog.get("patterns", {})
     verdicts = {"elevated": 0, "noise": 0, "retired": 0}
     for pat in patterns.values():
