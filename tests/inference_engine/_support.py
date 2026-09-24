@@ -27,6 +27,8 @@ SCRUBBED_ENV = (
     "WIXIE_INFERENCE_STATE",
     "WIXIE_INFERENCE_LOCK_TIMEOUT",
     "WIXIE_INFERENCE_EMIT_WAIT",
+    "PYTHONIOENCODING",
+    "PYTHONUTF8",
 )
 
 
@@ -34,7 +36,6 @@ def clean_env(state: Path, **extra: str) -> dict:
     env = {k: v for k, v in os.environ.items() if k not in SCRUBBED_ENV}
     env["WIXIE_INFERENCE_STATE"] = str(state)
     env["WIXIE_INFERENCE_ENABLED"] = "1"
-    env["PYTHONIOENCODING"] = "utf-8"
     env.update(extra)
     return env
 
