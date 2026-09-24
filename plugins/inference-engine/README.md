@@ -137,9 +137,9 @@ Five stages from failure to countermeasure:
 
 1. **Observation.** A plugin catches a failure (Wixie notices reactive iteration, Crow flags a silent revert, Hydra classifies a new attack pattern). The plugin composes a JSON artifact with `code`, `category`, `title`, `cause`, `counter`, `signal`, `tags`, and `evidence`.
 
-2. **Emission.** The plugin calls `inference-engine.py emit` (or the `inference-emit.sh` bash wrapper). The engine stamps `ts`, `session_id`, `plugin`, appends to `state/artifacts.jsonl`. Opt-in gate `WIXIE_INFERENCE_ENABLED=1` required; otherwise silent no-op.
+2. **Emission.** The plugin calls `inference-engine.py emit` (or the `inference-emit.sh` bash wrapper). The engine stamps `ts`, `session_id`, `plugin` and an event identity, and appends to `state/artifacts.jsonl` (or, if the state lock stays busy past the emit wait, queues the event in `state/pending/` to be folded in exactly once). Opt-in gate `WIXIE_INFERENCE_ENABLED=1` required; otherwise silent no-op. Identity, session precedence and exit codes: `shared/conduct/inference-substrate.md`.
 
-3. **Reconciliation.** Triggered manually, on schedule, or after an artifact write. The engine loads every artifact, fingerprints, runs SPRT + Beta-Binomial + EMA + Reservoir, writes `catalog.json` atomically. Idempotent on identical streams.
+3. **Reconciliation.** Triggered manually, on schedule, or after an artifact write. The engine loads every artifact, fingerprints, runs SPRT + Beta-Binomial + EMA + Reservoir, writes `catalog.json` atomically. Idempotent on identical streams. Exits 3 when some log lines were rejected (listed with file:line), 75 when another process holds the state lock.
 
 4. **Briefing.** The briefer agent renders `state/briefings/<plugin>.md` — filtered to that plugin's tags, sorted by weight, formatted for human + machine reading.
 
@@ -343,8 +343,8 @@ wixie/plugins/inference-engine/
         └── wixie.md                      top-of-context briefing for /converge
 
 wixie/shared/scripts/
-├── inference-engine.py                  ≈ 350 LOC stdlib Python, 6 subcommands
-└── inference-emit.sh                    ≈ 50 LOC bash wrapper for hook callers
+├── inference-engine.py                  stdlib Python, 6 subcommands
+└── inference-emit.sh                    bash wrapper for hook callers
 
 wixie/shared/conduct/
 └── inference-substrate.md               brand-standard module — how to write/read honestly
@@ -356,8 +356,9 @@ The substrate is **off by default**. `emit` is a no-op unless `WIXIE_INFERENCE_E
 
 When enabled and later unreachable — filesystem error, missing script, permission problem:
 
-- `emit` from a hook logs to stderr and exits 0 (fail-open; brand contract `hooks.md`).
-- `reconcile` aborts with a non-zero exit; the caller reports honestly and does not proceed with stale briefings.
+- `emit` from a hook (`inference-emit.sh`) exits 0 only when the event is durably recorded (appended, already recorded, or queued in `state/pending/`). When it was NOT recorded it logs the reason to stderr and exits 1. Exit 1 is non-blocking for Claude Code hooks (only 2 blocks), so the hook still fails open without claiming success. The hook's timeout must exceed `WIXIE_INFERENCE_EMIT_WAIT` (default 1 s) + 2 s.
+- `reconcile` aborts with a non-zero exit (75 lock busy, 1 operational failure) and reports partial success with exit 3; the caller reports honestly and does not proceed with stale briefings.
+- A corrupt `catalog.json` makes `status`, `query` and `render-briefing` exit 74; `reconcile` quarantines it to `catalog.json.corrupt-<stamp>` and rebuilds it from the log.
 - `render-briefing` on a missing catalog writes the placeholder.
 - Any consuming plugin that reads `briefings/wixie.md` tolerates a missing or stale file — the briefing is advisory, never load-bearing.
 

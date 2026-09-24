@@ -40,7 +40,18 @@ The engine:
 
 ### 2. Verify
 
-Parse the summary line. Confirm:
+Check the exit code first:
+
+| Exit | Meaning | Action |
+|------|---------|--------|
+| 0    | clean (or the empty-log no-op) | continue |
+| 3    | partial: the catalog was rebuilt, but some log lines were rejected. The summary line ends `[partial: N rejected line(s), M new]`; stderr lists the M new ones as `<file>:<line>: <reason>`. | continue, and report the rejected count; if M > 0, quote the new lines. Never call it clean. |
+| 75   | another inference-engine process held `state/.lock` past `WIXIE_INFERENCE_LOCK_TIMEOUT` (default 30 s); nothing changed | stop, report "busy, retry later"; do not render briefings from the unchanged catalog as if refreshed |
+| 1    | operational failure (one-line reason on stderr) | stop, report verbatim |
+
+A corrupt `catalog.json` is not an error for reconcile: it is moved to `state/catalog.json.corrupt-<stamp>` and rebuilt (stderr says so, and the new catalog carries `last_recovery`). Report the recovery. `render-briefing`, `status` and `query` exit 74 while a catalog is corrupt; running reconcile fixes that.
+
+Then parse the summary line. Confirm:
 
 - Total artifacts > 0 (else the run is a no-op by design).
 - `catalog.json` exists and parses as JSON.
@@ -63,6 +74,8 @@ Return one line:
 ```
 reconciled N artifacts -> P patterns (E elevated, R retired)
 ```
+
+followed, on exit 3, by the engine's `[partial: ...]` suffix, and on a busy lock by `busy (exit 75), retry later`.
 
 ## Rules
 
