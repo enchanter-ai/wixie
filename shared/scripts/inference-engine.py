@@ -11,6 +11,15 @@ Subcommands:
     backfill <source.jsonl>         Replay an external JSONL (e.g. precedent.jsonl) through emit
     status                          Print catalog summary + last reconcile timestamp
 
+Exit codes (contract: shared/conduct/inference-substrate.md):
+    0   success, incl. documented no-ops (gate-off emit, empty reconcile) and the emit outcomes
+        "duplicate" and "queued"
+    1   query found nothing, or an operational failure (one-line reason on stderr)
+    2   usage error, refused input record, or refused render-briefing plugin name
+    3   partial: reconcile/backfill completed but rejected some input lines (listed on stderr)
+    74  status/query/render-briefing: catalog.json is corrupt; run reconcile to rebuild it
+    75  reconcile/backfill: state/.lock busy past WIXIE_INFERENCE_LOCK_TIMEOUT; nothing changed
+
 Algorithms (all stdlib):
     U1 Pattern fingerprint          SHA-1 of (code, sorted(tags)) — deterministic id per semantic pattern
     U2 Wald SPRT                    log-likelihood ratio over recurrences; elevate at +2.89, retire at -2.25

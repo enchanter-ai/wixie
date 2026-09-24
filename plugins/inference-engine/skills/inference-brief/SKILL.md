@@ -20,6 +20,14 @@ Emit `state/briefings/<plugin>.md` — a concise Markdown summary of elevated pa
 
 The caller provides the plugin name. Defaults to `wixie` at Phase 1. Pass `all` to include every elevated pattern regardless of tag.
 
+The name must be a plugin slug: 1-64 characters from `[A-Za-z0-9._-]`, starting with a letter
+or digit, and not a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `CONIN$`, `CONOUT$`,
+`COM1`-`COM9`, `LPT1`-`LPT9`, with or without an extension). Anything else is refused with exit
+`2` and nothing is written; the engine never rewrites a name into a different one. The output
+path is checked after resolution to sit directly in the resolved `state/briefings/` directory,
+and the file is written by atomic rename. Exit `74` means `catalog.json` is corrupt: run
+`/inference-reconcile` first.
+
 ## Pipeline
 
 ### Step 1: Spawn the briefer agent

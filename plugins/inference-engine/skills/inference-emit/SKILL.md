@@ -41,6 +41,39 @@ The caller provides either:
 | `evidence`    | object | sub-session recurrence counts (see below)    |
 | `scope`       | string | plugin or sub-plugin                         |
 | `source_session` | string | human-readable session id                 |
+| `session_id`  | string | the session the event happened in (see precedence below) |
+| `event_id`    | string | caller's id for this event; makes a retry idempotent |
+| `ts`          | string | ISO-8601 time of the event; stamped from the clock if absent |
+
+Field types are checked. A record that is not a JSON object, is not UTF-8, or has a wrongly
+typed field (`code`, `title`, `category`, `signal`, `counter`, `session_id`, `ts`, `date` must be
+strings; `tags` a list of strings; `evidence` an object; an evidence count may not exceed 1000)
+is refused with exit 2 and nothing is written.
+
+## Event identity
+
+Every stored line carries `_identity`: a SHA-256 over the record minus the engine metadata keys
+(`_identity`, `_session_source`, `_ts_clock`). The event's own coordinates are part of it:
+`session_id`, `source_session`, a supplied `ts` or `date`, `event_id`, `source_ordinal`.
+
+- Each emit is a new event: when the record has no `event_id` the engine mints one, so two
+  genuine occurrences of the same payload in one session are two observations.
+- To make a retry idempotent (a hook re-run after an ambiguous failure), supply your own
+  `event_id`. A second emit with the same `event_id`, payload and session is reported as
+  `duplicate` and adds nothing.
+- The same payload in a different session is a different event.
+- A `ts` the engine filled from its clock is flagged `_ts_clock` and is not part of the identity.
+
+## Session identity
+
+The engine stamps `session_id` from the first of these that is set, and records which one in
+`_session_source`:
+
+1. the record's own `session_id` (`record:session_id`)
+2. the record's `source_session` (`record:source_session`)
+3. `$CLAUDE_CODE_SESSION_ID` (`env:CLAUDE_CODE_SESSION_ID`, what Claude Code exports)
+4. `$CLAUDE_SESSION_ID` (`env:CLAUDE_SESSION_ID`, legacy)
+5. the literal `unknown` (`unknown`). It is never guessed.
 
 ## Evidence keys that boost SPRT
 
@@ -68,7 +101,22 @@ EOF
 )
 ```
 
-Confirm the stdout line `emitted <CODE> -> artifacts.jsonl`.
+The first word of stdout is the outcome token:
+
+| Token       | Exit | Meaning |
+|-------------|------|---------|
+| `emitted`   | 0    | appended to `state/artifacts.jsonl` |
+| `duplicate` | 0    | an event with this identity is already recorded; nothing added |
+| `queued`    | 0    | the state lock stayed busy for `WIXIE_INFERENCE_EMIT_WAIT` seconds (default 5); the event was written to `state/pending/<identity>.json` and the next emit, backfill or reconcile folds it into the log exactly once |
+
+Other exits: `0` with no stdout when `WIXIE_INFERENCE_ENABLED` is not `1` (documented no-op,
+nothing recorded); `2` the record was refused (reason on stderr); `1` the event could not be
+recorded or queued (reason on stderr). Report a non-zero exit verbatim; the event was NOT
+recorded.
+
+Hooks should call `shared/scripts/inference-emit.sh`, which exits `0` only when the event is
+durably recorded (`emitted`, `duplicate`, `queued`) or the gate is off, and `1` otherwise
+(never `2`, which Claude Code treats as a blocking hook error). It accepts `--event-id`.
 
 ### Step 3: Optional reconcile
 
@@ -79,7 +127,7 @@ If the artifact is high-confidence (existing pattern with fresh evidence), sugge
 Tell the caller:
 
 ```
-Emitted <code> to artifacts.jsonl
+Emitted <code> to artifacts.jsonl (outcome: emitted | duplicate | queued)
 Fingerprint: <first 16 chars of SHA-1>
 Next: /inference-reconcile when ready to update the catalog.
 ```

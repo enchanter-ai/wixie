@@ -25,7 +25,7 @@ The caller provides one search term. Exact match only at Phase 1. Fuzzy / BM25 r
 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py query <term>
 ```
 
-The engine returns a JSON array of matching patterns to stdout. Exit code `0` if any match, `1` if none.
+The engine returns a JSON array of matching patterns to stdout. Exit code `0` if any match, `1` if none. Exit `74` means `catalog.json` is corrupt: nothing is returned; run `/inference-reconcile`, which quarantines and rebuilds it.
 
 ### Step 2: Summarize for the caller
 

@@ -13,7 +13,9 @@ Five file surfaces:
 | `state/artifacts.jsonl`                | append-only master log (rotation deferred)            | `inference-engine.py emit` appends; never edit in place            |
 | `state/catalog.json`                   | pattern catalog (posteriors, LLR, verdicts, weights)  | `inference-engine.py reconcile` writes atomically; never edit     |
 | `state/briefings/<plugin>.md`          | per-plugin top-of-context briefing                    | `inference-engine.py render-briefing` writes; never edit          |
-| `state/.lock` (if present)             | reconcile mutual-exclusion lock                       | the engine takes and releases; never touch                        |
+| `state/.lock`                          | state mutual-exclusion lock (emit, backfill, reconcile) | the engine takes and releases; never touch                      |
+| `state/pending/<identity>.json`        | events queued while the lock was busy                 | `emit` writes; the next lock holder folds and deletes; never touch |
+| `state/catalog.json.corrupt-<stamp>`   | a corrupt catalog moved aside by reconcile            | kept for inspection; safe to delete once reviewed                 |
 | `shared/scripts/inference-engine.py`   | all subcommands (emit, reconcile, render-briefing, query, backfill, status) | edit only with a matching convergence + test cycle                |
 
 ## The rule
@@ -48,7 +50,78 @@ Do not emit for every local slip. Emit for patterns worth compounding.
 }
 ```
 
-Timestamps and `session_id` are stamped by the engine. Do not set them by hand.
+Timestamps and `session_id` are stamped by the engine. Do not set them by hand, with two
+exceptions: a caller that may retry supplies `event_id` (see Event identity), and records
+re-imported with `backfill` keep the `session_id` / `source_session` / `date` / `ts` they
+already carry.
+
+## Contract details
+
+### Event identity
+
+Each stored line is one event with a stable `_identity`: SHA-256 over the record minus the
+engine metadata keys (`_identity`, `_session_source`, `_ts_clock`). The basis includes the
+event's own coordinates: `session_id`, `source_session`, a supplied `ts` or `date`, `event_id`,
+and `source_ordinal`. This is not payload dedup: the pattern fingerprint (code + tags) is what
+accumulates; identity only stops one event from being counted twice.
+
+- `emit` mints an `event_id` when none is supplied, so each call is a new event; supply
+  `event_id` to make a retry idempotent (the repeat reports `duplicate`).
+- `backfill` stamps only values derived from the source line (session from `session_id` or
+  `source_session`, `ts` from `date`, `plugin` from `scope`), so re-running an import,
+  finishing an interrupted one, or importing a copy of an engine-written log adds only events
+  not already recorded. The n-th repeat of an identical line in one source file gets
+  `source_ordinal` n and counts as its own event.
+- Identical content from different sessions, dates or supplied timestamps stays distinct.
+- A `ts` taken from the engine's clock is flagged `_ts_clock` and left out of the identity.
+- Reading the log applies the same rule, so a copy of the log left next to it
+  (`artifacts-*.jsonl`) is not double-counted, and a pre-identity log keeps every line it
+  counted before.
+
+### Session identity precedence
+
+First match wins, recorded in `_session_source`: record `session_id` > record `source_session` >
+`$CLAUDE_CODE_SESSION_ID` > `$CLAUDE_SESSION_ID` > `unknown`. The environment is consulted by
+`emit` only; `backfill` never takes the importing session's id.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0    | success, including the documented no-ops: gate-off `emit`, `reconcile` of an empty log, and the `emit` outcomes `duplicate` and `queued` |
+| 1    | `query` found nothing, or an operational failure (one-line reason on stderr) |
+| 2    | usage error, an input record refused by `emit`, or a refused `render-briefing` plugin name |
+| 3    | partial: `reconcile` or `backfill` completed, but some input lines were rejected (listed on stderr with file:line and reason) |
+| 74   | `status` / `query` / `render-briefing`: `catalog.json` is corrupt; run `reconcile` |
+| 75   | `reconcile` / `backfill`: `state/.lock` busy past `WIXIE_INFERENCE_LOCK_TIMEOUT` (default 30 s); nothing changed |
+
+`inference-emit.sh` exits 0 when the event is durably recorded or the gate is off, and 1 when
+it is not (never 2, which Claude Code treats as a blocking hook error).
+
+### Rejected records
+
+Every non-empty line of the log is counted, recognised as a repeat of a counted event, or
+rejected with file, line and reason (invalid UTF-8, invalid JSON, not an object, a wrongly
+typed field, an evidence count over 1000, or a torn final line). `reconcile` reports rejected
+lines on stderr, stores `outcome`, `accounting` and `rejected` in `catalog.json`, and exits 3.
+Appends write a newline first when the log does not end in one, so a torn write cannot swallow
+the next record.
+
+### Corrupt catalog: quarantine and recovery
+
+A catalog that cannot be read or lacks the catalog shape is moved by `reconcile` to
+`catalog.json.corrupt-<UTC stamp>` and rebuilt from the log; first-crossing stamps from entries
+that were still well-formed are kept and `last_recovery` is recorded. Read-only commands exit
+74 until then. Catalog writes are atomic (unique temp file, fsync, rename).
+
+### Emit-lock policy
+
+`emit` waits at most `WIXIE_INFERENCE_EMIT_WAIT` seconds (default 5) for `state/.lock`. If the
+lock is still busy, the fully stamped event is written to `state/pending/<identity>.json` by
+atomic rename and `emit` exits 0 with outcome `queued`. The next `emit`, `backfill` or
+`reconcile` folds pending events into the log: append unless the identity is already
+recorded, fsync, then delete, so each is recorded exactly once even across a crash. An event
+is never silently dropped.
 
 ## When to reconcile
 
@@ -90,6 +163,8 @@ Flip the gate only after Phase 1 backfill has been validated locally — running
 ## Anti-patterns
 
 - **Writing directly to catalog.json** — breaks atomic-write contract, corrupts posteriors.
+- **Treating exit 3 as clean or exit 75 as a data failure** — 3 means some records were rejected; 75 means busy, retry.
+- **Deleting `state/pending/` files** — they are recorded events waiting to be folded in.
 - **Editing a briefing by hand** — next reconcile overwrites your edit, so the correction is lost.
 - **Emitting without a counter** — signals noise, not a pattern. The engine accepts it but the substrate's utility collapses.
 - **Emitting without evidence recurrence counts when they exist** — understates SPRT observations, delays elevation.
