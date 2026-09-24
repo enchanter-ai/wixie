@@ -57,10 +57,27 @@ This runs up to 100 iterations:
 - Identifies the weakest axis
 - Applies targeted fix (hedge words, missing components, filler, format, fallbacks)
 - Re-scores and repeats
-- Exits on DEPLOY (overall ≥ 9, all axes ≥ 7) or plateau (3 identical scores)
+- Exits on the **full** DEPLOY bar (overall ≥ 9.0, every axis ≥ 7.0, σ ≤ the dynamic floor,
+  and 8/8 SAT assertions — see `deploy_verdict()`) or plateau (3 identical scores)
 
 This is a **fast heuristic pre-check only** — it never calls a model. A heuristic DEPLOY
 print is a green light to proceed to the measured step, not a DEPLOY verdict on its own.
+
+**Exit codes (WIX-EVAL-004 — the printed `VERDICT:` line, the exit code, and the optional
+`--json`/`--json-out` payload always agree; none of them can be read as DEPLOY when another
+says otherwise):**
+
+| Exit | Meaning |
+|------|---------|
+| `0` | DEPLOY — the full bar above was met. Still heuristic-only, not a measured DEPLOY. |
+| `1` | HOLD — the full bar was not met (score, an axis, σ, or an assertion failed), or no final report was reached. |
+| `2` | Usage / bad input — no prompt-file argument, missing file, or empty file. Nothing was scored. |
+| `3` | Internal error — an unexpected exception during scoring/fixing/saving. Distinct from HOLD: the prompt was never fully scored, so exit 1 (HOLD) and exit 3 (crash) must not be confused. |
+
+Pass `--json` to also print a `VERDICT_JSON {...}` line to stdout, or `--json-out <path>` to
+also write that same object to a file, with fields (`verdict`, `deploy`, `exit_code`, `overall`,
+`axes`, `sigma`, `sigma_floor`, `assertions_passed`/`_total`, `measured: false`, `note`) that
+mirror the printed report exactly. `measured` is always `false` here — see Step 2.5.
 
 ### Step 2.5: Measure against the eval corpus (the DEPLOY-relevant signal)
 
