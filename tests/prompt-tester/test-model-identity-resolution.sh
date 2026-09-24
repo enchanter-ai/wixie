@@ -45,6 +45,7 @@ REGISTRY = {"last_updated": "2000-01-01", "model_count": 10, "models": {
     "zz-gone-fb": entry(provider="anthropic", api=api("zz-gone-fb-wire", availability="unavailable",
                                                       price=(1.0, 1.0), fallback="zz-beta")),
     "zz-gone-fb-bad": entry(provider="anthropic", api=api("x", availability="unavailable", fallback="zz-gone")),
+    "zz-limited": entry(provider="anthropic", api=api("zz-lim-wire", availability="restricted", price=(1.0, 1.0))),
     "zz-foreign": entry(provider="otherco", api=api("zz-foreign-wire", price=(1.0, 1.0))),
     "zz-bare": entry(),
     "zz-noapi": entry(provider="anthropic"),
@@ -175,8 +176,32 @@ check("9 unpriced fixer cost UNKNOWN", calls[2]["cost_usd"] is None and
 check("9 total cost not a partial sum", res["total_cost_usd"] is None and res["cost_status"] == "partial"
       and res["cost_unknown_calls"] >= 1, {k: res[k] for k in ("total_cost_usd", "cost_status", "cost_unknown_calls")})
 
+# identity mismatch flag: per call and per role
+gen1, ev1, fx1 = calls[0], calls[1], calls[2]
+check("3 mismatch flagged when observed != resolved", gen1.get("identity_mismatch") is True, gen1)
+check("3 mismatch None when provider did not report", "identity_mismatch" in ev1 and ev1["identity_mismatch"] is None, ev1)
+check("3 mismatch False when observed == resolved", fx1.get("identity_mismatch") is False, fx1)
+check("3 role mismatch count", mi["target"].get("identity_mismatch_calls") == 2
+      and mi["fixer"].get("identity_mismatch_calls") == 0, (mi["target"], mi["fixer"]))
+# unknown cost is never persisted as 0: buckets and iterations
+cb = {k: v if isinstance(v, dict) else {"cost_usd": v} for k, v in res["cost_breakdown"].items()}
+gen_known = 2 * (10 * 2.0 + 20 * 8.0) / 1e6
+eval_known = (10 * 10.0 + 20 * 40.0) / 1e6
+check("9 generate bucket complete", abs((cb["generate"]["cost_usd"] or 0) - gen_known) < 1e-12
+      and cb["generate"].get("unknown_calls") == 0, cb["generate"])
+check("9 fix bucket UNKNOWN, partial sum labelled", cb["fix"]["cost_usd"] is None
+      and abs(cb["fix"].get("known_cost_usd", -1) - eval_known) < 1e-12 and cb["fix"].get("unknown_calls") == 1, cb["fix"])
+check("9 no-call buckets are a real zero", cb["preflight"] == {"cost_usd": 0.0, "known_cost_usd": 0.0,
+      "unknown_calls": 0}, cb["preflight"])
+it1, it2 = res["iterations_detail"][0], res["iterations_detail"][1]
+check("9 iteration with unpriced call is UNKNOWN", it1["cost_usd"] is None and it1.get("cost_unknown_calls") == 1
+      and abs(it1.get("known_cost_usd", -1) - (gen_known / 2 + eval_known)) < 1e-12 and it1["cost_complete"] is False, it1)
+check("9 fully priced iteration has a cost", abs((it2["cost_usd"] or 0) - gen_known / 2) < 1e-12
+      and it2["cost_complete"] is True, it2)
+
 # ── 2-4. unknown, unavailable, non-Anthropic targets: explicit failure, zero calls ──
 for target, needle in [("zz-missing", "not in models-registry"), ("zz-gone", "unavailable"),
+                       ("zz-limited", "restricted"),
                        ("zz-foreign", "otherco"), ("zz-bare", "undeclared"), ("zz-noapi", "no api block"),
                        ("zz-gone-fb-bad", "do not chain")]:
     c = FakeClient()
@@ -198,6 +223,12 @@ check("5 failure provenance", g["ok"] is False and g["usage"] is None and g["cos
       and g["error"]["status_code"] == 404 and g["observed"] is None, g)
 check("5 provider_failures", len(res["provider_failures"]) == 1, res["provider_failures"])
 check("5 total cost unknown", res["total_cost_usd"] is None, res["total_cost_usd"])
+check("5 generate bucket UNKNOWN not 0", isinstance(res["cost_breakdown"]["generate"], dict)
+      and res["cost_breakdown"]["generate"]["cost_usd"] is None
+      and res["cost_breakdown"]["generate"]["unknown_calls"] == 1, res["cost_breakdown"]["generate"])
+check("5 failed iteration cost UNKNOWN not 0", res["iterations_detail"][0]["cost_usd"] is None,
+      res["iterations_detail"][0])
+check("5 failed call has no mismatch verdict", "identity_mismatch" in g and g["identity_mismatch"] is None, g)
 check("5 credential never persisted", SECRET not in raw, "secret found in results")
 
 # ── 6. declared fallback vs none ─────────────────────────────────────────────

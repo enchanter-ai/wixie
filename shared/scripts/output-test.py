@@ -335,6 +335,14 @@ def estimate_cost(resolution, usage):
                             f"(resolved {resolution.get('resolved')})")
 
 
+def cost_summary(calls):
+    """Cost of a group of calls. cost_usd is None (UNKNOWN) when any call in the group is
+    unpriced or failed; known_cost_usd is then a partial sum, labelled by unknown_calls."""
+    known, unknown = sum_known_costs(calls)
+    return {"cost_usd": round(known, 6) if unknown == 0 else None,
+            "known_cost_usd": round(known, 6), "unknown_calls": unknown}
+
+
 def sum_known_costs(calls):
     """(known_cost_sum, unknown_count) over call records."""
     known, unknown = 0.0, 0
@@ -391,6 +399,9 @@ def call_model(client, resolution, system_prompt, user_prompt, max_tokens=4096, 
         "requested": resolution.get("requested"),
         "resolved": resolution.get("resolved"),
         "observed": None,
+        # True when the provider reports a different model than the one sent (an alias
+        # served as a snapshot, or a substitution); None when the provider did not say.
+        "identity_mismatch": None,
         "fallback": resolution.get("fallback"),
         "ok": False,
         "usage": None,
@@ -424,6 +435,8 @@ def call_model(client, resolution, system_prompt, user_prompt, max_tokens=4096, 
             text += block.text
     observed = getattr(response, "model", None)
     record["observed"] = observed if isinstance(observed, str) and observed else None
+    if record["observed"] is not None:
+        record["identity_mismatch"] = record["observed"] != record["resolved"]
     record["stop_reason"] = getattr(response, "stop_reason", None)
     record["usage"] = _usage_of(response)
     record["cost_usd"], record["cost_provenance"] = estimate_cost(resolution, record["usage"])
@@ -648,6 +661,8 @@ def run_generate(client, prompt_text, meta, folder, iteration, target=None):
     cost_txt = f"${call['cost_usd']:.4f}" if call["cost_usd"] is not None else "cost UNKNOWN"
     print(f" {GREEN}{output_words:,} words{RESET} "
           f"({usage.get('output_tokens')} tokens, {cost_txt}; observed {call['observed']})")
+    if call["identity_mismatch"]:
+        print(f"    {YELLOW}IDENTITY MISMATCH{RESET}: sent {call['resolved']}, provider reported {call['observed']}")
 
     # Save output as reference
     output_path = os.path.join(folder, "output-reference.md")
@@ -1063,6 +1078,7 @@ def _identity_with_observed(identity, calls):
         out[role] = dict(rec)
         out[role]["observed"] = sorted({o for o in observed if o})
         out[role]["observed_unknown_calls"] = sum(1 for o in observed if not o)
+        out[role]["identity_mismatch_calls"] = sum(1 for c in role_calls if c.get("identity_mismatch"))
         out[role]["calls"] = len(role_calls)
     return out
 
@@ -1094,6 +1110,7 @@ def save_results(folder, run_data):
         "cost_unknown_calls": unknown,
         "cost_status": cost_status,
         "total_duration_sec": round(run_data.get("total_duration", 0), 1),
+        # Each bucket: cost_usd (None when UNKNOWN), known_cost_usd and unknown_calls.
         "cost_breakdown": run_data.get("cost_breakdown", {}),
         "provider_failures": [c for c in calls if not c.get("ok")],
         "preflight": run_data.get("preflight", {}),
@@ -1107,10 +1124,12 @@ def save_results(folder, run_data):
 # ─── Main engine ──────────────────────────────────────────────────────────────
 
 def _close_iteration(iter_data, calls, iter_start):
-    known, unknown = sum_known_costs(calls)
     iter_data["calls"] = calls
-    iter_data["cost_usd"] = round(known, 6)
-    iter_data["cost_complete"] = unknown == 0
+    summary = cost_summary(calls)
+    iter_data["cost_usd"] = summary["cost_usd"]          # None when any call is unpriced/failed
+    iter_data["known_cost_usd"] = summary["known_cost_usd"]
+    iter_data["cost_unknown_calls"] = summary["unknown_calls"]
+    iter_data["cost_complete"] = summary["unknown_calls"] == 0
     iter_data["duration_sec"] = round(time.time() - iter_start, 1)
     return iter_data
 
@@ -1157,7 +1176,8 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
               f"-> {fb['to_registry_id']} = {fb['to_model_id']} (declared in registry)")
 
     run_start = time.time()
-    cost_breakdown = {"preflight": 0, "generate": 0, "evaluate": 0, "fix": 0}
+    # Calls per cost bucket; preflight and evaluate (Phase 3) make no provider calls.
+    bucket_calls = {"preflight": [], "generate": [], "evaluate": [], "fix": []}
     iterations_detail = []
     all_calls = []
     preflight_results = None
@@ -1174,7 +1194,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             "total_iterations": 0,
             "final_score": 0,
             "total_duration": round(time.time() - run_start, 1),
-            "cost_breakdown": cost_breakdown,
+            "cost_breakdown": {k: cost_summary(v) for k, v in bucket_calls.items()},
             "preflight": preflight_results,
             "iterations_detail": [],
             "available_engines": available,
@@ -1241,7 +1261,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         )
         calls.append(gen_call)
         all_calls.append(gen_call)
-        cost_breakdown["generate"] += gen_call["cost_usd"] or 0
+        bucket_calls["generate"].append(gen_call)
 
         if output is None:
             # Provider error — record it with its provenance and stop
@@ -1299,7 +1319,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             )
             calls.extend(fix_calls)
             all_calls.extend(fix_calls)
-            cost_breakdown["fix"] += sum_known_costs(fix_calls)[0]
+            bucket_calls["fix"].extend(fix_calls)
             iter_data["fix"] = fix_info
 
             if fix_info["applied"]:
@@ -1307,7 +1327,8 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
 
         iterations_detail.append(_close_iteration(iter_data, calls, iter_start))
         iter_cost_txt = (f"${iter_data['cost_usd']:.3f}" if iter_data["cost_complete"]
-                         else f"${iter_data['cost_usd']:.3f} known + unpriced calls")
+                         else f"UNKNOWN (${iter_data['known_cost_usd']:.3f} known + "
+                              f"{iter_data['cost_unknown_calls']} unpriced/failed call(s))")
         print(f"\n  {DIM}--- Iteration {iteration} done ({iter_cost_txt}) ---{RESET}")
 
     else:
@@ -1349,7 +1370,8 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         for it in iterations_detail:
             s = f"{it.get('scores', {}).get('overall', 0)}/10"
             v = it.get("verdict", "?")
-            c = f"${it.get('cost_usd', 0):.3f}" + ("" if it.get("cost_complete", True) else "+?")
+            c = (f"${it['cost_usd']:.3f}" if it.get("cost_usd") is not None
+                 else f"${it.get('known_cost_usd', 0):.3f}+?")
             t = f"{it.get('duration_sec', 0):.0f}s"
             color = GREEN if v == "PASS" else RED if v == "FAIL" else YELLOW
             print(f"  {it['iteration']:>4}  {s:>7}  {color}{v:>10}{RESET}  {c:>8}  {t:>6}")
