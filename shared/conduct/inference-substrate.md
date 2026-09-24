@@ -140,12 +140,19 @@ exit 74 until then. Catalog writes are atomic (unique temp file, fsync, rename).
 
 ### Emit-lock policy
 
-`emit` waits at most `WIXIE_INFERENCE_EMIT_WAIT` seconds (default 5) for `state/.lock`. If the
+`emit` waits at most `WIXIE_INFERENCE_EMIT_WAIT` seconds (default 1) for `state/.lock`. If the
 lock is still busy, the fully stamped event is written to `state/pending/<identity>.json` by
 atomic rename and `emit` exits 0 with outcome `queued`. The next `emit`, `backfill` or
 `reconcile` folds pending events into the log: append unless the identity is already
 recorded, fsync, then delete, so each is recorded exactly once even across a crash. An event
 is never silently dropped.
+
+The pending directory is fsynced after the rename on POSIX, so a queued event survives a power
+loss. A `pending/*.tmp` file older than 10 minutes (a queue write killed before its rename) is
+removed by the next lock holder; completed `pending/*.json` events are only ever removed by
+folding them in.
+
+**Hook timeout requirement:** a hook that emits (directly or through `inference-emit.sh`) must have a timeout greater than `WIXIE_INFERENCE_EMIT_WAIT` + 2 s (interpreter start-up and the queue write). Claude Code discards a hook that outlives its timeout, so the event would be lost. With the default wait of 1 s, a 3 s hook timeout (the smallest this plugin uses) is enough; raise the timeout before raising the wait.
 
 ## When to reconcile
 

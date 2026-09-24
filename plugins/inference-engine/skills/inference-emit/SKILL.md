@@ -110,7 +110,7 @@ The first word of stdout is the outcome token:
 |-------------|------|---------|
 | `emitted`   | 0    | appended to `state/artifacts.jsonl` |
 | `duplicate` | 0    | an event with this identity is already recorded; nothing added |
-| `queued`    | 0    | the state lock stayed busy for `WIXIE_INFERENCE_EMIT_WAIT` seconds (default 5); the event was written to `state/pending/<identity>.json` and the next emit, backfill or reconcile folds it into the log exactly once |
+| `queued`    | 0    | the state lock stayed busy for `WIXIE_INFERENCE_EMIT_WAIT` seconds (default 1); the event was written to `state/pending/<identity>.json` and the next emit, backfill or reconcile folds it into the log exactly once |
 
 Other exits: `0` with no stdout when `WIXIE_INFERENCE_ENABLED` is not `1` (documented no-op,
 nothing recorded); `2` the record was refused (reason on stderr); `1` the event could not be
@@ -120,6 +120,8 @@ recorded.
 Hooks should call `shared/scripts/inference-emit.sh`, which exits `0` only when the event is
 durably recorded (`emitted`, `duplicate`, `queued`) or the gate is off, and `1` otherwise
 (never `2`, which Claude Code treats as a blocking hook error). It accepts `--event-id`.
+
+**Hook timeout requirement:** a hook that emits (directly or through `inference-emit.sh`) must have a timeout greater than `WIXIE_INFERENCE_EMIT_WAIT` + 2 s (interpreter start-up and the queue write). Claude Code discards a hook that outlives its timeout, so the event would be lost. With the default wait of 1 s, a 3 s hook timeout (the smallest this plugin uses) is enough; raise the timeout before raising the wait.
 
 ### Step 3: Optional reconcile
 

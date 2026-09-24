@@ -396,12 +396,31 @@ def atomic_write_text(path: Path, text: str) -> None:
             os.fsync(f.fileno())
         _replace_with_retry(tmp, path)
         tmp = None
+        _fsync_dir(path.parent)
     finally:
         if tmp is not None:
             try:
                 tmp.unlink()
             except OSError:
                 pass
+
+
+def _fsync_dir(directory: Path) -> None:
+    """Make a rename in `directory` durable. POSIX only: on Windows (NTFS) the rename is
+    journaled and a directory cannot be opened for fsync. A filesystem that refuses directory
+    fsync is tolerated; the data file itself was already fsynced."""
+    if sys.platform == "win32":
+        return
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
 
 
 def _replace_with_retry(src: Path, dst: Path) -> None:
@@ -760,7 +779,7 @@ def iso_now() -> str:
 #
 #   reconcile, backfill   wait up to WIXIE_INFERENCE_LOCK_TIMEOUT seconds (default 30), then exit
 #                         75 (EXIT_LOCK_BUSY) having changed nothing. Retry later.
-#   emit                  waits up to WIXIE_INFERENCE_EMIT_WAIT seconds (default 5). If the lock is
+#   emit                  waits up to WIXIE_INFERENCE_EMIT_WAIT seconds (default 1). If the lock is
 #                         still busy the event is written, identity and all, to
 #                         state/pending/<identity>.json (atomic rename) and emit exits 0 with the
 #                         outcome token "queued". An event is never dropped.
@@ -854,6 +873,26 @@ def queue_pending(record: dict) -> Path:
     return dest
 
 
+DEFAULT_EMIT_WAIT = 1.0
+# A queue write lasts milliseconds; a pending temp file older than this was left by a killed
+# writer. Completed events are *.json and are never removed except by folding them in.
+STALE_PENDING_TMP_SECONDS = 600
+
+
+def clean_stale_pending_tmp() -> None:
+    """Remove pending/*.tmp left by a queue write that was killed before its rename. Caller
+    holds the state lock, but queue writers do not take it, so only old temp files go."""
+    if not PENDING_DIR.is_dir():
+        return
+    cutoff = time.time() - STALE_PENDING_TMP_SECONDS
+    for tmp in PENDING_DIR.glob("*.tmp"):
+        try:
+            if tmp.stat().st_mtime < cutoff:
+                tmp.unlink()
+        except OSError:
+            pass
+
+
 def pending_files() -> list[Path]:
     if not PENDING_DIR.is_dir():
         return []
@@ -883,6 +922,7 @@ def fold_pending(log: "LogAppender", identities: set[str]) -> tuple[int, int]:
             identities.add(eid)
             added += 1
         path.unlink()
+    clean_stale_pending_tmp()
     if added or already:
         sys.stderr.write(f"[inference-engine] folded {added} pending event(s) into the log"
                          + (f" ({already} already recorded)" if already else "") + "\n")
@@ -943,7 +983,11 @@ def cmd_emit(args: list[str]) -> int:
     # WIX-RUN-001 emit-lock policy: bounded wait, then a durable pending record. The outcome
     # token (first word on stdout) is one of: emitted, duplicate, queued.
     code = record.get("code", "?")
-    wait = env_seconds("WIXIE_INFERENCE_EMIT_WAIT", 5.0)
+    # The default is short because emit runs inside hooks, and Claude Code discards a hook that
+    # outlives its timeout: this plugin's own hooks use 3-5 s. Requirement (documented): the
+    # timeout of any hook that emits must exceed WIXIE_INFERENCE_EMIT_WAIT + 2 s (interpreter
+    # start-up and the queue write).
+    wait = env_seconds("WIXIE_INFERENCE_EMIT_WAIT", DEFAULT_EMIT_WAIT)
     try:
         with state_lock(wait, "emit"):
             path = artifacts_path()
@@ -1071,6 +1115,7 @@ def cmd_reconcile(args: list[str]) -> int:
             with LogAppender(artifacts_path()) as log:
                 fold_pending(log, scan_log().identities)
         clean_stale_temp_files()
+        clean_stale_pending_tmp()
         return _reconcile_locked()
 
 

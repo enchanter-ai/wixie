@@ -13,7 +13,9 @@
 # Exit status (WIX-RUN-001 emit-lock policy):
 #   0  the event is durably recorded: appended to the log ("emitted"), already recorded
 #      ("duplicate"), or written to state/pending/ because the state lock stayed busy for
-#      WIXIE_INFERENCE_EMIT_WAIT seconds ("queued"; folded in exactly once later).
+#      WIXIE_INFERENCE_EMIT_WAIT seconds, default 1 ("queued"; folded in exactly once later).
+#      The hook running this script needs a timeout > WIXIE_INFERENCE_EMIT_WAIT + 2 s, or Claude
+#      Code discards it: keep the default with a 3 s hook timeout, or raise both together.
 #      Also 0, silently, when WIXIE_INFERENCE_ENABLED is not 1 (documented no-op).
 #   1  the event was NOT recorded (bad flags, missing engine or python, invalid record, engine
 #      failure); the reason is on stderr. 1, not 2: Claude Code treats a hook's exit 2 as a
