@@ -7,8 +7,16 @@ Usage:
 
 Generates report.pdf (light) and report-dark.pdf (dark).
 Uses browser headless print via html-to-pdf.py.
+
+Exit codes (documented terminal states — see WIX-G0-REPORT-001):
+    0  report.pdf was produced this run and validated (non-empty, %PDF- header).
+    1  PDF conversion failed, produced no verified output, or WIX-PDF-001's async
+       browser handoff never delivered a file in time. A complete report.html
+       fallback was always written in this case — this is a controlled, documented
+       outcome, never an unhandled exception.
+    2  usage error (missing prompt-folder argument, or metadata.json not found).
 """
-import sys, os, json, subprocess
+import sys, os, json, subprocess, tempfile, shutil
 from datetime import datetime
 
 
@@ -116,7 +124,11 @@ def analyze_prompt(meta, registry, prompt_dir=None):
     # ── Token & cost analysis ──
     est = tokens.get("estimated", tokens.get("refined", 0))
     window = tokens.get("context_window", 0)
-    if est and window:
+    # A token field that is present but non-numeric ("~4000", "unknown") used to reach this
+    # division as-is and crash analyze_prompt with TypeError — an adjacent, unrelated exception
+    # that fired before generate_report ever reached the PDF-conversion step. Only real numbers
+    # count as a measurement here.
+    if _numeric(est) and _numeric(window) and est and window:
         pct = (est / window) * 100
         if pct > 80:
             warnings.append(f"Token budget critical: {pct:.0f}% of context ({est:,}/{window:,}). Barely room for output.")
@@ -124,7 +136,7 @@ def analyze_prompt(meta, registry, prompt_dir=None):
             warnings.append(f"Token budget tight: {pct:.0f}% of context used. Limits output length.")
         elif pct < 1 and domain not in ("image-gen",):
             strengths.append(f"Token-efficient ({pct:.1f}% of context). Room for complex output.")
-    if est:
+    if _numeric(est) and est:
         cost = estimate_cost(est, model_id)
         if cost is not None:
             monthly = round(cost * 1000, 2)  # 1000 calls/month estimate
@@ -251,6 +263,11 @@ def score_bar(val):
     return f'<div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:{pct}%;background:{c}"></div></div><span class="bar-val" style="color:{c}">{val}/10</span></div>'
 
 
+def _numeric(value):
+    """True for a real number. bool is excluded: True would format as 1 and read as a token count."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def pill(text, kind="green"):
     return f'<span class="pill-{kind}">{text}</span>'
 
@@ -311,6 +328,14 @@ def build_html(meta, prompt_dir):
     est = tokens.get("estimated", tokens.get("refined", tokens.get("original", "?")))
     window = tokens.get("context_window", "?")
     pct = tokens.get("usage_percent", "?")
+    # These three are rendered with a thousands separator ({est:,}, {window:,}), which raises
+    # "ValueError: Cannot specify ',' with 's'" on the "?" default. Any metadata.json without
+    # token fields therefore crashed report generation outright, before the PDF step and before
+    # the fallback could run. Pre-format to strings here so the template never applies a numeric
+    # spec to a non-numeric placeholder.
+    est_str = f"{est:,}" if _numeric(est) else str(est)
+    window_str = f"{window:,}" if _numeric(window) else str(window)
+    pct_str = f"{pct}%" if _numeric(pct) else str(pct)
     cost = estimate_cost(est if isinstance(est, int) else 0, model)
     cost_str = f"${cost}" if cost else "N/A"
     monthly = f"${round(cost * 1000, 2)}/mo" if cost else ""
@@ -520,9 +545,9 @@ td{{padding:5px 8px;border-bottom:1px solid var(--bd);}}
   <div class="task">{task}</div>
 
   <div class="g">
-    <div class="cd"><div class="cl">Tokens</div><div class="cv">~{est}</div></div>
-    <div class="cd"><div class="cl">Window</div><div class="cv">{window:,}</div></div>
-    <div class="cd"><div class="cl">Usage</div><div class="cv">{pct}%</div></div>
+    <div class="cd"><div class="cl">Tokens</div><div class="cv">~{est_str}</div></div>
+    <div class="cd"><div class="cl">Window</div><div class="cv">{window_str}</div></div>
+    <div class="cd"><div class="cl">Usage</div><div class="cv">{pct_str}</div></div>
     <div class="cd"><div class="cl">Est. Cost</div><div class="cv">{cost_str}</div></div>
     <div class="cd"><div class="cl">Format</div><div class="cv">{meta.get('format','?')}</div></div>
   </div>
@@ -566,58 +591,121 @@ td{{padding:5px 8px;border-bottom:1px solid var(--bd);}}
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
-def convert_to_pdf(prompt_dir, html_path, pdf_name="report.pdf"):
+def convert_to_pdf(html_path, dest_pdf_path, pdf_name="report.pdf"):
+    """Convert html_path to a PDF and, only once verified, move it to dest_pdf_path.
+
+    WIX-PDF-001 (host defect, NOT fixed here): a headless Edge launched without
+    --user-data-dir can hand its print job off to an already-running Edge instance instead of
+    executing it in *this* subprocess. When that happens, subprocess.run() below can return
+    before the PDF actually exists, and the real write can land seconds later from a process
+    this function no longer controls. html_path is always a file inside a private, per-run
+    temp directory the caller owns (never inside the user's prompt folder), and
+    html-to-pdf.py always writes its PDF output next to html_path with a matching basename —
+    so any late, asynchronous write from that stray browser instance can only ever land in
+    that private temp directory, never in the prompt folder. dest_pdf_path (report.pdf in the
+    prompt folder) is only ever touched here after the produced file is confirmed non-empty and
+    PDF-shaped; an unverified or absent conversion never creates, replaces, or otherwise
+    disturbs whatever is already at dest_pdf_path.
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     pdf_script = os.path.join(script_dir, "html-to-pdf.py")
-    pdf_path = os.path.join(prompt_dir, pdf_name)
-
     if not os.path.isfile(pdf_script):
+        print("  html-to-pdf.py not found; PDF conversion unavailable", file=sys.stderr)
         return False
 
+    produced_pdf = os.path.splitext(html_path)[0] + ".pdf"
+
     try:
-        # Use html-to-pdf.py with --keep-html (we manage deletion ourselves)
         result = subprocess.run(
             [sys.executable, pdf_script, html_path, "--keep-html"],
             capture_output=True, text=True, timeout=30,
         )
-        # Rename if needed (html-to-pdf outputs report.pdf by default for folders)
-        default_pdf = os.path.splitext(html_path)[0] + ".pdf"
-        if default_pdf != pdf_path and os.path.isfile(default_pdf):
-            os.replace(default_pdf, pdf_path)
-        if os.path.isfile(pdf_path) and os.path.getsize(pdf_path) > 0:
-            print(f"  {pdf_name}")
-            return True
-    except Exception:
-        pass
-    return False
+    except subprocess.TimeoutExpired:
+        print("  PDF conversion timed out after 30s", file=sys.stderr)
+        return False
+    except OSError as exc:
+        print(f"  PDF conversion failed: {exc}", file=sys.stderr)
+        return False
+
+    # The child's exit code used to be captured and never read, so html-to-pdf.py's deliberate
+    # sys.exit(1) (no browser found, or the browser itself failed) was discarded. Honour it.
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip().splitlines()
+        print(f"  PDF conversion failed (exit {result.returncode})"
+              f"{': ' + detail[-1][:200] if detail else ''}", file=sys.stderr)
+        return False
+
+    if not os.path.isfile(produced_pdf) or os.path.getsize(produced_pdf) == 0:
+        # Covers WIX-PDF-001's async handoff: the child reported exit 0 before the actual
+        # browser instance had written anything. Nothing here yet is treated as failure now —
+        # this function never waits for a write it cannot attribute to this run, because
+        # whatever arrives after this point lands in the private temp dir, not the prompt folder.
+        print("  PDF conversion reported success but produced no output; treating as failure",
+              file=sys.stderr)
+        return False
+
+    with open(produced_pdf, "rb") as fh:
+        if fh.read(5) != b"%PDF-":
+            print(f"  {pdf_name} is not a PDF (missing %PDF- header); treating as failure",
+                  file=sys.stderr)
+            return False
+
+    # Verified: this run's PDF exists, is non-empty, and starts with a PDF header. Only now does
+    # anything touch the prompt folder — a stale or absent prior report.pdf is never at risk of
+    # being reported as this run's fresh output, because nothing unverified ever reaches here.
+    os.replace(produced_pdf, dest_pdf_path)
+    print(f"  {pdf_name}")
+    return True
 
 
 def generate_report(prompt_dir):
+    """Build the report and try to convert it to PDF. Returns the process exit code (see the
+    module docstring for the documented 0/1/2 contract) rather than raising."""
     meta_path = os.path.join(prompt_dir, "metadata.json")
     if not os.path.exists(meta_path):
         print(f"Error: {meta_path} not found", file=sys.stderr)
-        sys.exit(2)
+        return 2
 
     with open(meta_path, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
     html_content = build_html(meta, prompt_dir)
-    html_path = os.path.join(prompt_dir, "_tmp_report.html")
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
 
-    success = convert_to_pdf(prompt_dir, html_path, "report.pdf")
+    # Build and convert entirely inside a private temp directory OUTSIDE the prompt folder. The
+    # prompt folder is a handoff surface: once this process returns, no artifact from this run
+    # may still appear in it later. See convert_to_pdf's docstring for why WIX-PDF-001's async
+    # browser handoff otherwise leaks a stray PDF into that folder.
+    work_dir = tempfile.mkdtemp(prefix="wixie-report-")
+    try:
+        html_path = os.path.join(work_dir, "report.html")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
 
-    # Clean up temp HTML
-    if os.path.isfile(html_path):
-        os.remove(html_path)
+        dest_pdf_path = os.path.join(prompt_dir, "report.pdf")
+        success = convert_to_pdf(html_path, dest_pdf_path, "report.pdf")
+    finally:
+        # Best-effort: a WIX-PDF-001 async handoff can still hold a file open here on Windows,
+        # so removal is not guaranteed. That is not this run's problem to solve — work_dir is
+        # outside the prompt folder either way, so a leftover file here cannot surface as a
+        # stray artifact in the handoff surface this function is responsible for.
+        shutil.rmtree(work_dir, ignore_errors=True)
 
     if not success:
+        # Bounded, explicit failure: a complete and valid HTML report is always left behind, and
+        # the exit code says the PDF did not happen. This used to read an undefined name `theme`
+        # (never assigned anywhere in this file), so the fallback wrote report.html and then
+        # died with NameError — turning a handled degradation into an unhandled crash, and never
+        # printing a final status line at all.
         fallback = os.path.join(prompt_dir, "report.html")
         with open(fallback, "w", encoding="utf-8") as f:
             f.write(html_content)
-        print(f"report.html ({theme}, PDF conversion failed)")
+        print(f"report.html written ({os.path.getsize(fallback)} bytes); PDF conversion failed",
+              file=sys.stderr)
+        print("Done (HTML fallback).")
+        return 1
+
     print("Done.")
+    return 0
 
 
 if __name__ == "__main__":
@@ -625,4 +713,4 @@ if __name__ == "__main__":
     if not args:
         print("Usage: python report-gen.py <prompt-folder>", file=sys.stderr)
         sys.exit(2)
-    generate_report(args[0])
+    sys.exit(generate_report(args[0]))
