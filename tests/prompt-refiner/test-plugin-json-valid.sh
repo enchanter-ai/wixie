@@ -7,7 +7,7 @@ python -c "
 import json, sys, os
 path = os.path.normpath(sys.argv[1])
 data = json.load(open(path))
-assert data['name'] == 'prompt-refiner', f'wrong name: {data[\"name\"]}'
+assert data['name'] == 'wixie-prompt-refiner', f'wrong name: {data[\"name\"]}'
 assert 'description' in data, 'missing description'
 assert 'skills' in data, 'missing skills'
 assert './skills/prompt-improver/' in data['skills'], 'missing prompt-improver skill'
