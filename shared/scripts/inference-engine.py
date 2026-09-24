@@ -27,6 +27,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import tempfile
 import time
@@ -1104,12 +1105,48 @@ def _reconcile_locked() -> int:
 
 # ─── Subcommand: render-briefing ──────────────────────────────────────────────
 
+# WIX-SEC-BRIEF-001. <plugin> becomes a filename, so it must be a plugin slug: 1-64 characters
+# from [A-Za-z0-9._-], starting with a letter or digit, and not a Windows device name (CON, NUL,
+# COM1, ... with or without an extension). Anything else is refused with exit 2, never rewritten
+# into a different name. After resolution the target must sit directly in the resolved
+# briefings directory; the file is written by atomic rename, which replaces rather than
+# follows anything already at that path.
+PLUGIN_SLUG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+WIN_RESERVED_NAMES = frozenset(
+    ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"]
+    + [f"COM{i}" for i in range(1, 10)]
+    + [f"LPT{i}" for i in range(1, 10)]
+)
+
+
+def briefing_target(plugin: str) -> Path | None:
+    """The briefing path for a plugin slug, or None (with the reason on stderr) if refused."""
+    if not PLUGIN_SLUG_RE.fullmatch(plugin):
+        sys.stderr.write(f"[inference-engine] refusing plugin name {plugin!r}: expected a slug "
+                         "matching [A-Za-z0-9][A-Za-z0-9._-]{0,63}\n")
+        return None
+    if plugin.split(".")[0].upper() in WIN_RESERVED_NAMES:
+        sys.stderr.write(f"[inference-engine] refusing plugin name {plugin!r}: reserved device "
+                         "name\n")
+        return None
+    BRIEFINGS_DIR.mkdir(parents=True, exist_ok=True)
+    base = BRIEFINGS_DIR.resolve()
+    out = base / f"{plugin}.md"
+    if out.resolve().parent != base:
+        sys.stderr.write(f"[inference-engine] refusing to write {out}: it resolves outside "
+                         f"{base}\n")
+        return None
+    return out
+
 
 def cmd_render_briefing(args: list[str]) -> int:
     if not args:
         sys.stderr.write("usage: inference-engine.py render-briefing <plugin>\n")
         return 2
     plugin = args[0]
+    out = briefing_target(plugin)
+    if out is None:
+        return EXIT_USAGE
     catalog = load_catalog_or_exit()
     if isinstance(catalog, int):
         return catalog
@@ -1144,8 +1181,6 @@ def cmd_render_briefing(args: list[str]) -> int:
     if truncated:
         relevant = relevant[:BRIEFING_CAP]
 
-    BRIEFINGS_DIR.mkdir(parents=True, exist_ok=True)
-    out = BRIEFINGS_DIR / f"{plugin}.md"
     lines = [
         f"# {plugin.title()} Briefing — elevated patterns",
         "",
@@ -1193,7 +1228,7 @@ def cmd_render_briefing(args: list[str]) -> int:
                 "",
             ]
 
-    out.write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(out, "\n".join(lines))
     print(f"rendered {out}")
     return 0
 
