@@ -355,7 +355,15 @@ Execute this pipeline fully autonomously:
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py <prompt-file>
 ```
-This loops up to 100 times, fixing hedge words, missing components, filler, format mismatches, and fallbacks. Exits on DEPLOY (≥9 overall, all axes ≥7) or plateau.
+This loops up to 100 times, fixing hedge words, missing components, filler, format mismatches, and fallbacks. Exits on the **full** DEPLOY bar (overall ≥ 9.0, every axis ≥ 7.0, σ ≤ the dynamic floor, and 8/8 SAT assertions) or plateau.
+
+**Exit codes (WIX-EVAL-004):** `0` = DEPLOY, `1` = HOLD, `2` = usage/bad input, `3` = an
+unexpected internal error (distinct from HOLD — the prompt was never fully scored). Pass
+`--json` for a `VERDICT_JSON {...}` line, or `--json-out <path>` to also write it to a file.
+**Exit 0 / "VERDICT: DEPLOY" here is a heuristic verdict only** — self-eval's regex/structure
+scorer, zero model API calls. It is NOT a measured DEPLOY; do not report a prompt as DEPLOY
+to the user on this signal alone. A measured DEPLOY requires the converge skill's Step 2.5
+(`efficacy-replay.py corpus deploy-bar`, real `claude -p` calls, Wilson CI) to ACCEPT.
 
 **Step 3 — Save artifacts** (delivery steps 3-8): token count, self-eval, metadata.json, tests.json, report.pdf, index.json.
 

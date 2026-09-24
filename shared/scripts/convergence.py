@@ -589,19 +589,13 @@ def _render_learnings_md(data):
 
 def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_out=None):
     if not os.path.isfile(prompt_path):
-        msg = f"{prompt_path} not found"
-        print(f"Error: {msg}", file=sys.stderr)
-        _emit_machine_verdict(_verdict_payload(exit_code=EXIT_USAGE_ERROR, error=msg), want_json, json_out)
-        sys.exit(EXIT_USAGE_ERROR)
+        _usage_error(f"{prompt_path} not found", want_json, json_out)
 
     with open(prompt_path, "r", encoding="utf-8") as f:
         text = f.read()
 
     if not text.strip():
-        msg = "Empty prompt file."
-        print(f"Error: {msg}", file=sys.stderr)
-        _emit_machine_verdict(_verdict_payload(exit_code=EXIT_USAGE_ERROR, error=msg), want_json, json_out)
-        sys.exit(EXIT_USAGE_ERROR)
+        _usage_error("Empty prompt file.", want_json, json_out)
 
     prompt_dir = os.path.dirname(os.path.abspath(prompt_path))
     history = []
@@ -637,7 +631,9 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
 
     print(f"\n{'=' * 60}")
     print(f"  WIXIE CONVERGENCE ENGINE (Gauss Method)")
-    print(f"  Target: DEPLOY (overall >= 9.0, all axes >= 7.0, sigma <= floor, 8/8 assertions)")
+    # N3: "(heuristic bar)" — this target is self-eval's regex/structure scorer, never a
+    # measured DEPLOY. See converge SKILL.md Step 2.5 / shared/scripts/efficacy-replay.py.
+    print(f"  Target: DEPLOY (heuristic bar — overall >= 9.0, all axes >= 7.0, sigma <= floor, 8/8 assertions)")
     print(f"  Max iterations: {max_iterations}")
     if num_sessions:
         print(f"  Prior knowledge: {num_sessions} sessions, {num_negs} negative examples, {len(confidence)} confidence scores")
@@ -671,7 +667,7 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
         if deploy:
             print(f"  Iteration {iteration}: {overall}/10 — DEPLOY ({len(passed)}/{len(assertions)} assertions, sigma {sigma:.2f} <= {floor:.2f})")
             _save(prompt_path, text)
-            _print_final(scores, assertions, iteration, text, want_json=want_json, json_out=json_out)
+            _print_final(scores, assertions, iteration, text)
             save_learnings(prompt_dir, learnings, prev_learnings, text)
             return scores
 
@@ -681,7 +677,7 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
             if plateau_count >= 1:
                 print(f"  Iteration {iteration}: {overall}/10 — PLATEAU (HOLD — bar not met)")
                 _save(prompt_path, best_text)
-                _print_final(scores, assertions, iteration, best_text, want_json=want_json, json_out=json_out)
+                _print_final(scores, assertions, iteration, best_text)
                 save_learnings(prompt_dir, learnings, prev_learnings, best_text)
                 return scores
 
@@ -762,7 +758,7 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
     print(f"\n  Max iterations ({max_iterations}) reached. Best: {best_score}/10")
     _save(prompt_path, best_text)
     scores = score_prompt(best_text)
-    _print_final(scores, run_assertions(best_text), max_iterations, best_text, want_json=want_json, json_out=json_out)
+    _print_final(scores, run_assertions(best_text), max_iterations, best_text)
     save_learnings(prompt_dir, learnings, prev_learnings, best_text)
     return scores
 
@@ -811,7 +807,35 @@ def _emit_machine_verdict(payload, want_json, json_out):
             print(f"Warning: could not write --json-out {json_out}: {e}", file=sys.stderr)
 
 
-def _print_final(scores, assertions, iterations, text, want_json=False, json_out=None):
+def _verdict_payload_from_scores(scores, exit_code):
+    """Build the machine verdict from a scores dict _print_final has already stamped
+    (_deploy/_sigma/_sigma_floor/_assertions_passed/_assertions_total). Used by main() as
+    the single emission point after run() returns (N1)."""
+    return _verdict_payload(
+        scores,
+        deploy=scores.get("_deploy", False),
+        sigma=scores.get("_sigma", 0.0),
+        floor=scores.get("_sigma_floor", 0.0),
+        passed=scores.get("_assertions_passed", 0),
+        total=scores.get("_assertions_total", 0),
+        exit_code=exit_code,
+    )
+
+
+def _usage_error(msg, want_json, json_out, show_usage=False):
+    """Bad input / usage error (N2): validate arguments explicitly instead of letting
+    int()/index errors raise uncaught — an uncaught exception in main()'s CLI parsing exits
+    1, which the documented exit codes define as HOLD. This always exits EXIT_USAGE_ERROR (2)
+    and, like every other exit path, emits the machine verdict once if requested."""
+    if show_usage:
+        print("Usage: python convergence.py <prompt-file> [--max N] [--verbose] [--json] [--json-out PATH]",
+              file=sys.stderr)
+    print(f"Error: {msg}", file=sys.stderr)
+    _emit_machine_verdict(_verdict_payload(exit_code=EXIT_USAGE_ERROR, error=msg), want_json, json_out)
+    sys.exit(EXIT_USAGE_ERROR)
+
+
+def _print_final(scores, assertions, iterations, text):
     print(f"\n{'=' * 60}")
     print(f"  FINAL SCORES (after {iterations} iteration{'s' if iterations != 1 else ''})")
     print(f"{'=' * 60}")
@@ -836,22 +860,27 @@ def _print_final(scores, assertions, iterations, text, want_json=False, json_out
     for name, ok, desc in assertions:
         print(f"    {'PASS' if ok else 'FAIL'}  {desc}")
 
-    # Full DEPLOY bar: scores + sigma + all assertions. Anything short is HOLD.
-    print(f"\n  VERDICT: {'DEPLOY' if deploy else 'HOLD'}")
+    # Full DEPLOY bar: scores + sigma + all assertions. Anything short is HOLD. "(heuristic)"
+    # (N3) flags that even a DEPLOY here is self-eval's regex/structure scorer, never a
+    # measured DEPLOY — see converge SKILL.md Step 2.5 / shared/scripts/efficacy-replay.py.
+    print(f"\n  VERDICT: {'DEPLOY (heuristic)' if deploy else 'HOLD'}")
     print(f"{'=' * 60}\n")
 
     # WIX-EVAL-004: stamp the verdict this function just printed onto the scores dict so
     # main() can exit on the SAME verdict the operator just read, instead of re-deriving it
     # from the score-only is_deploy() gate. A missing stamp is treated as HOLD by main().
+    #
+    # N1: the machine verdict (VERDICT_JSON / --json-out) is emitted exactly ONCE — by main(),
+    # after run() returns — and NOT here. Emitting it here too meant that when save_learnings()
+    # raised right after this printed (e.g. learnings.json made read-only), stdout carried a
+    # first, scored VERDICT_JSON (DEPLOY, exit_code 0) followed by a second, contradictory one
+    # from main()'s crash handler (ERROR, exit_code 3) — two machine verdicts for one process
+    # exit. _print_final() now only ever produces the stamp; main() is the single emitter.
     scores["_deploy"] = deploy
     scores["_sigma"] = sigma
     scores["_sigma_floor"] = floor
     scores["_assertions_passed"] = passed
     scores["_assertions_total"] = total
-
-    payload = _verdict_payload(scores, deploy, sigma, floor, passed, total,
-                                exit_code=EXIT_DEPLOY if deploy else EXIT_HOLD)
-    _emit_machine_verdict(payload, want_json, json_out)
     return deploy
 
 
@@ -862,16 +891,28 @@ def main():
     json_out = None
     args = []
     skip_next = False
-    for i, a in enumerate(sys.argv[1:]):
+    argv_tail = sys.argv[1:]
+    for i, a in enumerate(argv_tail):
         if skip_next:
             skip_next = False
             continue
         if a == "--max":
-            max_iter = int(sys.argv[i + 2])
+            # N2: a missing/non-integer --max value used to raise IndexError/ValueError
+            # uncaught, which exits 1 — the documented HOLD code. Validate explicitly instead.
+            if i + 1 >= len(argv_tail):
+                _usage_error("--max requires a value", want_json, json_out)
+            raw = argv_tail[i + 1]
+            try:
+                max_iter = int(raw)
+            except ValueError:
+                _usage_error(f"--max value must be an integer, got {raw!r}", want_json, json_out)
             skip_next = True
             continue
         if a == "--json-out":
-            json_out = sys.argv[i + 2]
+            # N2: same for a missing --json-out value.
+            if i + 1 >= len(argv_tail):
+                _usage_error("--json-out requires a path value", want_json, json_out)
+            json_out = argv_tail[i + 1]
             skip_next = True
             continue
         if a.startswith("--") or a == "-v":
@@ -879,12 +920,7 @@ def main():
         args.append(a)
 
     if not args:
-        print("Usage: python convergence.py <prompt-file> [--max N] [--verbose] [--json] [--json-out PATH]",
-              file=sys.stderr)
-        _emit_machine_verdict(
-            _verdict_payload(exit_code=EXIT_USAGE_ERROR, error="no prompt-file argument given"),
-            want_json, json_out)
-        sys.exit(EXIT_USAGE_ERROR)
+        _usage_error("no prompt-file argument given", want_json, json_out, show_usage=True)
 
     # WIX-EVAL-004: an unexpected exception during scoring/fixing/saving is neither DEPLOY nor
     # HOLD — the prompt was never fully scored, so it must not exit 1 and collide with a clean
@@ -906,7 +942,13 @@ def main():
     # let a run print "VERDICT: HOLD" and still exit 0 — which automation reads as DEPLOY.
     # _deploy is the verdict _print_final actually printed. Absent (no final report was
     # reached) is treated as HOLD: never assume success.
-    sys.exit(EXIT_DEPLOY if scores.get("_deploy") is True else EXIT_HOLD)
+    #
+    # N1: this is the ONLY place the machine verdict is emitted on the success path — once,
+    # after run() has fully returned — so a later failure can never produce a second,
+    # contradictory VERDICT_JSON/--json-out payload for the same process exit.
+    exit_code = EXIT_DEPLOY if scores.get("_deploy") is True else EXIT_HOLD
+    _emit_machine_verdict(_verdict_payload_from_scores(scores, exit_code), want_json, json_out)
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,9 @@ allowed-tools: Bash(python *) Read Write Edit
 
 # Optimizer Agent
 
-You are an autonomous prompt optimization agent. You take a prompt file and drive it toward DEPLOY quality (overall >= 9.0, all axes >= 7.0, all binary assertions pass) without any user input.
+You are an autonomous prompt optimization agent. You take a prompt file and drive it toward DEPLOY quality (overall >= 9.0, all axes >= 7.0, sigma <= the dynamic floor, all 8 binary assertions pass) without any user input.
+
+**This is a heuristic bar, not a measured DEPLOY.** convergence.py's scoring is self-eval's regex/structure scorer — zero model API calls. A heuristic "DEPLOY" from this agent means "ready for the measured step," not "ready to ship." The converge skill's Step 2.5 (`efficacy-replay.py corpus deploy-bar`, real `claude -p` calls, Wilson CI) is what actually measures DEPLOY; this agent never runs it.
 
 ## Inputs
 
@@ -35,6 +37,13 @@ The engine will:
 - Form a hypothesis about which fix will help the weakest axis
 - Apply the fix, re-score, auto-revert if regression detected
 - Save `learnings.md` to the prompt folder with hypothesis/outcome log
+
+**Exit codes (WIX-EVAL-004 — the printed `VERDICT:` line and the exit code always agree):**
+`0` = heuristic DEPLOY (full bar met, not a measured DEPLOY); `1` = HOLD (bar not met);
+`2` = usage/bad input; `3` = an unexpected internal error, distinct from HOLD. Pass
+`--json` for a machine-readable `VERDICT_JSON {...}` line on stdout, or `--json-out <path>`
+to also write it to a file. See `shared/scripts/convergence.py`'s docstring and converge
+`SKILL.md` for the full contract.
 
 ### 2. Capture Final Scores
 
@@ -72,10 +81,14 @@ Generates `report.pdf` (dark theme, single page, full audit with findings and ve
 Return concise summary:
 ```
 Convergence: X.X → Y.Y in N iterations
-Verdict: DEPLOY | BEST EFFORT
+Verdict: DEPLOY (heuristic) | HOLD
 Assertions: M/8 pass
 Clarity: X  Completeness: X  Efficiency: X  Model Fit: X  Resilience: X
 ```
+"DEPLOY (heuristic)" here means the full bar in Step 1 was met by convergence.py's own
+scoring — it is NOT a measured DEPLOY. Say so explicitly if you report DEPLOY: the
+measured step (converge SKILL.md Step 2.5, `efficacy-replay.py`) still has to run and
+accept before this prompt may be called DEPLOY.
 
 ## Fallback
 

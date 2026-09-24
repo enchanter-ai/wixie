@@ -230,6 +230,10 @@ Same pipeline as prompt-crafter. Run autonomously.
 ### Mode A: Text Prompts
 
 1. Run convergence: `python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py <prompt-file>`
+   Exit codes (WIX-EVAL-004): `0` DEPLOY, `1` HOLD, `2` usage/bad input, `3` internal error
+   (distinct from HOLD). **Exit 0 / "VERDICT: DEPLOY" is a heuristic verdict only** — zero
+   model API calls — NOT a measured DEPLOY; the measured step is converge SKILL.md's Step 2.5
+   (`efficacy-replay.py`). Pass `--json`/`--json-out <path>` for a machine-readable verdict.
 2. Save all artifacts (delivery steps 3-8).
 3. Review: check self-eval output for criticals. If any, fix and re-converge (max 3 review cycles).
 4. Deliver with convergence history.
