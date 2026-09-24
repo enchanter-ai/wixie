@@ -111,7 +111,13 @@ class ReplayIdempotence(S.StateTestCase):
         self.ok(S.run_engine(self.state, "backfill", str(seed), timeout=600))
         again = self.ok(S.run_engine(self.state, "backfill", str(seed), timeout=600))
         self.assertEqual(S.out(again).split()[1], "0")
-        self.ok(S.run_engine(self.state, "reconcile", timeout=600))
+        # If the kill tore the line being written, that fragment stays its own rejected line
+        # (reconcile then reports a partial outcome, exit 3) and the record it belonged to was
+        # re-imported by the replay; every event is still counted exactly once.
+        rec = S.run_engine(self.state, "reconcile", timeout=600)
+        self.assertIn(rec.returncode, (0, 3), S.err(rec))
+        self.assertNotIn("Traceback", S.err(rec))
+        self.assertLessEqual(len(S.catalog(self.state).get("rejected", [])), 1)
         self.assertEqual(S.summary(self.state), S.summary(clean))
 
 

@@ -63,26 +63,37 @@ def artifacts_path(ts: datetime | None = None) -> Path:
     return STATE_DIR / "artifacts.jsonl"
 
 
-def append_jsonl_locked(path: Path, line: str) -> None:
-    """Append one JSON line, locked + flushed. Cross-platform.
+class LogAppender:
+    """Append JSON lines to the log, each one locked, flushed and fsynced. Cross-platform.
 
     Closes F-015: parallel races and partial-line writes on artifacts.jsonl
     that biased the SPRT walk. Per spec section G.
+
+    The file is opened once per command, not once per line: on Windows every open with read
+    access is scanned, which made a large backfill spend most of its time in open().
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not line.endswith("\n"):
-        line += "\n"
-    with path.open("a", encoding="utf-8") as f:
+
+    def __init__(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.f = path.open("a+b")
+        self.guard = _newline_guard(self.f)
+
+    def append(self, line: str) -> None:
+        if not line.endswith("\n"):
+            line += "\n"
+        data = self.guard + line.encode("utf-8")
+        f = self.f
         if sys.platform == "win32":
             import msvcrt
+            pos = f.seek(0, os.SEEK_END)
             try:
                 msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
-                f.write(line)
+                f.write(data)
                 f.flush()
                 os.fsync(f.fileno())
             finally:
                 try:
-                    f.seek(0)
+                    f.seek(pos)
                     msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
                 except OSError:
                     pass
@@ -90,11 +101,42 @@ def append_jsonl_locked(path: Path, line: str) -> None:
             import fcntl
             try:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-                f.write(line)
+                f.write(data)
                 f.flush()
                 os.fsync(f.fileno())
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        self.guard = b""
+
+    def close(self) -> None:
+        self.f.close()
+
+    def __enter__(self) -> "LogAppender":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
+def append_jsonl_locked(path: Path, line: str) -> None:
+    """Append one JSON line (see LogAppender)."""
+    with LogAppender(path) as log:
+        log.append(line)
+
+
+def _newline_guard(f) -> bytes:
+    """b"\n" if the file is non-empty and does not end in a newline, else b"".
+
+    WIX-RUN-003: a torn final line (an append interrupted mid-write) must stay its own rejected
+    line instead of swallowing the next record appended after it.
+    """
+    end = f.seek(0, os.SEEK_END)
+    if end == 0:
+        return b""
+    f.seek(end - 1)
+    last = f.read(1)
+    f.seek(0, os.SEEK_END)
+    return b"" if last == b"\n" else b"\n"
 
 
 # ─── Event identity (WIX-RUN-002) ─────────────────────────────────────────────
@@ -455,6 +497,95 @@ def load_catalog_or_exit() -> dict | int:
         return EXIT_CORRUPT_STATE
 
 
+# ─── Record validation and rejection accounting (WIX-RUN-003) ─────────────────
+#
+# Every non-empty line of the artifact stream ends up in exactly one bucket: a counted event, a
+# duplicate of a counted event (same identity), or a REJECTED record reported with file:line and
+# a reason. Lines are split and decoded one at a time from bytes, so one undecodable or torn
+# line cannot hide the lines around it.
+
+EXIT_PARTIAL = 3          # completed, but some input records were rejected (listed on stderr)
+
+EVIDENCE_COUNT_KEYS = ("user_rounds_of_pushback", "iterations", "occurrences", "times_hit")
+MAX_RECURRENCES = 1000
+# Fields reconcile copies into catalog.json: they must be strings when present.
+RECORD_STR_FIELDS = ("code", "title", "category", "signal", "counter", "session_id")
+
+
+def record_problem(rec) -> str | None:
+    """Why this parsed record cannot be counted, or None if it can."""
+    if not isinstance(rec, dict):
+        return f"expected a JSON object, got {type(rec).__name__}"
+    for field in RECORD_STR_FIELDS:
+        if field in rec and not isinstance(rec[field], str):
+            return f"field {field!r} must be a string, got {type(rec[field]).__name__}"
+    for field in ("ts", "date"):
+        if rec.get(field) is not None and not isinstance(rec[field], str):
+            return f"field {field!r} must be a string, got {type(rec[field]).__name__}"
+    tags = rec.get("tags")
+    if tags is not None and not (isinstance(tags, list) and all(isinstance(t, str) for t in tags)):
+        return "field 'tags' must be a list of strings"
+    ev = rec.get("evidence")
+    if ev is not None:
+        if not isinstance(ev, dict):
+            return f"field 'evidence' must be an object, got {type(ev).__name__}"
+        for key in EVIDENCE_COUNT_KEYS:
+            val = ev.get(key)
+            if isinstance(val, int) and not isinstance(val, bool) and val > MAX_RECURRENCES:
+                return f"evidence.{key}={val} exceeds {MAX_RECURRENCES}"
+    if "event_id" in rec and not (isinstance(rec["event_id"], str) and rec["event_id"].strip()):
+        return "field 'event_id' must be a non-empty string"
+    if "_ts_clock" in rec and not isinstance(rec["_ts_clock"], bool):
+        return "field '_ts_clock' must be a boolean"
+    return None
+
+
+def decode_record(raw: bytes) -> tuple[dict | None, str | None]:
+    """bytes of one line -> (record, None) or (None, reason)."""
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return None, f"invalid UTF-8 at byte {exc.start}"
+    try:
+        rec = json.loads(text)
+    except (ValueError, RecursionError) as exc:
+        return None, f"invalid JSON ({type(exc).__name__}: {exc})"[:200]
+    problem = record_problem(rec)
+    return (None, problem) if problem else (rec, None)
+
+
+def excerpt(raw: bytes) -> str:
+    return raw[:120].decode("utf-8", "replace")
+
+
+def read_jsonl(path: Path):
+    """Yield (lineno, record, reason, excerpt) for every non-empty line; reason is None for a
+    usable record. A final line with no trailing newline that does not parse is reported as a
+    torn write."""
+    segments = path.read_bytes().split(b"\n")
+    last = len(segments) - 1
+    for idx, raw in enumerate(segments):
+        if idx == 0 and raw.startswith(b"\xef\xbb\xbf"):
+            raw = raw[3:]
+        raw = raw.strip()
+        if not raw:
+            continue
+        rec, reason = decode_record(raw)
+        if reason and idx == last:
+            reason = f"incomplete final line (no trailing newline): {reason}"
+        yield idx + 1, rec, reason, excerpt(raw)
+
+
+def report_rejected(rejected: list[dict], what: str) -> None:
+    if not rejected:
+        return
+    sys.stderr.write(f"[inference-engine] {len(rejected)} {what} rejected and NOT counted:\n")
+    for r in rejected[:20]:
+        sys.stderr.write(f"  {r['file']}:{r['line']}: {r['reason']} | {r['excerpt']}\n")
+    if len(rejected) > 20:
+        sys.stderr.write(f"  ... and {len(rejected) - 20} more\n")
+
+
 class LogScan:
     """Result of reading the artifact stream: unique events in stream order plus accounting."""
 
@@ -462,6 +593,8 @@ class LogScan:
         self.events: list[dict] = []
         self.identities: set[str] = set()
         self.duplicates: list[dict] = []   # {file, line, identity}: a repeat of a counted event
+        self.rejected: list[dict] = []     # {file, line, reason, excerpt}
+        self.nonempty_lines = 0
 
 
 def log_paths() -> list[Path]:
@@ -480,29 +613,26 @@ def scan_log() -> LogScan:
     identical line within one file gets ordinal n (see with_ordinal), exactly as backfill assigns
     it, so a legacy log keeps every line it always counted. A line whose identity was already
     read (a copy of the log dropped next to it, for example) is the same event and is counted
-    once.
+    once. A line that cannot be counted is rejected with its location (WIX-RUN-003).
     """
     scan = LogScan()
     for p in log_paths():
         repeats: dict[str, int] = {}
-        with p.open("r", encoding="utf-8") as f:
-            for lineno, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                key = canonical(rec)
-                ordinal = repeats.get(key, 0)
-                repeats[key] = ordinal + 1
-                eid = event_identity(with_ordinal(rec, ordinal))
-                if eid in scan.identities:
-                    scan.duplicates.append({"file": p.name, "line": lineno, "identity": eid})
-                    continue
-                scan.identities.add(eid)
-                scan.events.append(rec)
+        for lineno, rec, reason, text in read_jsonl(p):
+            scan.nonempty_lines += 1
+            if reason:
+                scan.rejected.append({"file": p.name, "line": lineno, "reason": reason,
+                                      "excerpt": text})
+                continue
+            key = canonical(rec)
+            ordinal = repeats.get(key, 0)
+            repeats[key] = ordinal + 1
+            eid = event_identity(with_ordinal(rec, ordinal))
+            if eid in scan.identities:
+                scan.duplicates.append({"file": p.name, "line": lineno, "identity": eid})
+                continue
+            scan.identities.add(eid)
+            scan.events.append(rec)
     return scan
 
 
@@ -544,12 +674,18 @@ def cmd_emit(args: list[str]) -> int:
         sys.stderr.write("usage: inference-engine.py emit <record.json|->\n")
         return 2
     src = args[0]
-    raw = sys.stdin.read() if src == "-" else Path(src).read_text(encoding="utf-8")
+    # WIX-RUN-003: read bytes and decode UTF-8 explicitly (the host default may be cp1252), and
+    # reject an unusable record with its source and reason instead of raising.
     try:
-        record = json.loads(raw)
-    except json.JSONDecodeError as e:
-        sys.stderr.write(f"[inference-engine] invalid JSON: {e}\n")
-        return 2
+        raw = sys.stdin.buffer.read() if src == "-" else Path(src).read_bytes()
+    except OSError as exc:
+        sys.stderr.write(f"[inference-engine] cannot read {src}: {exc}\n")
+        return EXIT_USAGE
+    record, reason = decode_record(raw.strip().lstrip(b"\xef\xbb\xbf"))
+    if reason:
+        where = "stdin" if src == "-" else src
+        sys.stderr.write(f"[inference-engine] rejected {where}: {reason}; nothing recorded\n")
+        return EXIT_USAGE
 
     # WIX-RUN-002. emit records an event happening now. Each call is a new event unless the
     # caller supplies an event_id: the engine then mints one, so two genuine occurrences of the
@@ -595,13 +731,16 @@ def cmd_backfill(args: list[str]) -> int:
     seen = scan_log().identities
     repeats: dict[str, int] = {}
     count = skipped = 0
-    for line in src.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
+    rejected: list[dict] = []
+    try:
+        lines = list(read_jsonl(src))
+    except OSError as exc:
+        sys.stderr.write(f"[inference-engine] cannot read {src}: {exc}\n")
+        return EXIT_USAGE
+    log = LogAppender(artifacts_path())
+    for lineno, record, reason, text in lines:
+        if reason:
+            rejected.append({"file": src.name, "line": lineno, "reason": reason, "excerpt": text})
             continue
         stamp_session(record, use_env=False)
         if "ts" not in record:
@@ -620,12 +759,14 @@ def cmd_backfill(args: list[str]) -> int:
             skipped += 1
             continue
         record["_identity"] = eid
-        path = artifacts_path(parse_ts(record["ts"]) or datetime.now(timezone.utc))
-        append_jsonl_locked(path, json.dumps(record, ensure_ascii=False))
+        log.append(json.dumps(record, ensure_ascii=False))
         seen.add(eid)
         count += 1
-    print(f"backfilled {count} new records from {src.name} ({skipped} already recorded)")
-    return 0
+    log.close()
+    print(f"backfilled {count} new records from {src.name} ({skipped} already recorded, "
+          f"{len(rejected)} rejected)")
+    report_rejected(rejected, f"line(s) of {src.name}")
+    return EXIT_PARTIAL if rejected else EXIT_OK
 
 
 # ─── Subcommand: reconcile ────────────────────────────────────────────────────
@@ -640,7 +781,7 @@ def recurrence_count(record: dict) -> int:
     """
     ev = record.get("evidence") or {}
     recurrences = 1
-    for key in ("user_rounds_of_pushback", "iterations", "occurrences", "times_hit"):
+    for key in EVIDENCE_COUNT_KEYS:
         val = ev.get(key)
         if isinstance(val, int) and val > 1:
             recurrences = max(recurrences, val)
@@ -654,7 +795,8 @@ def cmd_reconcile(args: list[str]) -> int:
         sys.stderr.write(
             f"[inference-engine] {len(scan.duplicates)} line(s) repeat an already-counted event "
             "and were counted once\n")
-    if not artifacts:
+    report_rejected(scan.rejected, "artifact line(s)")
+    if not artifacts and not scan.rejected:
         sys.stderr.write("[inference-engine] no artifacts to reconcile\n")
         return 0
 
@@ -731,6 +873,17 @@ def cmd_reconcile(args: list[str]) -> int:
         "elevated_count": sum(1 for p in patterns.values() if p["verdict"] == "elevated"),
         "retired_count": sum(1 for p in patterns.values() if p["verdict"] == "retired"),
         "patterns": patterns,
+        # WIX-RUN-003: complete accounting of the stream. nonempty_lines == events +
+        # duplicate_lines + rejected_lines always holds; outcome is "partial" when any line
+        # was rejected (reconcile then exits 3).
+        "outcome": "partial" if scan.rejected else "clean",
+        "accounting": {
+            "nonempty_lines": scan.nonempty_lines,
+            "events": len(artifacts),
+            "duplicate_lines": len(scan.duplicates),
+            "rejected_lines": len(scan.rejected),
+        },
+        "rejected": [{k: r[k] for k in ("file", "line", "reason")} for r in scan.rejected],
     }
     if recovery:
         new_catalog["last_recovery"] = recovery
@@ -740,8 +893,9 @@ def cmd_reconcile(args: list[str]) -> int:
         f"reconciled {len(artifacts)} artifacts -> "
         f"{new_catalog['total_patterns']} patterns "
         f"({new_catalog['elevated_count']} elevated, {new_catalog['retired_count']} retired)"
+        + (f" [partial: {len(scan.rejected)} rejected line(s)]" if scan.rejected else "")
     )
-    return 0
+    return EXIT_PARTIAL if scan.rejected else EXIT_OK
 
 
 # ─── Subcommand: render-briefing ──────────────────────────────────────────────
@@ -881,6 +1035,8 @@ def cmd_status(_args: list[str]) -> int:
                 "last_reconciled": catalog.get("last_reconciled"),
                 "total_artifacts": catalog.get("total_artifacts", 0),
                 "total_patterns": catalog.get("total_patterns", 0),
+                "last_outcome": catalog.get("outcome"),
+                "rejected_lines": (catalog.get("accounting") or {}).get("rejected_lines"),
                 "verdicts": verdicts,
                 "state_dir": str(STATE_DIR),
             },
