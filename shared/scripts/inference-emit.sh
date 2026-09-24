@@ -5,10 +5,19 @@
 #
 # Usage:
 #   inference-emit.sh --code F07 --category process-discipline \
-#     --title "..." --signal "..." --counter "..." --tags "wixie,lifecycle"
+#     --title "..." --signal "..." --counter "..." --tags "wixie,lifecycle" [--event-id ID]
 #   echo '{"code":"F07",...}' | inference-emit.sh -
 #
-# Requires: bash, jq, python3. Respects WIXIE_INFERENCE_ENABLED=1.
+# Requires: bash, python3 (override with WIXIE_INFERENCE_PYTHON). Respects WIXIE_INFERENCE_ENABLED=1.
+#
+# Exit status (WIX-RUN-001 emit-lock policy):
+#   0  the event is durably recorded: appended to the log ("emitted"), already recorded
+#      ("duplicate"), or written to state/pending/ because the state lock stayed busy for
+#      WIXIE_INFERENCE_EMIT_WAIT seconds ("queued"; folded in exactly once later).
+#      Also 0, silently, when WIXIE_INFERENCE_ENABLED is not 1 (documented no-op).
+#   1  the event was NOT recorded (bad flags, missing engine or python, invalid record, engine
+#      failure); the reason is on stderr. 1, not 2: Claude Code treats a hook's exit 2 as a
+#      blocking error, and a failed emit must not block the tool call that triggered it.
 
 set -uo pipefail
 
@@ -18,21 +27,35 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE="${SCRIPT_DIR}/inference-engine.py"
+PY="${WIXIE_INFERENCE_PYTHON:-python3}"
 
-if [ ! -f "${ENGINE}" ]; then
-  echo "[inference-emit] engine missing at ${ENGINE}" >&2
-  exit 0  # fail open
-fi
+not_recorded() {
+  echo "[inference-emit] event NOT recorded: $*" >&2
+  exit 1
+}
 
-# Pipe-in mode: a JSON record on stdin
+[ -f "${ENGINE}" ] || not_recorded "engine missing at ${ENGINE}"
+command -v "${PY}" >/dev/null 2>&1 || not_recorded "python interpreter '${PY}' not found"
+
+run_engine() {
+  "${PY}" "${ENGINE}" emit -
+  local rc=$?
+  [ "${rc}" -eq 0 ] || not_recorded "engine exited ${rc}"
+  exit 0
+}
+
+# Pipe-in mode: a JSON record on stdin (inherited by the engine).
 if [ "${1:-}" = "-" ]; then
-  python3 "${ENGINE}" emit - < /dev/stdin
-  exit $?
+  run_engine
 fi
 
 # Flag mode: build a JSON record from flags
-code=""; category=""; title=""; cause=""; counter=""; signal=""; tags=""; scope=""
+code=""; category=""; title=""; cause=""; counter=""; signal=""; tags=""; scope=""; event_id=""
 while [ $# -gt 0 ]; do
+  case "$1" in
+    --code|--category|--title|--cause|--counter|--signal|--tags|--scope|--event-id)
+      [ $# -ge 2 ] || not_recorded "flag $1 needs a value" ;;
+  esac
   case "$1" in
     --code)     code="$2"; shift 2 ;;
     --category) category="$2"; shift 2 ;;
@@ -42,34 +65,27 @@ while [ $# -gt 0 ]; do
     --signal)   signal="$2"; shift 2 ;;
     --tags)     tags="$2"; shift 2 ;;    # comma-separated
     --scope)    scope="$2"; shift 2 ;;
-    *) echo "[inference-emit] unknown flag: $1" >&2; exit 0 ;;
+    --event-id) event_id="$2"; shift 2 ;;
+    *) not_recorded "unknown flag: $1" ;;
   esac
 done
 
 if [ -z "${code}" ] || [ -z "${title}" ]; then
-  echo "[inference-emit] --code and --title are required" >&2
-  exit 0
+  not_recorded "--code and --title are required"
 fi
 
-# Build the JSON record via jq (handles escaping).
-record=$(jq -cn \
-  --arg code "${code}" \
-  --arg category "${category}" \
-  --arg title "${title}" \
-  --arg cause "${cause}" \
-  --arg counter "${counter}" \
-  --arg signal "${signal}" \
-  --arg scope "${scope}" \
-  --arg tags "${tags}" \
-  '{
-    code: $code,
-    category: $category,
-    title: $title,
-    cause: $cause,
-    counter: $counter,
-    signal: $signal,
-    scope: $scope,
-    tags: (if $tags == "" then [] else ($tags | split(",")) end)
-  }')
+# Build the JSON record with python's json module (handles escaping; no jq dependency).
+record=$("${PY}" -c '
+import json, sys
+code, category, title, cause, counter, signal, scope, tags, event_id = sys.argv[1:10]
+rec = {"code": code, "category": category, "title": title, "cause": cause,
+       "counter": counter, "signal": signal, "scope": scope,
+       "tags": [t for t in tags.split(",")] if tags else []}
+if event_id:
+    rec["event_id"] = event_id
+sys.stdout.write(json.dumps(rec))  # ASCII-escaped: safe on any console code page
+' "${code}" "${category}" "${title}" "${cause}" "${counter}" "${signal}" "${scope}" "${tags}" "${event_id}") \
+  || not_recorded "could not build the JSON record"
 
-echo "${record}" | python3 "${ENGINE}" emit -
+printf '%s' "${record}" | run_engine
+exit $?

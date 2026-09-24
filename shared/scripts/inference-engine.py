@@ -20,6 +20,8 @@ Algorithms (all stdlib):
 """
 from __future__ import annotations
 
+import contextlib
+import functools
 import hashlib
 import json
 import math
@@ -308,6 +310,7 @@ def _incomplete_beta(a: float, b: float, x: float, steps: int = 256) -> float:
     return max(0.0, min(1.0, s * h / 3.0))
 
 
+@functools.lru_cache(maxsize=None)
 def beta_ci(alpha: float, beta: float, level: float = 0.95) -> tuple[float, float]:
     tail = (1 - level) / 2
     return (_beta_quantile(alpha, beta, tail), _beta_quantile(alpha, beta, 1 - tail))
@@ -356,7 +359,7 @@ def atomic_write_text(path: Path, text: str) -> None:
             f.write(text)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, path)
+        _replace_with_retry(tmp, path)
         tmp = None
     finally:
         if tmp is not None:
@@ -364,6 +367,22 @@ def atomic_write_text(path: Path, text: str) -> None:
                 tmp.unlink()
             except OSError:
                 pass
+
+
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    """os.replace, retried briefly on Windows, where a reader holding dst open makes the
+    rename fail with a sharing violation (PermissionError) for the duration of the read."""
+    delay = 0.01
+    deadline = time.monotonic() + 5.0
+    while True:
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if sys.platform != "win32" or time.monotonic() >= deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.2)
 
 
 def atomic_write_json(path: Path, data) -> None:
@@ -662,6 +681,152 @@ def iso_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# ─── State lock and pending queue (WIX-RUN-001) ───────────────────────────────
+#
+# Every mutation of the state directory (emit's append, backfill, reconcile's read-compute-write)
+# runs under one exclusive lock on state/.lock. Acquisition is a bounded non-blocking poll:
+#
+#   reconcile, backfill   wait up to WIXIE_INFERENCE_LOCK_TIMEOUT seconds (default 30), then exit
+#                         75 (EXIT_LOCK_BUSY) having changed nothing. Retry later.
+#   emit                  waits up to WIXIE_INFERENCE_EMIT_WAIT seconds (default 5). If the lock is
+#                         still busy the event is written, identity and all, to
+#                         state/pending/<identity>.json (atomic rename) and emit exits 0 with the
+#                         outcome token "queued". An event is never dropped.
+#
+# The next lock holder (emit, backfill or reconcile) folds every pending file into the log:
+# append unless its identity is already recorded, fsync, then delete the file. A crash between
+# the append and the delete leaves a file whose identity is already in the log, so the next
+# fold only deletes it: each queued event is recorded exactly once.
+
+EXIT_LOCK_BUSY = 75       # the state lock was not acquired within the bound; nothing changed
+
+LOCK_PATH = STATE_DIR / ".lock"
+PENDING_DIR = STATE_DIR / "pending"
+
+
+class LockBusy(RuntimeError):
+    """The state lock could not be acquired. A distinct outcome, never a silent success."""
+
+
+def env_seconds(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        val = float(raw)
+        if val >= 0 and math.isfinite(val):
+            return val
+    except ValueError:
+        pass
+    sys.stderr.write(f"[inference-engine] ignoring {name}={raw!r}; using {default:g}s\n")
+    return default
+
+
+@contextlib.contextmanager
+def state_lock(timeout: float, purpose: str):
+    """Exclusive, bounded, cross-platform lock over the state directory (state/.lock)."""
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # A symlinked or non-file .lock is refused rather than followed or truncated.
+    if LOCK_PATH.is_symlink():
+        raise LockBusy(f"{LOCK_PATH} is a symlink; refusing to use it")
+    if LOCK_PATH.exists() and not LOCK_PATH.is_file():
+        raise LockBusy(f"{LOCK_PATH} exists and is not a regular file; refusing to use it")
+    try:
+        f = LOCK_PATH.open("a+", encoding="utf-8")
+    except OSError as exc:
+        raise LockBusy(f"cannot open {LOCK_PATH} for {purpose}: {exc}") from exc
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise LockBusy(
+                        f"could not acquire {LOCK_PATH} for {purpose} within {timeout:g}s; "
+                        "another inference-engine process holds it") from None
+                time.sleep(random.uniform(0.005, 0.03))
+        try:
+            f.seek(0)
+            f.truncate()
+            f.write(f"{os.getpid()} {purpose}\n")
+            f.flush()
+        except OSError:
+            pass  # the holder note is diagnostic only
+        yield
+    finally:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        f.close()
+
+
+def queue_pending(record: dict) -> Path:
+    """Durably record an event that could not be appended because the lock was busy."""
+    dest = PENDING_DIR / f"{record['_identity']}.json"
+    atomic_write_text(dest, json.dumps(record, ensure_ascii=False) + "\n")
+    return dest
+
+
+def pending_files() -> list[Path]:
+    if not PENDING_DIR.is_dir():
+        return []
+    return sorted(PENDING_DIR.glob("*.json"))
+
+
+def fold_pending(log: "LogAppender", identities: set[str]) -> tuple[int, int]:
+    """Fold queued events into the log. Caller holds the state lock. Returns (added, already)."""
+    items = []
+    for path in pending_files():
+        rec, reason = decode_record(path.read_bytes().strip())
+        if reason:
+            bad = path.with_name(path.name + ".rejected")
+            os.replace(path, bad)
+            sys.stderr.write(f"[inference-engine] pending event {path.name} rejected ({reason}); "
+                             f"kept as pending/{bad.name}\n")
+            continue
+        items.append((str(rec.get("ts") or ""), path.name, path, rec))
+    added = already = 0
+    for _ts, _name, path, rec in sorted(items, key=lambda t: (t[0], t[1])):
+        eid = event_identity(rec)
+        if eid in identities:
+            already += 1
+        else:
+            rec["_identity"] = eid
+            log.append(json.dumps(rec, ensure_ascii=False))
+            identities.add(eid)
+            added += 1
+        path.unlink()
+    if added or already:
+        sys.stderr.write(f"[inference-engine] folded {added} pending event(s) into the log"
+                         + (f" ({already} already recorded)" if already else "") + "\n")
+    return added, already
+
+
+def clean_stale_temp_files() -> None:
+    """Remove catalog temp files left by an interrupted write. Caller holds the state lock, and
+    only lock holders write the catalog, so none of these can be in flight."""
+    for tmp in STATE_DIR.glob(f"{CATALOG_PATH.name}*.tmp"):
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
 # ─── Subcommand: emit ─────────────────────────────────────────────────────────
 
 
@@ -703,13 +868,34 @@ def cmd_emit(args: list[str]) -> int:
     eid = event_identity(record)
     record["_identity"] = eid
 
-    if supplied_id and eid in scan_log().identities:
-        print(f"duplicate {record.get('code', '?')} (event {eid[:12]}) already recorded; nothing added")
-        return 0
-    path = artifacts_path(parse_ts(record["ts"]) or datetime.now(timezone.utc))
-    append_jsonl_locked(path, json.dumps(record, ensure_ascii=False))
-    print(f"emitted {record.get('code', '?')} -> {path.name} (event {eid[:12]})")
-    return 0
+    # WIX-RUN-001 emit-lock policy: bounded wait, then a durable pending record. The outcome
+    # token (first word on stdout) is one of: emitted, duplicate, queued.
+    code = record.get("code", "?")
+    wait = env_seconds("WIXIE_INFERENCE_EMIT_WAIT", 5.0)
+    try:
+        with state_lock(wait, "emit"):
+            path = artifacts_path()
+            with LogAppender(path) as log:
+                pending = pending_files()
+                identities = scan_log().identities if (supplied_id or pending) else set()
+                if pending:
+                    fold_pending(log, identities)
+                if eid in identities:
+                    print(f"duplicate {code} (event {eid[:12]}) already recorded; nothing added")
+                    return EXIT_OK
+                log.append(json.dumps(record, ensure_ascii=False))
+    except LockBusy as exc:
+        try:
+            dest = queue_pending(record)
+        except OSError as qexc:
+            sys.stderr.write(f"[inference-engine] {exc}; queueing also failed ({qexc}). "
+                             "Event NOT recorded.\n")
+            return EXIT_FAILED
+        print(f"queued {code} -> pending/{dest.name} (event {eid[:12]}); state lock busy, "
+              "folded into the log by the next emit, backfill or reconcile")
+        return EXIT_OK
+    print(f"emitted {code} -> {path.name} (event {eid[:12]})")
+    return EXIT_OK
 
 
 # ─── Subcommand: backfill ─────────────────────────────────────────────────────
@@ -728,16 +914,24 @@ def cmd_backfill(args: list[str]) -> int:
     # ts from date, plugin from scope) and the identity carries the source's own coordinates.
     # Re-running the same import, finishing an interrupted one, or importing a copy of an
     # engine-written log adds only events not already recorded.
-    seen = scan_log().identities
-    repeats: dict[str, int] = {}
-    count = skipped = 0
-    rejected: list[dict] = []
     try:
         lines = list(read_jsonl(src))
     except OSError as exc:
         sys.stderr.write(f"[inference-engine] cannot read {src}: {exc}\n")
         return EXIT_USAGE
-    log = LogAppender(artifacts_path())
+    # WIX-RUN-001: the whole import runs under the state lock, so a concurrent import or emit
+    # cannot interleave between the identity read and the appends.
+    with state_lock(env_seconds("WIXIE_INFERENCE_LOCK_TIMEOUT", 30.0), f"backfill {src.name}"):
+        with LogAppender(artifacts_path()) as log:
+            return _backfill_locked(src, lines, log)
+
+
+def _backfill_locked(src: Path, lines: list, log: "LogAppender") -> int:
+    seen = scan_log().identities
+    fold_pending(log, seen)
+    repeats: dict[str, int] = {}
+    count = skipped = 0
+    rejected: list[dict] = []
     for lineno, record, reason, text in lines:
         if reason:
             rejected.append({"file": src.name, "line": lineno, "reason": reason, "excerpt": text})
@@ -762,7 +956,6 @@ def cmd_backfill(args: list[str]) -> int:
         log.append(json.dumps(record, ensure_ascii=False))
         seen.add(eid)
         count += 1
-    log.close()
     print(f"backfilled {count} new records from {src.name} ({skipped} already recorded, "
           f"{len(rejected)} rejected)")
     report_rejected(rejected, f"line(s) of {src.name}")
@@ -789,6 +982,17 @@ def recurrence_count(record: dict) -> int:
 
 
 def cmd_reconcile(args: list[str]) -> int:
+    # WIX-RUN-001: read-compute-write runs under the state lock, so concurrent reconciles
+    # serialize (or return 75 after the bound) instead of racing on the catalog.
+    with state_lock(env_seconds("WIXIE_INFERENCE_LOCK_TIMEOUT", 30.0), "reconcile"):
+        if pending_files():
+            with LogAppender(artifacts_path()) as log:
+                fold_pending(log, scan_log().identities)
+        clean_stale_temp_files()
+        return _reconcile_locked()
+
+
+def _reconcile_locked() -> int:
     scan = scan_log()
     artifacts = scan.events
     if scan.duplicates:
@@ -1068,7 +1272,14 @@ def main(argv: list[str]) -> int:
         sys.stderr.write(f"unknown subcommand: {cmd}\n")
         sys.stderr.write(f"available: {', '.join(COMMANDS)}\n")
         return 2
-    return COMMANDS[cmd](argv[2:])
+    try:
+        return COMMANDS[cmd](argv[2:])
+    except LockBusy as exc:
+        sys.stderr.write(f"[inference-engine] {cmd}: {exc}. Nothing was changed; retry later.\n")
+        return EXIT_LOCK_BUSY
+    except OSError as exc:
+        sys.stderr.write(f"[inference-engine] {cmd} failed: {type(exc).__name__}: {exc}\n")
+        return EXIT_FAILED
 
 
 if __name__ == "__main__":
