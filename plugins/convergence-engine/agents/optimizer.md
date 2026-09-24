@@ -76,6 +76,11 @@ python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder>
 
 Generates `report.pdf` (dark theme, single page, full audit with findings and verdict).
 
+Exit codes (WIX-G0-REPORT-001): `0` = `report.pdf` written and validated. `1` = PDF
+conversion failed; `report.html` was written as the documented fallback ("Done (HTML
+fallback)."), a degraded-but-valid outcome — not an error to retry blindly. `2` = usage
+error (missing prompt-folder or `metadata.json`).
+
 ### 6. Report Results
 
 Return concise summary:

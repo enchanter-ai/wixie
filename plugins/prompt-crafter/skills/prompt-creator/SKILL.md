@@ -300,6 +300,11 @@ python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder-p
 ```
 This generates a dark-themed single-page PDF audit report. Do NOT create report.html, report.md, or report.pdf yourself — the script handles it.
 
+Exit codes (WIX-G0-REPORT-001): `0` = `report.pdf` written and validated. `1` = PDF
+conversion failed; `report.html` was written as the documented fallback ("Done (HTML
+fallback)."), a degraded-but-valid outcome — do not treat it as a failure to retry
+blindly. `2` = usage error (missing prompt-folder or `metadata.json`).
+
 8. **Update index.json:** Read `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json`, append an entry for this prompt, and write it back.
 
 #### Final folder contents

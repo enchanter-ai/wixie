@@ -117,6 +117,11 @@ python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder>
 ```
+Exit codes (WIX-G0-REPORT-001): `0` = `report.pdf` was produced and validated this run.
+`1` = PDF conversion failed; `report.html` was written as the documented fallback
+("Done (HTML fallback)."). This is a degraded but valid, controlled outcome — not an
+unhandled exception, and not an error to retry blindly. `2` = usage error (missing
+prompt-folder argument, or no `metadata.json`).
 
 5. Update `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json`.
 
