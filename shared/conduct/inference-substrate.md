@@ -129,8 +129,10 @@ the next record.
 
 A catalog that cannot be read or lacks the catalog shape is moved by `reconcile` to
 `catalog.json.corrupt-<UTC stamp>` and rebuilt from the log; first-crossing stamps from entries
-that were still well-formed are kept and `last_recovery` is recorded. Read-only commands exit
-74 until then. Catalog writes are atomic (unique temp file, fsync, rename).
+that were still well-formed are kept and `last_recovery` is recorded. Wrongly typed top-level
+fields (`accounting`, `rejected`, `outcome`, totals) count as corrupt too. With an empty or
+missing log, reconcile still quarantines a corrupt catalog and leaves none. Read-only commands
+exit 74 until then. Catalog writes are atomic (unique temp file, fsync, rename).
 
 ### Emit-lock policy
 

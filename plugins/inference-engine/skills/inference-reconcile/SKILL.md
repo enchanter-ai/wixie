@@ -70,13 +70,16 @@ reporting it (exit 3) until an operator deals with it; it is never silently drop
 ### Corrupt catalog: quarantine and recovery
 
 `catalog.json` is derived state. If it cannot be read or does not have the catalog shape
-(truncated or invalid JSON, not UTF-8, wrong top-level type, a pattern entry that is not an
-object or has a wrongly typed field), reconcile moves it to `state/catalog.json.corrupt-<UTC
+(truncated or invalid JSON, not UTF-8, wrong top-level type, a wrongly typed top-level field
+such as `accounting` or `rejected`, a pattern entry that is not an object or has a wrongly
+typed field), reconcile moves it to `state/catalog.json.corrupt-<UTC
 stamp>` (never deleted), rebuilds the catalog from the artifact log, keeps the first-crossing
 stamps (`elevated_at` / `retired_at`) of prior entries that were still well-formed, records
 `last_recovery` (`at`, `reason`, `quarantined_as`, `stamps_carried_from`) in the new catalog, and
 exits 0 (or 3 if lines were also rejected). While the catalog is corrupt, `status`, `query` and
-`render-briefing` exit 74 and point here. A catalog write is atomic (unique temp file, fsync,
+`render-briefing` exit 74 and point here. When the artifact log is empty or missing,
+reconcile still quarantines a corrupt catalog (and writes none, the normal empty state), so
+the 74 loop always ends. A catalog write is atomic (unique temp file, fsync,
 rename): an interrupted write leaves the previous catalog, and stale temp files are removed by
 the next reconcile.
 

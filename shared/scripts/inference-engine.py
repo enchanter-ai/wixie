@@ -501,7 +501,30 @@ def load_catalog() -> dict:
         problem = pattern_problem(pid, pat)
         if problem:
             raise CorruptCatalog(problem, salvage=data)
+    problem = top_level_problem(data)
+    if problem:
+        raise CorruptCatalog(problem, salvage=data)
     return data
+
+
+# Top-level catalog fields other than "patterns": readers (status, the next reconcile) use them,
+# so a wrong type is corruption, not something to crash on.
+TOP_LEVEL_TYPES = {
+    "version": int, "last_reconciled": (str, type(None)), "total_artifacts": int,
+    "total_patterns": int, "elevated_count": int, "retired_count": int, "outcome": str,
+    "accounting": dict, "rejected": list, "last_recovery": dict,
+}
+
+
+def top_level_problem(data: dict) -> str | None:
+    for field, typ in TOP_LEVEL_TYPES.items():
+        if field in data and not isinstance(data[field], typ):
+            return f"top-level field {field!r} has type {type(data[field]).__name__}"
+    if not all(isinstance(v, int) for v in data.get("accounting", {}).values()):
+        return "top-level field 'accounting' has a non-integer value"
+    if not all(isinstance(r, dict) for r in data.get("rejected", [])):
+        return "top-level field 'rejected' has a non-object entry"
+    return None
 
 
 def quarantine_catalog() -> Path:
@@ -1044,6 +1067,11 @@ def _reconcile_locked() -> int:
             "and were counted once\n")
     report_rejected(scan.rejected, "artifact line(s)")
     if not artifacts and not scan.rejected:
+        # Still repair a corrupt catalog (WIX-RUN-004): otherwise read-only commands would keep
+        # sending the caller here while this no-op left the damage in place. The quarantine is
+        # the whole repair; with no events there is nothing to rebuild, and a missing catalog
+        # is the normal empty state.
+        load_catalog_for_rebuild()
         sys.stderr.write("[inference-engine] no artifacts to reconcile\n")
         return 0
 
