@@ -59,13 +59,15 @@ Briefing: state/briefings/wixie.md
 | Exit | Meaning | What to tell the caller |
 |------|---------|-------------------------|
 | 0    | clean: every non-empty log line is counted (or is a repeat of a counted event). Also the no-op when the log is empty. | the summary line |
-| 3    | partial: the catalog was rebuilt from every usable line, but some lines were rejected. stderr lists each as `<file>:<line>: <reason>`; `catalog.json` has `outcome: "partial"`, `accounting` and the full `rejected` list. | the summary line plus the rejected count; do not call it clean |
+| 3    | partial: the catalog was rebuilt from every usable line, but some lines were rejected. The summary line ends `[partial: N rejected line(s), M new]`. stderr lists the M lines rejected for the first time (not in the previous catalog) as `<file>:<line>: <reason>`, then only a count of the older ones; `catalog.json` has `outcome: "partial"`, `accounting` (incl. `new_rejected_lines`) and the full `rejected` list, each entry marked `new: true/false`. | the summary line; if M > 0 say that NEW records were rejected and quote them; do not call it clean |
 | 75   | busy: another inference-engine process held `state/.lock` for `WIXIE_INFERENCE_LOCK_TIMEOUT` seconds (default 30). Nothing was changed. | retry later |
 | 1    | operational failure (one-line reason on stderr, no traceback) | the error verbatim |
 
 `catalog.json` accounting always satisfies `nonempty_lines == events + duplicate_lines +
 rejected_lines`. A rejected line stays in the append-only log, so later reconciles keep
-reporting it (exit 3) until an operator deals with it; it is never silently dropped.
+reporting it (exit 3) until an operator deals with it; it is never silently dropped. Because
+exit 3 persists, `new_rejected_lines` is the signal that something new went wrong: it counts
+lines not listed by the previous catalog (all of them after a catalog recovery).
 
 ### Corrupt catalog: quarantine and recovery
 

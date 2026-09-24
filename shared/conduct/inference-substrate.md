@@ -122,6 +122,10 @@ Every non-empty line of the log is counted, recognised as a repeat of a counted 
 rejected with file, line and reason (invalid UTF-8, invalid JSON, not an object, a wrongly
 typed field, an evidence count over 1000, or a torn final line). `reconcile` reports rejected
 lines on stderr, stores `outcome`, `accounting` and `rejected` in `catalog.json`, and exits 3.
+Since a rejected line stays in the append-only log and exit 3 therefore persists, rejections
+that are new since the previous reconcile are counted separately (`accounting.new_rejected_lines`,
+`new: true` on the entry, `M new` in the summary line) and listed first on stderr, so a fresh
+one is never hidden behind older ones.
 Appends write a newline first when the log does not end in one, so a torn write cannot swallow
 the next record.
 

@@ -539,13 +539,15 @@ def quarantine_catalog() -> Path:
     return dest
 
 
-def load_catalog_for_rebuild() -> tuple[dict, dict | None]:
+def load_catalog_for_rebuild() -> tuple[dict, dict | None, list]:
     """reconcile's read: a corrupt catalog is quarantined instead of aborting the rebuild.
 
-    Returns (prior_patterns, recovery) where recovery is None when the catalog was usable.
+    Returns (prior_patterns, recovery, prior_rejected); recovery is None when the catalog was
+    usable. After a recovery prior_rejected is empty, so every rejected line reports as new.
     """
     try:
-        return load_catalog().get("patterns", {}), None
+        prior = load_catalog()
+        return prior.get("patterns", {}), None, prior.get("rejected", [])
     except CorruptCatalog as exc:
         dest = quarantine_catalog()
         prior: dict = {}
@@ -559,7 +561,7 @@ def load_catalog_for_rebuild() -> tuple[dict, dict | None]:
             f"[inference-engine] catalog.json is corrupt ({exc.reason}); moved to {dest.name} "
             f"and rebuilding from the artifact log ({len(prior)} well-formed prior entries kept "
             "for their first-crossing stamps)\n")
-        return prior, recovery
+        return prior, recovery, []
 
 
 def load_catalog_or_exit() -> dict | int:
@@ -653,14 +655,28 @@ def read_jsonl(path: Path):
         yield idx + 1, rec, reason, excerpt(raw)
 
 
-def report_rejected(rejected: list[dict], what: str) -> None:
+def report_rejected(rejected: list[dict], what: str, limit: int = 20) -> None:
     if not rejected:
         return
     sys.stderr.write(f"[inference-engine] {len(rejected)} {what} rejected and NOT counted:\n")
-    for r in rejected[:20]:
+    for r in rejected[:limit]:
         sys.stderr.write(f"  {r['file']}:{r['line']}: {r['reason']} | {r['excerpt']}\n")
-    if len(rejected) > 20:
-        sys.stderr.write(f"  ... and {len(rejected) - 20} more\n")
+    if len(rejected) > limit:
+        sys.stderr.write(f"  ... and {len(rejected) - limit} more\n")
+
+
+def rejection_key(r: dict) -> tuple:
+    return (r.get("file"), r.get("line"), r.get("reason"), r.get("excerpt"))
+
+
+def split_new_rejections(rejected: list[dict], prior: list) -> list[dict]:
+    """Mark each rejected line new=True unless the previous catalog already listed it (same
+    file, line, reason and excerpt: the log is append-only, so an old rejection keeps its
+    place). Returns the new ones, in log order."""
+    seen = {rejection_key(r) for r in prior if isinstance(r, dict)}
+    for r in rejected:
+        r["new"] = rejection_key(r) not in seen
+    return [r for r in rejected if r["new"]]
 
 
 class LogScan:
@@ -1061,24 +1077,32 @@ def cmd_reconcile(args: list[str]) -> int:
 def _reconcile_locked() -> int:
     scan = scan_log()
     artifacts = scan.events
+    # Event-sourced rebuild: derive the whole pattern state from the artifact log
+    # every reconcile. Preserve only the first-crossing timestamps from the
+    # previous catalog so elevation/retirement history is durable.
+    # Read (and if corrupt, quarantine) the prior catalog first, even when there is nothing to
+    # rebuild: otherwise read-only commands would keep sending the caller here while the no-op
+    # below left the damage in place (WIX-RUN-004).
+    prior_patterns, recovery, prior_rejected = load_catalog_for_rebuild()
     if scan.duplicates:
         sys.stderr.write(
             f"[inference-engine] {len(scan.duplicates)} line(s) repeat an already-counted event "
             "and were counted once\n")
-    report_rejected(scan.rejected, "artifact line(s)")
+    # WIX-RUN-003: rejections NEW since the previous reconcile are listed first and in full (up
+    # to 200), so a fresh one is never hidden behind older, already-reported ones.
+    new_rejected = split_new_rejections(scan.rejected, prior_rejected)
+    report_rejected(new_rejected, "NEW artifact line(s) since the last reconcile", limit=200)
+    old_count = len(scan.rejected) - len(new_rejected)
+    if old_count:
+        sys.stderr.write(
+            f"[inference-engine] {old_count} previously reported rejected line(s) are still in "
+            "the log and NOT counted (listed in catalog.json 'rejected')\n")
     if not artifacts and not scan.rejected:
-        # Still repair a corrupt catalog (WIX-RUN-004): otherwise read-only commands would keep
-        # sending the caller here while this no-op left the damage in place. The quarantine is
-        # the whole repair; with no events there is nothing to rebuild, and a missing catalog
-        # is the normal empty state.
-        load_catalog_for_rebuild()
+        # With no events the quarantine above is the whole repair; a missing catalog is the
+        # normal empty state.
         sys.stderr.write("[inference-engine] no artifacts to reconcile\n")
         return 0
 
-    # Event-sourced rebuild: derive the whole pattern state from the artifact log
-    # every reconcile. Preserve only the first-crossing timestamps from the
-    # previous catalog so elevation/retirement history is durable.
-    prior_patterns, recovery = load_catalog_for_rebuild()
     patterns: dict[str, dict] = {}
     rng = random.Random(42)  # deterministic reservoir selection across runs
     now = datetime.now(timezone.utc)
@@ -1157,8 +1181,10 @@ def _reconcile_locked() -> int:
             "events": len(artifacts),
             "duplicate_lines": len(scan.duplicates),
             "rejected_lines": len(scan.rejected),
+            "new_rejected_lines": len(new_rejected),
         },
-        "rejected": [{k: r[k] for k in ("file", "line", "reason")} for r in scan.rejected],
+        "rejected": [{k: r[k] for k in ("file", "line", "reason", "excerpt", "new")}
+                     for r in scan.rejected],
     }
     if recovery:
         new_catalog["last_recovery"] = recovery
@@ -1168,7 +1194,8 @@ def _reconcile_locked() -> int:
         f"reconciled {len(artifacts)} artifacts -> "
         f"{new_catalog['total_patterns']} patterns "
         f"({new_catalog['elevated_count']} elevated, {new_catalog['retired_count']} retired)"
-        + (f" [partial: {len(scan.rejected)} rejected line(s)]" if scan.rejected else "")
+        + (f" [partial: {len(scan.rejected)} rejected line(s), {len(new_rejected)} new]"
+           if scan.rejected else "")
     )
     return EXIT_PARTIAL if scan.rejected else EXIT_OK
 
@@ -1346,6 +1373,7 @@ def cmd_status(_args: list[str]) -> int:
                 "total_patterns": catalog.get("total_patterns", 0),
                 "last_outcome": catalog.get("outcome"),
                 "rejected_lines": (catalog.get("accounting") or {}).get("rejected_lines"),
+                "new_rejected_lines": (catalog.get("accounting") or {}).get("new_rejected_lines"),
                 "verdicts": verdicts,
                 "state_dir": str(STATE_DIR),
             },
