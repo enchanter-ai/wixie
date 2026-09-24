@@ -56,6 +56,9 @@ Every stored line carries `_identity`: a SHA-256 over the record minus the engin
 (`_identity`, `_session_source`, `_ts_clock`). The event's own coordinates are part of it:
 `session_id`, `source_session`, a supplied `ts` or `date`, `event_id`, `source_ordinal`.
 
+- A stored line whose `_identity` recomputes from the line is that event, so a copy of the log
+  (plain, concatenated or duplicated) never adds evidence. Known limits are listed in
+  `shared/conduct/inference-substrate.md` (Event identity).
 - Each emit is a new event: when the record has no `event_id` the engine mints one, so two
   genuine occurrences of the same payload in one session are two observations.
 - To make a retry idempotent (a hook re-run after an ambiguous failure), supply your own

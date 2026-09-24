@@ -199,6 +199,31 @@ def event_identity(record: dict) -> str:
     return hashlib.sha256(canonical(record).encode("utf-8")).hexdigest()[:32]
 
 
+def verified_identity(record: dict) -> str | None:
+    """The record's stored _identity if it recomputes exactly from the record, else None.
+
+    A line the engine wrote carries its identity. When that identity verifies, it IS the
+    event, with no per-file repeat counter: any copy, concatenation or in-place duplication of
+    an engine-written log therefore adds nothing. A missing, edited or forged _identity does not
+    verify and the line is identified from its content (plus repeat counter) instead.
+    """
+    stored = record.get("_identity")
+    if isinstance(stored, str) and stored == event_identity(record):
+        return stored
+    return None
+
+
+def line_identity(record: dict, repeats: dict[str, int]) -> str:
+    """Identity of one line read from a file, updating that file's repeat counter."""
+    eid = verified_identity(record)
+    if eid is not None:
+        return eid
+    key = canonical(record)
+    ordinal = repeats.get(key, 0)
+    repeats[key] = ordinal + 1
+    return event_identity(with_ordinal(record, ordinal))
+
+
 def resolve_session(record: dict, *, use_env: bool) -> tuple[str, str]:
     """Source-session precedence, first match wins:
 
@@ -638,8 +663,9 @@ def log_paths() -> list[Path]:
 def scan_log() -> LogScan:
     """Load every artifact from state/artifacts.jsonl plus any legacy artifacts-*.jsonl files.
 
-    Each line is identified by event_identity() over the stored record; the n-th repeat of an
-    identical line within one file gets ordinal n (see with_ordinal), exactly as backfill assigns
+    A line carrying a verified _identity is that event (see verified_identity). Any other line
+    is identified by event_identity() over the stored record; the n-th repeat of an identical
+    such line within one file gets ordinal n (see with_ordinal), exactly as backfill assigns
     it, so a legacy log keeps every line it always counted. A line whose identity was already
     read (a copy of the log dropped next to it, for example) is the same event and is counted
     once. A line that cannot be counted is rejected with its location (WIX-RUN-003).
@@ -653,10 +679,7 @@ def scan_log() -> LogScan:
                 scan.rejected.append({"file": p.name, "line": lineno, "reason": reason,
                                       "excerpt": text})
                 continue
-            key = canonical(rec)
-            ordinal = repeats.get(key, 0)
-            repeats[key] = ordinal + 1
-            eid = event_identity(with_ordinal(rec, ordinal))
+            eid = line_identity(rec, repeats)
             if eid in scan.identities:
                 scan.duplicates.append({"file": p.name, "line": lineno, "identity": eid})
                 continue
@@ -945,6 +968,16 @@ def _backfill_locked(src: Path, lines: list, log: "LogAppender") -> int:
     for lineno, record, reason, text in lines:
         if reason:
             rejected.append({"file": src.name, "line": lineno, "reason": reason, "excerpt": text})
+            continue
+        eid = verified_identity(record)
+        if eid is not None:
+            # A line an engine already wrote (a copy of a log): it is that event, unchanged.
+            if eid in seen:
+                skipped += 1
+                continue
+            log.append(json.dumps(record, ensure_ascii=False))
+            seen.add(eid)
+            count += 1
             continue
         stamp_session(record, use_env=False)
         if "ts" not in record:

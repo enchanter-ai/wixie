@@ -74,9 +74,27 @@ accumulates; identity only stops one event from being counted twice.
   `source_ordinal` n and counts as its own event.
 - Identical content from different sessions, dates or supplied timestamps stays distinct.
 - A `ts` taken from the engine's clock is flagged `_ts_clock` and left out of the identity.
-- Reading the log applies the same rule, so a copy of the log left next to it
-  (`artifacts-*.jsonl`) is not double-counted, and a pre-identity log keeps every line it
-  counted before.
+- A line that carries a stored `_identity` which recomputes exactly from the line is that
+  event, with no repeat counter. So any copy of an engine-written log adds nothing, whether it is
+  re-imported with `backfill`, left next to the log as `artifacts-*.jsonl`, concatenated with
+  itself, or duplicated in place. An `_identity` that does not verify (edited or forged) is
+  ignored and the line is identified from its content.
+- Lines without a verified `_identity` (pre-identity logs, precedent sources) use the per-file
+  repeat counter, so a pre-identity log keeps every line it counted before.
+
+Known limits of the identity rule (inherent, not bugs):
+
+- **An edited record is a new event.** Identity covers the whole record, so re-importing a
+  source line after correcting a typo in any field counts it again. Fix records before the
+  first import, or give them an `event_id`.
+- **`source_ordinal` is not injective.** A source `[X, X, X-with-source_ordinal-1]` counts 2,
+  not 3: the second `X` is numbered `source_ordinal` 1 and collides with the third line.
+- **Pre-identity lines have no copy protection.** A pre-identity log (no `_identity` on its
+  lines) concatenated with itself is indistinguishable from genuine repeats and counts twice.
+  Lines written by this engine version always carry `_identity`.
+- **Truncating a source loses its history.** After a source file is truncated and appended to
+  again, a genuinely new line identical in content and coordinates (same session, same date)
+  to an already-imported one is treated as a replay. Only an `event_id` can tell them apart.
 
 ### Session identity precedence
 
