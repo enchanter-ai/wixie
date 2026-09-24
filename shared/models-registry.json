@@ -21,7 +21,7 @@
           "input": 5.0,
           "output": 25.0
         },
-        "source": "Anthropic model-deprecations page re-checked 2026-09-23 (Active; temperature/top_p/top_k non-default values rejected on Claude 4.7 and later); pricing from the claude-api model table cached 2026-06-24",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -43,7 +43,7 @@
           "input": 3.0,
           "output": 15.0
         },
-        "source": "Anthropic model-deprecations page re-checked 2026-09-23 (Active; temperature/top_p/top_k non-default values rejected on Claude 4.7 and later); pricing from the claude-api model table cached 2026-06-24",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -65,7 +65,7 @@
           "input": 1.0,
           "output": 5.0
         },
-        "source": "Anthropic model-deprecations page re-checked 2026-09-23 (Active; temperature/top_p/top_k non-default values rejected on Claude 4.7 and later); pricing from the claude-api model table cached 2026-06-24; alias of snapshot claude-haiku-4-5-20251001",
+        "source": "availability: Active (as claude-haiku-4-5-20251001; claude-haiku-4-5 is its alias) per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -697,7 +697,7 @@
           "input": 5.0,
           "output": 25.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -719,7 +719,7 @@
           "input": 5.0,
           "output": 25.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -741,7 +741,7 @@
           "input": 5.0,
           "output": 25.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -760,10 +760,10 @@
         "availability": "available",
         "sampling": "default_only",
         "pricing_usd_per_mtok": {
-          "input": 3.0,
-          "output": 15.0
+          "input": 2.0,
+          "output": 10.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; standard price per this entry's key_constraint (the cached table's $2/$10 was introductory pricing through 2026-08-31)",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: pricing page https://platform.claude.com/docs/en/about-claude/pricing (orchestrator fetch 2026-09-24) ($2/$10 is the standard price; the scheduled increase to $3/$15 did not occur)",
         "checked": "2026-09-24"
       }
     },
@@ -2695,7 +2695,7 @@
           "input": 10.0,
           "output": 50.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -2717,7 +2717,7 @@
           "input": 10.0,
           "output": 50.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; Project Glasswing participants only",
+        "source": "availability: Active, limited availability (Project Glasswing) per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -2870,7 +2870,7 @@
           "input": 10.0,
           "output": 50.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "source": "availability: Active per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -2893,7 +2893,7 @@
           "input": 10.0,
           "output": 50.0
         },
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; Project Glasswing participants only",
+        "source": "availability: Active, limited availability (Project Glasswing) per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: price from the claude-api model table cached 2026-06-24; pricing page (orchestrator fetch 2026-09-24) not confirmed to the implementer for this entry",
         "checked": "2026-09-24"
       }
     },
@@ -2912,8 +2912,11 @@
         "model_id": "claude-opus-4-5",
         "availability": "available",
         "sampling": "adjustable",
-        "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; price not in that table",
+        "pricing_usd_per_mtok": {
+          "input": 5.0,
+          "output": 25.0
+        },
+        "source": "availability: Active (as claude-opus-4-5-20251101; claude-opus-4-5 is its alias) per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: pricing page https://platform.claude.com/docs/en/about-claude/pricing (orchestrator fetch 2026-09-24)",
         "checked": "2026-09-24"
       }
     },
@@ -2932,8 +2935,11 @@
         "model_id": "claude-sonnet-4-5",
         "availability": "available",
         "sampling": "adjustable",
-        "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; price not in that table",
+        "pricing_usd_per_mtok": {
+          "input": 3.0,
+          "output": 15.0
+        },
+        "source": "availability: Active (as claude-sonnet-4-5-20250929; claude-sonnet-4-5 is its alias) per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); sampling: non-default temperature/top_p/top_k rejected on 4.7 and later per the deprecations page; price: pricing page https://platform.claude.com/docs/en/about-claude/pricing (orchestrator fetch 2026-09-24)",
         "checked": "2026-09-24"
       }
     },
@@ -4636,7 +4642,7 @@
         "availability": "unavailable",
         "sampling": null,
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "source": "availability: Retired 2026-01-05 per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); the registry id is not a provider model id",
         "checked": "2026-09-24"
       }
     },
@@ -4656,7 +4662,7 @@
         "availability": "unavailable",
         "sampling": null,
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "source": "availability: listed as retired in the claude-api model table cached 2026-06-24 (not re-verified live; not in the orchestrator's deprecations-page extract); the registry id is not a provider model id",
         "checked": "2026-09-24"
       }
     },
@@ -4676,7 +4682,7 @@
         "availability": "unavailable",
         "sampling": null,
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "source": "availability: Retired 2026-04-20 per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); the registry id is not a provider model id",
         "checked": "2026-09-24"
       }
     },
@@ -4696,7 +4702,7 @@
         "availability": "unavailable",
         "sampling": null,
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "source": "availability: listed as retired in the claude-api model table cached 2026-06-24 (not re-verified live; not in the orchestrator's deprecations-page extract); the registry id is not a provider model id",
         "checked": "2026-09-24"
       }
     },
@@ -4716,7 +4722,7 @@
         "availability": "unavailable",
         "sampling": null,
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "source": "availability: Retired 2026-02-19 per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); the registry id is not a provider model id",
         "checked": "2026-09-24"
       }
     },
@@ -4736,7 +4742,7 @@
         "availability": "unavailable",
         "sampling": null,
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "source": "availability: Retired 2026-02-19 per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23); the registry id is not a provider model id",
         "checked": "2026-09-24"
       }
     },
@@ -4756,7 +4762,7 @@
         "availability": "unavailable",
         "sampling": "adjustable",
         "pricing_usd_per_mtok": null,
-        "source": "claude-api model table cached 2026-06-24 lists it Deprecated with retirement 2026-08-05, which has passed; not re-verified live",
+        "source": "availability: Retired 2026-08-05 per model-deprecations page https://platform.claude.com/docs/en/about-claude/model-deprecations (orchestrator re-check 2026-09-23)",
         "checked": "2026-09-24"
       }
     },
