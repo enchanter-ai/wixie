@@ -11,7 +11,19 @@
       "reasoning": "extended-thinking",
       "cot_approach": "Built-in. Use 'think thoroughly' + effort parameter. Do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Avoid aggressive language (MUST/CRITICAL) — causes overtriggering"
+      "key_constraint": "Avoid aggressive language (MUST/CRITICAL) — causes overtriggering",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-opus-4-6",
+        "availability": "available",
+        "sampling": "adjustable",
+        "pricing_usd_per_mtok": {
+          "input": 5.0,
+          "output": 25.0
+        },
+        "source": "Anthropic model-deprecations page re-checked 2026-09-23 (Active; temperature/top_p/top_k non-default values rejected on Claude 4.7 and later); pricing from the claude-api model table cached 2026-06-24",
+        "checked": "2026-09-24"
+      }
     },
     "claude-sonnet-4-6": {
       "family": "Claude 4.x",
@@ -21,7 +33,19 @@
       "reasoning": "standard",
       "cot_approach": "Explicit CoT helps. Use 'think thoroughly before responding'.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Avoid aggressive language — causes overtriggering"
+      "key_constraint": "Avoid aggressive language — causes overtriggering",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-sonnet-4-6",
+        "availability": "available",
+        "sampling": "adjustable",
+        "pricing_usd_per_mtok": {
+          "input": 3.0,
+          "output": 15.0
+        },
+        "source": "Anthropic model-deprecations page re-checked 2026-09-23 (Active; temperature/top_p/top_k non-default values rejected on Claude 4.7 and later); pricing from the claude-api model table cached 2026-06-24",
+        "checked": "2026-09-24"
+      }
     },
     "claude-haiku-4-5": {
       "family": "Claude 4.x",
@@ -31,7 +55,19 @@
       "reasoning": "standard",
       "cot_approach": "Keep simple and direct. Less capable at complex reasoning chains.",
       "few_shot": "2-3 short examples in <example> tags",
-      "key_constraint": "Keep prompts simple — less capable reasoning"
+      "key_constraint": "Keep prompts simple — less capable reasoning",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-haiku-4-5",
+        "availability": "available",
+        "sampling": "adjustable",
+        "pricing_usd_per_mtok": {
+          "input": 1.0,
+          "output": 5.0
+        },
+        "source": "Anthropic model-deprecations page re-checked 2026-09-23 (Active; temperature/top_p/top_k non-default values rejected on Claude 4.7 and later); pricing from the claude-api model table cached 2026-06-24; alias of snapshot claude-haiku-4-5-20251001",
+        "checked": "2026-09-24"
+      }
     },
     "gpt-4.1": {
       "family": "GPT-4.x",
@@ -651,7 +687,19 @@
       "reasoning": "extended-thinking",
       "cot_approach": "Built-in. Use 'think thoroughly' + effort parameter. Do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Released Apr 16, 2026. SWE-bench Pro 64.3% (up from 53.4% on 4.6). Vision 2576px / ~3.75MP. New tokenizer emits up to 35% more tokens for same input text — budget accordingly. Pricing unchanged from 4.6."
+      "key_constraint": "Released Apr 16, 2026. SWE-bench Pro 64.3% (up from 53.4% on 4.6). Vision 2576px / ~3.75MP. New tokenizer emits up to 35% more tokens for same input text — budget accordingly. Pricing unchanged from 4.6.",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-opus-4-7",
+        "availability": "available",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 5.0,
+          "output": 25.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "checked": "2026-09-24"
+      }
     },
     "claude-opus-4-8": {
       "family": "Claude 4.x",
@@ -661,7 +709,19 @@
       "reasoning": "adaptive-thinking",
       "cot_approach": "Adaptive thinking built-in. Triggers reasoning only when needed. Simple tasks skip reasoning; complex multi-step problems trigger it. Use 'think thoroughly' for explicit requests.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Released May 28, 2026. Agentic coding 69.2% (vs 64.3% on 4.7), multidisciplinary reasoning 57.9% (vs 54.7%). Min cache length 1K tokens. 1M context. 128K max output. Pricing: $5M input / $25M output standard; $10M/$50M fast mode."
+      "key_constraint": "Released May 28, 2026. Agentic coding 69.2% (vs 64.3% on 4.7), multidisciplinary reasoning 57.9% (vs 54.7%). Min cache length 1K tokens. 1M context. 128K max output. Pricing: $5M input / $25M output standard; $10M/$50M fast mode.",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-opus-4-8",
+        "availability": "available",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 5.0,
+          "output": 25.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "checked": "2026-09-24"
+      }
     },
     "claude-opus-5": {
       "family": "Claude 5.x",
@@ -671,7 +731,19 @@
       "reasoning": "adaptive-thinking",
       "cot_approach": "Adaptive thinking ON by default (omitting the thinking param runs adaptive, unlike Opus 4.8). Full effort ladder low/medium/high/xhigh/max; low+medium punch above their weight. Raw chain-of-thought is never returned (summaries only). Disabling thinking is capped at effort <= high.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Drop-in upgrade at Opus 4.8 pricing ($5M input / $25M output; fast mode $10M/$50M, Claude-API-only). 1M context (default+max). 128K max output. Min cache length 512 tokens (down from 1K). Safety classifiers can return stop_reason:refusal — handle before reading content. Separate rate-limit bucket from the Opus 4.x pool. Tends to longer output + self-verification: add conciseness + scope-discipline instructions, delete verification scaffolding."
+      "key_constraint": "Drop-in upgrade at Opus 4.8 pricing ($5M input / $25M output; fast mode $10M/$50M, Claude-API-only). 1M context (default+max). 128K max output. Min cache length 512 tokens (down from 1K). Safety classifiers can return stop_reason:refusal — handle before reading content. Separate rate-limit bucket from the Opus 4.x pool. Tends to longer output + self-verification: add conciseness + scope-discipline instructions, delete verification scaffolding.",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-opus-5",
+        "availability": "available",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 5.0,
+          "output": 25.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "checked": "2026-09-24"
+      }
     },
     "claude-sonnet-5": {
       "family": "Claude 5.x",
@@ -681,7 +753,19 @@
       "reasoning": "adaptive-thinking",
       "cot_approach": "Adaptive thinking ON by default (omitting the thinking param runs adaptive, unlike Sonnet 4.6). First Sonnet-tier model with the full low/medium/high/xhigh/max effort ladder; keep high default, raise to xhigh for hardest coding/agentic. Non-default temperature/top_p/top_k are rejected (400) — steer via prompting.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Near-Opus quality on coding/agentic at Sonnet cost. Pricing $3M input / $15M output ($2M/$10M intro through 2026-08-31). 1M context. 128K max output. New tokenizer emits ~30% more tokens for same text vs Sonnet 4.6 — re-baseline budgets. High-res vision 2576px. Follows instructions more literally than 4.6."
+      "key_constraint": "Near-Opus quality on coding/agentic at Sonnet cost. Pricing $3M input / $15M output ($2M/$10M intro through 2026-08-31). 1M context. 128K max output. New tokenizer emits ~30% more tokens for same text vs Sonnet 4.6 — re-baseline budgets. High-res vision 2576px. Follows instructions more literally than 4.6.",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-sonnet-5",
+        "availability": "available",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 3.0,
+          "output": 15.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; standard price per this entry's key_constraint (the cached table's $2/$10 was introductory pricing through 2026-08-31)",
+        "checked": "2026-09-24"
+      }
     },
     "gpt-5.4": {
       "family": "GPT-5.x",
@@ -2601,7 +2685,19 @@
       "reasoning": "adaptive-thinking",
       "cot_approach": "Adaptive thinking built-in (inherits Opus 4.8 behavior). Use 'think thoroughly' for explicit deep reasoning. Do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Released Jun 9, 2026. First publicly available Mythos-class model — a tier ABOVE Opus 4.8. API id claude-fable-5; also on Amazon Bedrock. 1M context, 128K max output. Pricing $10/M input, $50/M output (2x Opus 4.8). Third-party benchmarks: SWE-Bench Pro 80.3%, Terminal-Bench 2.1 88.0%, Humanity's Last Exam w/tools 64.5%. Hard safety limits: cybersecurity/bio/chem/distillation queries are rerouted to Opus 4.8, not answered. Same XML format as Claude 4.x."
+      "key_constraint": "Released Jun 9, 2026. First publicly available Mythos-class model — a tier ABOVE Opus 4.8. API id claude-fable-5; also on Amazon Bedrock. 1M context, 128K max output. Pricing $10/M input, $50/M output (2x Opus 4.8). Third-party benchmarks: SWE-Bench Pro 80.3%, Terminal-Bench 2.1 88.0%, Humanity's Last Exam w/tools 64.5%. Hard safety limits: cybersecurity/bio/chem/distillation queries are rerouted to Opus 4.8, not answered. Same XML format as Claude 4.x.",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-fable-5",
+        "availability": "available",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 10.0,
+          "output": 50.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "checked": "2026-09-24"
+      }
     },
     "claude-mythos-5": {
       "family": "Claude (Mythos-class)",
@@ -2611,7 +2707,19 @@
       "reasoning": "adaptive-thinking",
       "cot_approach": "Adaptive thinking built-in. Use 'think thoroughly' for explicit deep reasoning.",
       "few_shot": "3-5 examples in <example> tags",
-      "key_constraint": "Released Jun 2026. NOT generally available — the safeguards-lifted sibling of Fable 5, restricted to ~50 vetted infrastructure providers and cybersecurity researchers via Project Glasswing. Same capabilities and 1M/128K limits as Fable 5 but without the high-risk-domain safety classifiers. ESCALATE: do not target this model unless the developer confirms Project Glasswing access."
+      "key_constraint": "Released Jun 2026. NOT generally available — the safeguards-lifted sibling of Fable 5, restricted to ~50 vetted infrastructure providers and cybersecurity researchers via Project Glasswing. Same capabilities and 1M/128K limits as Fable 5 but without the high-risk-domain safety classifiers. ESCALATE: do not target this model unless the developer confirms Project Glasswing access.",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-mythos-5",
+        "availability": "restricted",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 10.0,
+          "output": 50.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; Project Glasswing participants only",
+        "checked": "2026-09-24"
+      }
     },
     "gemini-3.5-flash": {
       "family": "Gemini",
@@ -2752,7 +2860,19 @@
       "cot_approach": "Built-in extended thinking; use 'think thoroughly'; do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released 2026-09-01, current flagship for demanding reasoning/long-horizon agentic work; 1M context, 128K max output; adaptive thinking always-on (default effort high); forced tool use unsupported and thinking blocks not readable by earlier models; API id claude-fable-5-1; retirement not sooner than 2027-09-01.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-fable-5-1",
+        "availability": "available",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 10.0,
+          "output": 50.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23",
+        "checked": "2026-09-24"
+      }
     },
     "claude-mythos-5-1": {
       "family": "Claude 5.x",
@@ -2763,7 +2883,19 @@
       "cot_approach": "Built-in extended thinking; use 'think thoroughly'; do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released 2026-09-01, shares Claude Fable 5.1's specs/pricing but invitation-only via Project Glasswing; 1M context, 128K max output; adaptive thinking always-on; API id claude-mythos-5-1; contact Anthropic/AWS/Google Cloud account team for access.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-mythos-5-1",
+        "availability": "restricted",
+        "sampling": "default_only",
+        "pricing_usd_per_mtok": {
+          "input": 10.0,
+          "output": 50.0
+        },
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; Project Glasswing participants only",
+        "checked": "2026-09-24"
+      }
     },
     "claude-opus-4-5": {
       "family": "Claude 4.x",
@@ -2774,7 +2906,16 @@
       "cot_approach": "Built-in extended thinking; use 'think thoroughly'; do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released 2025-11-24, legacy (Anthropic recommends migrating to Opus 5); 200K context, 64K max output; extended (manual budget_tokens) thinking, default effort high; API id claude-opus-4-5-20251101 (alias claude-opus-4-5); retirement not sooner than 2026-11-24.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-opus-4-5",
+        "availability": "available",
+        "sampling": "adjustable",
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; price not in that table",
+        "checked": "2026-09-24"
+      }
     },
     "claude-sonnet-4-5": {
       "family": "Claude 4.x",
@@ -2785,7 +2926,16 @@
       "cot_approach": "Built-in extended thinking; use 'think thoroughly'; do NOT use 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released 2025-09-29, legacy (Anthropic recommends migrating to Sonnet 5); 200K context, 64K max output; extended (manual budget_tokens) thinking, no effort param support; API id claude-sonnet-4-5-20250929 (alias claude-sonnet-4-5); retirement not sooner than 2026-09-29.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-sonnet-4-5",
+        "availability": "available",
+        "sampling": "adjustable",
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 (not re-verified live); sampling rule from the model-deprecations page re-checked 2026-09-23; price not in that table",
+        "checked": "2026-09-24"
+      }
     },
     "kokoro-82m": {
       "family": "Kokoro",
@@ -4479,7 +4629,16 @@
       "cot_approach": "Pre-extended-thinking: prompt 'think step by step' explicitly.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Mar 2024 (claude-3-opus-20240229); 200K ctx, 4K output. RETIRED/legacy — historical. Top Claude 3 tier.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": null,
+        "availability": "unavailable",
+        "sampling": null,
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "checked": "2026-09-24"
+      }
     },
     "claude-3-sonnet": {
       "family": "Claude 3.x",
@@ -4490,7 +4649,16 @@
       "cot_approach": "Pre-extended-thinking: prompt 'think step by step' explicitly.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Mar 2024; 200K ctx. RETIRED — historical. Mid Claude 3 tier.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": null,
+        "availability": "unavailable",
+        "sampling": null,
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "checked": "2026-09-24"
+      }
     },
     "claude-3-haiku": {
       "family": "Claude 3.x",
@@ -4501,7 +4669,16 @@
       "cot_approach": "Pre-extended-thinking: prompt 'think step by step' explicitly.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Mar 2024 (claude-3-haiku-20240307); 200K ctx. RETIRED — historical. Fastest/cheapest Claude 3.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": null,
+        "availability": "unavailable",
+        "sampling": null,
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "checked": "2026-09-24"
+      }
     },
     "claude-3-5-sonnet": {
       "family": "Claude 3.x",
@@ -4512,7 +4689,16 @@
       "cot_approach": "Pre-extended-thinking: prompt 'think step by step' explicitly.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Jun 2024; v2 = claude-3-5-sonnet-20241022 (introduced computer use). 200K ctx, 8K output. RETIRED/legacy — historical.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": null,
+        "availability": "unavailable",
+        "sampling": null,
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "checked": "2026-09-24"
+      }
     },
     "claude-3-5-haiku": {
       "family": "Claude 3.x",
@@ -4523,7 +4709,16 @@
       "cot_approach": "Pre-extended-thinking: prompt 'think step by step' explicitly.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Oct 2024 (claude-3-5-haiku-20241022); 200K ctx, 8K output. RETIRED/legacy — historical.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": null,
+        "availability": "unavailable",
+        "sampling": null,
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "checked": "2026-09-24"
+      }
     },
     "claude-3-7-sonnet": {
       "family": "Claude 3.x",
@@ -4534,7 +4729,16 @@
       "cot_approach": "First hybrid-reasoning Claude: toggle extended thinking with a thinking budget.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Feb 2025 (claude-3-7-sonnet-20250219); 200K ctx, 64K output (128K beta). First Claude with extended thinking. RETIRED/legacy — historical.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": null,
+        "availability": "unavailable",
+        "sampling": null,
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists this generation as retired or past its retirement date; the registry id is not a provider model id",
+        "checked": "2026-09-24"
+      }
     },
     "claude-opus-4-1": {
       "family": "Claude 4.x",
@@ -4545,7 +4749,16 @@
       "cot_approach": "Extended thinking (manual budget_tokens). Use 'think thoroughly'; not 'think step by step'.",
       "few_shot": "3-5 examples in <example> tags",
       "key_constraint": "Released Aug 2025 (claude-opus-4-1-20250805); 200K ctx, 32K output. RETIRED ~2026-08-05 — historical. Superseded by Opus 4.5→Opus 5.",
-      "added": "2026-09-06"
+      "added": "2026-09-06",
+      "provider": "anthropic",
+      "api": {
+        "model_id": "claude-opus-4-1",
+        "availability": "unavailable",
+        "sampling": "adjustable",
+        "pricing_usd_per_mtok": null,
+        "source": "claude-api model table cached 2026-06-24 lists it Deprecated with retirement 2026-08-05, which has passed; not re-verified live",
+        "checked": "2026-09-24"
+      }
     },
     "gemini-1.5-pro": {
       "family": "Gemini",
