@@ -27,6 +27,7 @@ import os
 import random
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -93,6 +94,83 @@ def append_jsonl_locked(path: Path, line: str) -> None:
                 os.fsync(f.fileno())
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+# ─── Event identity (WIX-RUN-002) ─────────────────────────────────────────────
+#
+# One stored line = one logical event. Its identity is a SHA-256 over the stored record's
+# identity basis: every field except the engine metadata keys below, with the event's source
+# coordinates (session_id, ts/date, source_session, event_id, source_ordinal) part of the basis.
+# The same logical event therefore has the same identity however many times it is imported,
+# while the same payload in a different session, at a different supplied time, or with a
+# different event_id is a different event.
+#
+# Every value the engine stamps is either deterministic from the source record (backfill) or
+# a recorded fact of the event (emit's session and generated event_id), so re-hashing a stored
+# line always reproduces its identity. The one non-reproducible stamp, a ts filled from the
+# engine's clock, is flagged with _ts_clock and left out of the basis.
+#
+# This is NOT pattern dedup: fingerprint() below is the many-to-one pattern key that reconcile
+# accumulates over. Identity only stops the same event from being counted twice.
+
+META_KEYS = ("_identity", "_session_source", "_ts_clock")
+UNKNOWN_SESSION = "unknown"
+
+
+def with_ordinal(record: dict, ordinal: int) -> dict:
+    """The ordinal-th repeat (0-based) of an identical record within one source file is its own
+    event. Ordinal 0 leaves the record unchanged, so a record that occurs once is unaffected."""
+    if not ordinal:
+        return record
+    out = dict(record)
+    prev = out.get("source_ordinal")
+    out["source_ordinal"] = ordinal if prev is None else f"{prev}.{ordinal}"
+    return out
+
+
+def identity_basis(record: dict) -> dict:
+    basis = {k: v for k, v in record.items() if k not in META_KEYS}
+    if record.get("_ts_clock") is True:
+        basis.pop("ts", None)
+    return basis
+
+
+def canonical(record: dict) -> str:
+    return json.dumps(identity_basis(record), sort_keys=True, ensure_ascii=False,
+                      separators=(",", ":"))
+
+
+def event_identity(record: dict) -> str:
+    return hashlib.sha256(canonical(record).encode("utf-8")).hexdigest()[:32]
+
+
+def resolve_session(record: dict, *, use_env: bool) -> tuple[str, str]:
+    """Source-session precedence, first match wins:
+
+        record session_id > record source_session > $CLAUDE_CODE_SESSION_ID
+        > $CLAUDE_SESSION_ID > "unknown"
+
+    The environment is consulted only for emit (the event is happening in this session).
+    backfill never consults it: the importing session is not where the event happened.
+    Returns (session, provenance); the provenance is stored as _session_source.
+    """
+    for key in ("session_id", "source_session"):
+        val = record.get(key)
+        if isinstance(val, str) and val.strip():
+            return val, f"record:{key}"
+    if use_env:
+        for var in ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID"):
+            val = os.environ.get(var, "").strip()
+            if val:
+                return val, f"env:{var}"
+    return UNKNOWN_SESSION, "unknown"
+
+
+def stamp_session(record: dict, *, use_env: bool) -> None:
+    session, source = resolve_session(record, use_env=use_env)
+    if not (isinstance(record.get("session_id"), str) and record["session_id"].strip()):
+        record["session_id"] = session
+    record.setdefault("_session_source", source)
 
 
 # ─── U1: Pattern fingerprint ──────────────────────────────────────────────────
@@ -236,25 +314,59 @@ def load_catalog() -> dict:
         return json.load(f)
 
 
-def iter_artifacts() -> list[dict]:
-    """Load every artifact from state/artifacts.jsonl plus any legacy artifacts-*.jsonl files."""
-    out = []
+class LogScan:
+    """Result of reading the artifact stream: unique events in stream order plus accounting."""
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+        self.identities: set[str] = set()
+        self.duplicates: list[dict] = []   # {file, line, identity}: a repeat of a counted event
+
+
+def log_paths() -> list[Path]:
     # Master log (current convention)
     master = STATE_DIR / "artifacts.jsonl"
     paths = [master] if master.exists() else []
     # Legacy date-rotated files, if any linger from before the rotation was retired.
     paths.extend(sorted(STATE_DIR.glob("artifacts-*.jsonl")))
-    for p in paths:
+    return paths
+
+
+def scan_log() -> LogScan:
+    """Load every artifact from state/artifacts.jsonl plus any legacy artifacts-*.jsonl files.
+
+    Each line is identified by event_identity() over the stored record; the n-th repeat of an
+    identical line within one file gets ordinal n (see with_ordinal), exactly as backfill assigns
+    it, so a legacy log keeps every line it always counted. A line whose identity was already
+    read (a copy of the log dropped next to it, for example) is the same event and is counted
+    once.
+    """
+    scan = LogScan()
+    for p in log_paths():
+        repeats: dict[str, int] = {}
         with p.open("r", encoding="utf-8") as f:
-            for line in f:
+            for lineno, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    out.append(json.loads(line))
+                    rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-    return out
+                key = canonical(rec)
+                ordinal = repeats.get(key, 0)
+                repeats[key] = ordinal + 1
+                eid = event_identity(with_ordinal(rec, ordinal))
+                if eid in scan.identities:
+                    scan.duplicates.append({"file": p.name, "line": lineno, "identity": eid})
+                    continue
+                scan.identities.add(eid)
+                scan.events.append(rec)
+    return scan
+
+
+def iter_artifacts() -> list[dict]:
+    return scan_log().events
 
 
 def parse_ts(s: str | None) -> datetime | None:
@@ -298,13 +410,28 @@ def cmd_emit(args: list[str]) -> int:
         sys.stderr.write(f"[inference-engine] invalid JSON: {e}\n")
         return 2
 
-    record.setdefault("ts", iso_now())
-    record.setdefault("session_id", os.environ.get("CLAUDE_SESSION_ID", "unknown"))
+    # WIX-RUN-002. emit records an event happening now. Each call is a new event unless the
+    # caller supplies an event_id: the engine then mints one, so two genuine occurrences of the
+    # same payload in one session stay two events. A caller that may retry (a hook re-run after
+    # an ambiguous failure) supplies its own event_id; the retry then has the same identity and
+    # is recorded once.
+    stamp_session(record, use_env=True)
     record.setdefault("plugin", os.environ.get("ENCHANTED_ATTRIBUTION_PLUGIN", "unknown"))
+    supplied_id = "event_id" in record
+    if not supplied_id:
+        record["event_id"] = uuid.uuid4().hex
+    if "ts" not in record:
+        record["ts"] = iso_now()
+        record["_ts_clock"] = True
+    eid = event_identity(record)
+    record["_identity"] = eid
 
+    if supplied_id and eid in scan_log().identities:
+        print(f"duplicate {record.get('code', '?')} (event {eid[:12]}) already recorded; nothing added")
+        return 0
     path = artifacts_path(parse_ts(record["ts"]) or datetime.now(timezone.utc))
     append_jsonl_locked(path, json.dumps(record, ensure_ascii=False))
-    print(f"emitted {record.get('code', '?')} -> {path.name}")
+    print(f"emitted {record.get('code', '?')} -> {path.name} (event {eid[:12]})")
     return 0
 
 
@@ -319,7 +446,14 @@ def cmd_backfill(args: list[str]) -> int:
     if not src.exists():
         sys.stderr.write(f"source not found: {src}\n")
         return 2
-    count = 0
+    # WIX-RUN-002. backfill re-imports events that already happened elsewhere, so every stamp
+    # is a deterministic function of the source line (session from session_id/source_session,
+    # ts from date, plugin from scope) and the identity carries the source's own coordinates.
+    # Re-running the same import, finishing an interrupted one, or importing a copy of an
+    # engine-written log adds only events not already recorded.
+    seen = scan_log().identities
+    repeats: dict[str, int] = {}
+    count = skipped = 0
     for line in src.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -328,13 +462,28 @@ def cmd_backfill(args: list[str]) -> int:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
-        record.setdefault("ts", record.get("date", iso_now()))
-        record.setdefault("session_id", record.get("source_session", "backfill"))
+        stamp_session(record, use_env=False)
+        if "ts" not in record:
+            if isinstance(record.get("date"), str) and record["date"].strip():
+                record["ts"] = record["date"]
+            else:
+                record["ts"] = iso_now()
+                record["_ts_clock"] = True
         record.setdefault("plugin", record.get("scope", "unknown"))
+        key = canonical(record)
+        ordinal = repeats.get(key, 0)
+        repeats[key] = ordinal + 1
+        record = with_ordinal(record, ordinal)
+        eid = event_identity(record)
+        if eid in seen:
+            skipped += 1
+            continue
+        record["_identity"] = eid
         path = artifacts_path(parse_ts(record["ts"]) or datetime.now(timezone.utc))
         append_jsonl_locked(path, json.dumps(record, ensure_ascii=False))
+        seen.add(eid)
         count += 1
-    print(f"backfilled {count} records from {src.name}")
+    print(f"backfilled {count} new records from {src.name} ({skipped} already recorded)")
     return 0
 
 
@@ -358,7 +507,12 @@ def recurrence_count(record: dict) -> int:
 
 
 def cmd_reconcile(args: list[str]) -> int:
-    artifacts = iter_artifacts()
+    scan = scan_log()
+    artifacts = scan.events
+    if scan.duplicates:
+        sys.stderr.write(
+            f"[inference-engine] {len(scan.duplicates)} line(s) repeat an already-counted event "
+            "and were counted once\n")
     if not artifacts:
         sys.stderr.write("[inference-engine] no artifacts to reconcile\n")
         return 0
