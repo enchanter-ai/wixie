@@ -21,11 +21,11 @@ stop and re-read the step.
 
 Governed by:
 
-- `@.vis-cache/vis/packages/web/conduct/mcp-research-discipline.md` — MCP selection, the three security gates, credential scoping, version pinning
-- `@.vis-cache/vis/packages/web/conduct/web-fetch.md` — caching, dedup, budget; per-page extracted-text floor still applies
-- `@.vis-cache/vis/packages/web/conduct/source-discipline.md` — untrusted-source quote wrapping (Step 6 wraps every quote in `<untrusted_source url="...">...</untrusted_source>` — never strip)
-- `@.vis-cache/vis/packages/web/conduct/citation-verification.md` — Wayback Machine fallback if the MCP returns a live-but-fetched URL that later fails to re-verify
-- `@.vis-cache/vis/packages/core/conduct/capability-fidelity.md` — if the named MCP is missing, mis-versioned, or fails the manifest audit, **abort with `error: "mcp-capability-gap"`** — do not silently fall back to `WebSearch`
+- `@../../../.vis-cache/vis/packages/web/conduct/mcp-research-discipline.md` — MCP selection, the three security gates, credential scoping, version pinning
+- `@../../../.vis-cache/vis/packages/web/conduct/web-fetch.md` — caching, dedup, budget; per-page extracted-text floor still applies
+- `@../../../.vis-cache/vis/packages/web/conduct/source-discipline.md` — untrusted-source quote wrapping (Step 6 wraps every quote in `<untrusted_source url="...">...</untrusted_source>` — never strip)
+- `@../../../.vis-cache/vis/packages/web/conduct/citation-verification.md` — Wayback Machine fallback if the MCP returns a live-but-fetched URL that later fails to re-verify
+- `@../../../.vis-cache/vis/packages/core/conduct/capability-fidelity.md` — if the named MCP is missing, mis-versioned, or fails the manifest audit, **abort with `error: "mcp-capability-gap"`** — do not silently fall back to `WebSearch`
 
 ## Inputs
 

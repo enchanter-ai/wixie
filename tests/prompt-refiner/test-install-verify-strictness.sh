@@ -117,7 +117,7 @@ for i, l in enumerate(lines):
         skip = 1  # also drop its sha1 line
         continue
     out.append(l)
-open(p, 'w', encoding='utf-8').write(''.join(out))
+open(p, 'w', encoding='utf-8', newline='').write(''.join(out))
 PYEOF
 set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out5.$$ 2>&1); rc=$?; set -e
 check "missing conduct_files entry is rejected" "$rc" 1
@@ -131,7 +131,7 @@ p = sys.argv[1]
 t = open(p, encoding='utf-8').read()
 extra = "  bogus:\n    version: v1.0.0\n    tag: bogus--v1.0.0\n    tag_commit: 0000000000000000000000000000000000000000\n"
 t = t.replace("conduct_files:", extra + "conduct_files:", 1)
-open(p, 'w', encoding='utf-8').write(t)
+open(p, 'w', encoding='utf-8', newline='').write(t)
 PYEOF
 set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out6.$$ 2>&1); rc=$?; set -e
 check "extra package block is rejected" "$rc" 1
@@ -161,6 +161,87 @@ rm -f /tmp/out8.$$
 ( cd "$WIXIE" && VIS_REPO="$VIS" ./scripts/bootstrap.sh >/dev/null )
 set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/dev/null 2>&1); rc=$?; set -e
 check "unmodified lock still verifies clean" "$rc" 0
+
+# 10. DUPLICATE conduct entry -- the SAME path appended a second time with a
+#     bogus sha1 (distinct from #4's UNKNOWN extra path). Fix round 2
+#     (VERIFICATION.md fix_round item 2): this passed under both bash and PS
+#     at the previous head because the old ad-hoc awk/grep extraction just
+#     grabbed the FIRST match for a given path and never noticed a second.
+restore_good
+cat >> "$WIXIE/.vis-lock" <<'EOF'
+  - path: packages/core/conduct/a.md
+    sha1: bogus000000000000000000000000000000000000
+EOF
+set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out10.$$ 2>&1); rc=$?; set -e
+check "duplicate conduct entry (same path, bogus sha1) is rejected" "$rc" 1
+grep -qi "duplicate conduct_files entry" /tmp/out10.$$ || { fail=$((fail+1)); echo "  FAIL: no duplicate-entry-named cause" >&2; }
+rm -f /tmp/out10.$$
+
+# 11. DUPLICATE package block -- the SAME package name ("core") appended a
+#     second time with a forged tag_commit (distinct from #6's UNKNOWN extra
+#     "bogus" package name). This passed under PS (though bash already
+#     rejected it) at the previous head.
+restore_good
+python3 - "$WIXIE/.vis-lock" <<'PYEOF'
+import sys
+p = sys.argv[1]
+t = open(p, encoding='utf-8').read()
+extra = "  core:\n    version: v1.0.0\n    tag: enchanter-core--v1.0.0\n    tag_commit: 9999999999999999999999999999999999999999\n"
+t = t.replace("conduct_files:", extra + "conduct_files:", 1)
+open(p, 'w', encoding='utf-8', newline='').write(t)
+PYEOF
+set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out11.$$ 2>&1); rc=$?; set -e
+check "duplicate package block (same name, forged tag_commit) is rejected" "$rc" 1
+grep -qi "duplicate package block" /tmp/out11.$$ || { fail=$((fail+1)); echo "  FAIL: no duplicate-package-block-named cause" >&2; }
+rm -f /tmp/out11.$$
+
+# 12. Unknown TOP-LEVEL key must fail (not just unknown keys nested inside a
+#     package/conduct entry, already covered above by other cases).
+restore_good
+python3 - "$WIXIE/.vis-lock" <<'PYEOF'
+import sys
+p = sys.argv[1]
+t = open(p, encoding='utf-8').read()
+t = t.replace("lock_version: 2", "lock_version: 2\nbogus_top: hax", 1)
+open(p, 'w', encoding='utf-8', newline='').write(t)
+PYEOF
+set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out12.$$ 2>&1); rc=$?; set -e
+check "unknown top-level key is rejected" "$rc" 1
+grep -qi "unknown top-level key" /tmp/out12.$$ || { fail=$((fail+1)); echo "  FAIL: no unknown-top-level-key-named cause" >&2; }
+rm -f /tmp/out12.$$
+
+# 13. Unknown key inside a PACKAGE block.
+restore_good
+python3 - "$WIXIE/.vis-lock" <<'PYEOF'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding='utf-8').read()
+t = re.sub(r'(    tag_commit: [0-9a-f]+\n)', r'\1    bogus: 1\n', t, count=1)
+open(p, 'w', encoding='utf-8', newline='').write(t)
+PYEOF
+set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out13.$$ 2>&1); rc=$?; set -e
+check "unknown key inside a package block is rejected" "$rc" 1
+grep -qi "unknown key in package" /tmp/out13.$$ || { fail=$((fail+1)); echo "  FAIL: no unknown-package-key-named cause" >&2; }
+rm -f /tmp/out13.$$
+
+# 14. Unknown key inside a CONDUCT_FILES entry.
+restore_good
+python3 - "$WIXIE/.vis-lock" <<'PYEOF'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding='utf-8').read()
+t = re.sub(r'(    sha1: [0-9a-f]+\n)', r'\1    bogus: 1\n', t, count=1)
+open(p, 'w', encoding='utf-8', newline='').write(t)
+PYEOF
+set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/out14.$$ 2>&1); rc=$?; set -e
+check "unknown key inside a conduct_files entry is rejected" "$rc" 1
+grep -qi "unknown key in conduct_files entry" /tmp/out14.$$ || { fail=$((fail+1)); echo "  FAIL: no unknown-conduct-key-named cause" >&2; }
+rm -f /tmp/out14.$$
+
+# 15. final sanity: the good lock still verifies clean after all the above.
+restore_good
+set +e; (cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/dev/null 2>&1); rc=$?; set -e
+check "unmodified lock still verifies clean (final)" "$rc" 0
 
 echo "install-verify-strictness: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]

@@ -228,9 +228,13 @@ for i in "${!PKGS[@]}"; do
 done
 EXTRA_AGENT="$WIXIE/plugins/_fixture-agent"
 mkdir -p "$EXTRA_AGENT"
+# probe.md is 2 directories deep (plugins/_fixture-agent/); its @-import must
+# resolve RELATIVE TO ITS OWN DIRECTORY, exactly like the real fix for
+# plugins/deep-research/agents/ciber.md -- so it needs "../../" to reach the
+# repo root's .vis-cache/vis/, not a bare ".vis-cache/vis/" prefix.
 cat > "$EXTRA_AGENT/probe.md" <<EOF
 Probe agent file referencing a vis import that CLAUDE.md never mentions:
-@.vis-cache/vis/$EXTRA_REL
+@../../.vis-cache/vis/$EXTRA_REL
 EOF
 set +e
 OUT4="$(cd "$WIXIE" && VIS_REPO="$VIS" ./scripts/bootstrap.sh 2>&1)"

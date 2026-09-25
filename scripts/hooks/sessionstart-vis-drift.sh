@@ -8,11 +8,11 @@
 # Fail loud on mismatch with a one-line remediation — never auto-heal.
 #
 # NOT CURRENTLY REGISTERED: this repo has no .claude/settings.json, so this
-# hook does not fire today (verified independently — see
-# tranche3/patches/IMPLEMENTATION_NOTES.md "Fix round 1"). That is
-# intentional for this remediation branch: registering hooks / editing
-# .claude/settings.json is out of this fix's scope. This script is kept
-# correct and ready for whoever does register it.
+# hook does not fire today (verified independently: no .claude/ directory
+# exists in this repo at all). That is intentional for this remediation
+# branch: registering hooks / editing .claude/settings.json is out of this
+# fix's scope. This script is kept correct and ready for whoever does
+# register it.
 #
 # MERGE PRECONDITION this hook depends on: the vis owner must cut the real
 # enchanter-<pkg>--v<version> tags declared in .vis-versions, and this repo's

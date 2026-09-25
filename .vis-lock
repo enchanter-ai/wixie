@@ -2,24 +2,24 @@
 # Do not edit by hand. Run ./scripts/bootstrap.sh to refresh.
 lock_version: 2
 mode: pinned
-resolved_at: 2026-09-25T11:11:43Z
+resolved_at: 2026-09-25T12:30:03Z
 packages:
   core:
     version: v0.7.0
     tag: enchanter-core--v0.7.0
-    tag_commit: de21d78587c6092893e5401aea185ed3cb040674
+    tag_commit: 904873d7543d62bab5cddd3a3740422232983af2
   skills:
     version: v0.7.0
     tag: enchanter-skills--v0.7.0
-    tag_commit: de21d78587c6092893e5401aea185ed3cb040674
+    tag_commit: 904873d7543d62bab5cddd3a3740422232983af2
   web:
     version: v0.7.0
     tag: enchanter-web--v0.7.0
-    tag_commit: de21d78587c6092893e5401aea185ed3cb040674
+    tag_commit: 904873d7543d62bab5cddd3a3740422232983af2
   orchestration:
     version: v0.7.0
     tag: enchanter-orchestration--v0.7.0
-    tag_commit: de21d78587c6092893e5401aea185ed3cb040674
+    tag_commit: 904873d7543d62bab5cddd3a3740422232983af2
 conduct_files:
   - path: packages/core/conduct/capability-fidelity.md
     sha1: 5f2e24ec559cc6f23c6eb98d2c7c6a59d39ef5ee

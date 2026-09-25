@@ -189,33 +189,236 @@ function Get-PkgIndex([string]$name) {
     return -1
 }
 
-# --- enumerate every @.vis-cache/vis/... import across the WHOLE repo -------
-# Not just CLAUDE.md: plugin agents/skills reference vis conduct directly
-# too, and every one of them must resolve to the same materialized content.
+# --- strict .vis-lock parser (-Verify only), mirroring bootstrap.sh's
+# lock_strict_parse exactly. Parses the lock against the schema, not just
+# well-enough-to-extract specific fields: rejects an unknown top-level key,
+# an unknown key inside a package block or a conduct_files entry, a
+# duplicate top-level key, a duplicate package block (even with a forged
+# tag_commit), and a duplicate conduct_files entry (even with a bogus sha1).
+# On success returns a hashtable: TopField, PkgNames, PkgField ("pkg:field"),
+# ConductPaths, ConductSha1. On any violation, calls Fail() (exits 1).
+function ConvertFrom-StrictLock([string]$text) {
+    $topField = @{}
+    $topSeen = @{}
+    $pkgNames = New-Object System.Collections.Generic.List[string]
+    $pkgSeen = @{}
+    $pkgField = @{}
+    $conductPaths = New-Object System.Collections.Generic.List[string]
+    $conductSeen = @{}
+    $conductSha1 = @{}
+
+    $state = "top"
+    $curPkg = $null
+    $curPkgKeysSeen = @{}
+    $curPath = $null
+    $curPathHasSha1 = $false
+    $lineno = 0
+
+    $lines = $text -split "`r?`n"
+    foreach ($line in $lines) {
+        $lineno++
+        if ($line.Length -eq 0) { continue }
+        if ($line.StartsWith('#')) { continue }
+
+        $topMatch = [regex]::Match($line, '^([A-Za-z_][A-Za-z0-9_]*):\s?(.*)$')
+        if ($topMatch.Success) {
+            $key = $topMatch.Groups[1].Value
+            $val = $topMatch.Groups[2].Value
+            if ($state -eq "conduct" -and $curPath -and -not $curPathHasSha1) {
+                Fail "conduct entry incomplete (missing sha1) for path: $curPath (line $lineno)"
+            }
+            if ($key -notin @('lock_version','mode','resolved_at','packages','conduct_files','vis_head')) {
+                Fail "unknown top-level key in lock: $key (line $lineno)"
+            }
+            if ($topSeen.ContainsKey($key)) {
+                Fail "duplicate top-level key in lock: $key (line $lineno)"
+            }
+            $topSeen[$key] = $true
+            if ($key -eq "packages") {
+                $state = "packages"
+            } elseif ($key -eq "conduct_files") {
+                $state = "conduct"
+                $curPath = $null
+                $curPathHasSha1 = $false
+            } else {
+                $state = "top"
+                $topField[$key] = $val
+            }
+            continue
+        }
+
+        if ($state -eq "packages" -or $state -eq "pkgblock") {
+            if ($state -eq "pkgblock") {
+                $fieldMatch = [regex]::Match($line, '^    ([a-z_]+):\s?(.*)$')
+                if ($fieldMatch.Success) {
+                    $fkey = $fieldMatch.Groups[1].Value
+                    $fval = $fieldMatch.Groups[2].Value
+                    if ($fkey -notin @('version','tag','tag_commit')) {
+                        Fail "unknown key in package '$curPkg' block: $fkey (line $lineno)"
+                    }
+                    if ($curPkgKeysSeen.ContainsKey($fkey)) {
+                        Fail "duplicate key '$fkey' in package '$curPkg' block (line $lineno)"
+                    }
+                    $curPkgKeysSeen[$fkey] = $true
+                    $pkgField["$curPkg`:$fkey"] = $fval
+                    continue
+                }
+            }
+            $pkgMatch = [regex]::Match($line, '^  ([a-z][a-zA-Z0-9_]*):\s*$')
+            if ($pkgMatch.Success) {
+                $pkgname = $pkgMatch.Groups[1].Value
+                if ($pkgSeen.ContainsKey($pkgname)) {
+                    Fail "duplicate package block in lock: $pkgname (line $lineno)"
+                }
+                $pkgSeen[$pkgname] = $true
+                $pkgNames.Add($pkgname)
+                $curPkg = $pkgname
+                $curPkgKeysSeen = @{}
+                $state = "pkgblock"
+                continue
+            }
+            Fail "malformed line under 'packages:' (line $lineno): $line"
+        }
+
+        if ($state -eq "conduct") {
+            $pathMatch2 = [regex]::Match($line, '^  - path:\s?(.*)$')
+            if ($pathMatch2.Success) {
+                if ($curPath -and -not $curPathHasSha1) {
+                    Fail "conduct entry incomplete (missing sha1) for path: $curPath (line $lineno)"
+                }
+                $p = $pathMatch2.Groups[1].Value
+                if ($conductSeen.ContainsKey($p)) {
+                    Fail "duplicate conduct_files entry for path: $p (line $lineno)"
+                }
+                $conductSeen[$p] = $true
+                $conductPaths.Add($p)
+                $curPath = $p
+                $curPathHasSha1 = $false
+                continue
+            }
+            $ckeyMatch = [regex]::Match($line, '^    ([a-z0-9_]+):\s?(.*)$')
+            if ($ckeyMatch.Success) {
+                $ckey = $ckeyMatch.Groups[1].Value
+                $cval = $ckeyMatch.Groups[2].Value
+                if (-not $curPath) {
+                    Fail "conduct entry field '$ckey' with no preceding '- path:' (line $lineno)"
+                }
+                if ($ckey -eq "sha1") {
+                    if ($curPathHasSha1) {
+                        Fail "duplicate 'sha1' key for conduct entry: $curPath (line $lineno)"
+                    }
+                    $conductSha1[$curPath] = $cval
+                    $curPathHasSha1 = $true
+                } else {
+                    Fail "unknown key in conduct_files entry '$curPath': $ckey (line $lineno)"
+                }
+                continue
+            }
+            Fail "malformed line under 'conduct_files:' (line $lineno): $line"
+        }
+
+        Fail "malformed line (line $lineno): $line"
+    }
+
+    if ($state -eq "conduct" -and $curPath -and -not $curPathHasSha1) {
+        Fail "conduct entry incomplete (missing sha1) for path: $curPath (end of file)"
+    }
+
+    return @{
+        TopField     = $topField
+        PkgNames     = $pkgNames
+        PkgField     = $pkgField
+        ConductPaths = $conductPaths
+        ConductSha1  = $conductSha1
+    }
+}
+
+# --- enumerate every @-import across the WHOLE repo, by RESOLUTION ----------
+# Not just CLAUDE.md, and not a literal "@.vis-cache/vis/" string match:
+# every @<relpath> token in every *.md file is resolved relative to the FILE
+# THAT CONTAINS IT (any number of ../ segments, any spelling), exactly like
+# plugins/deep-research/agents/ciber.md's @../../../vis/... form. A resolved
+# path landing inside the materialized cache is a real import that needs
+# coverage; one landing directly in the raw sibling vis (not yet repointed to
+# the cache) is a hard error.
+#
+# Exclusion of .git/.vis-cache/state/node_modules is applied to path
+# components RELATIVE TO $PluginDir only -- never via a substring match
+# against the FULL path, which would also match an ANCESTOR directory of the
+# repo with one of those names (e.g. the repo checked out under
+# ...\state\wixie) and silently exclude everything. That was the WIX-INSTALL-002
+# fix-round-2 defect: PS materialized 0 files and exited 0 under such a
+# parent directory, and -Verify exited 0 against a correct lock too.
 # Byte-order (ordinal) unique + sort -- NOT Sort-Object's default culture
 # comparison -- so entry order is identical to bash's `LC_ALL=C sort -u`
 # for the same inputs (every path here is ASCII, so ordinal == C-locale).
-$excludeDirs = @('\.vis-cache\', '\.git\', '\state\', '\node_modules\')
-$mdFiles = Get-ChildItem -Path $PluginDir -Recurse -Filter '*.md' -File -ErrorAction SilentlyContinue |
-    Where-Object {
-        $full = $_.FullName
-        -not ($excludeDirs | Where-Object { $full -like "*$_*" })
-    }
+$excludeNames = @('.git', '.vis-cache', 'state', 'node_modules')
+$allMdFiles = Get-ChildItem -Path $PluginDir -Recurse -Filter '*.md' -File -ErrorAction SilentlyContinue
+$mdFiles = @()
+foreach ($f in $allMdFiles) {
+    $rel = $f.FullName.Substring($PluginDir.Length).TrimStart('\', '/')
+    $parts = $rel -split '[\\/]'
+    $excluded = $false
+    foreach ($p in $parts) { if ($excludeNames -contains $p) { $excluded = $true; break } }
+    if (-not $excluded) { $mdFiles += $f }
+}
+
+$AtImportRegex = '@((?:\.\./)+|\.[A-Za-z0-9._-]*/|[a-z][A-Za-z0-9_-]*/)[A-Za-z0-9._/-]*\.[A-Za-z0-9]+'
+$sep = [System.IO.Path]::DirectorySeparatorChar
+
 $importSet = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+$unpinnedFound = $false
 foreach ($f in $mdFiles) {
     $text = Get-Content $f.FullName -Raw -ErrorAction SilentlyContinue
     if (-not $text) { continue }
-    $ms = [regex]::Matches($text, '@\.vis-cache/vis/packages/[a-z]+/[A-Za-z0-9._/-]+\.[a-zA-Z]+')
-    foreach ($m in $ms) {
-        [void]$importSet.Add(($m.Value -replace '^@\.vis-cache/vis/', ''))
+    $fdir = $f.DirectoryName
+    foreach ($m in [regex]::Matches($text, $AtImportRegex)) {
+        $tok = $m.Value.Substring(1)
+        try { $resolved = [System.IO.Path]::GetFullPath((Join-Path $fdir $tok)) } catch { continue }
+        if ($resolved -eq $CacheDir -or $resolved.StartsWith($CacheDir + $sep)) {
+            $key = ($resolved.Substring($CacheDir.Length).TrimStart('\', '/')) -replace '\\', '/'
+            [void]$importSet.Add($key)
+        } elseif ($resolved -eq $VisDir -or $resolved.StartsWith($VisDir + $sep)) {
+            [Console]::Error.WriteLine("unpinned @-import: $($f.FullName) references @$tok, which resolves directly into the vis sibling ($resolved) instead of the materialized cache ($CacheDir...). Repoint it to the correct relative path into .vis-cache/vis/.")
+            $unpinnedFound = $true
+        }
     }
 }
+if ($unpinnedFound) {
+    Fail "one or more @-imports resolve directly into the vis sibling instead of the materialized cache - the vis sibling is unchanged; nothing was written"
+}
+
 $importPaths = New-Object string[] ($importSet.Count)
 $importSet.CopyTo($importPaths)
 [Array]::Sort($importPaths, [System.StringComparer]::Ordinal)
 
 if ($importPaths.Count -eq 0) {
-    [Console]::Error.WriteLine("warning: no @.vis-cache/vis/... imports found anywhere in $PluginDir")
+    Fail "no @-imports resolving into the materialized cache were found anywhere in $PluginDir - refusing to bootstrap/verify an empty expected set (this is the failure mode a broken exclusion filter produces)"
+}
+
+# Fail-closed sanity floor, independent of the whole-repo walk above: CLAUDE.md
+# alone is always found (it is a required top-level file, checked earlier) and
+# its own imports must always be a subset of the final set.
+$claudeOnlyCount = 0
+$claudeText2 = Get-Content $ClaudeMd -Raw -ErrorAction SilentlyContinue
+if ($claudeText2) {
+    $claudeOnlySeen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($m in [regex]::Matches($claudeText2, $AtImportRegex)) {
+        $tok = $m.Value.Substring(1)
+        try { $resolved = [System.IO.Path]::GetFullPath((Join-Path $PluginDir $tok)) } catch { continue }
+        if ($resolved -eq $CacheDir -or $resolved.StartsWith($CacheDir + $sep)) {
+            $key = ($resolved.Substring($CacheDir.Length).TrimStart('\', '/')) -replace '\\', '/'
+            if ($claudeOnlySeen.Contains($key)) { continue }
+            [void]$claudeOnlySeen.Add($key)
+            $claudeOnlyCount++
+            if (-not $importSet.Contains($key)) {
+                Fail "sanity check failed: CLAUDE.md imports $key but the whole-repo import walk did not find it - an exclusion filter is likely too broad (e.g. matching an ANCESTOR directory of the repo, not just directories inside it)"
+            }
+        }
+    }
+}
+if ($importPaths.Count -lt $claudeOnlyCount) {
+    Fail "sanity check failed: whole-repo import walk found $($importPaths.Count) entries, fewer than CLAUDE.md alone ($claudeOnlyCount) - refusing a short expected set"
 }
 
 # --- materialize into a staging dir, never touching the sibling's checkout ---
@@ -340,9 +543,15 @@ if (-not (Test-Path $LockFile)) {
 }
 
 $lockText = [System.IO.File]::ReadAllText($LockFile)
+$parsed = ConvertFrom-StrictLock $lockText
+$lockTopField = $parsed.TopField
+$lockPkgNamesList = $parsed.PkgNames
+$lockPkgField = $parsed.PkgField
+$lockConductPathsList = $parsed.ConductPaths
+$lockConductSha1 = $parsed.ConductSha1
 
-$lockVersionField = ([regex]::Match($lockText, '(?m)^lock_version:\s*(\S+)')).Groups[1].Value
-$lockMode = ([regex]::Match($lockText, '(?m)^mode:\s*(\S+)')).Groups[1].Value
+$lockVersionField = $lockTopField['lock_version']
+$lockMode = $lockTopField['mode']
 if (-not $lockMode -or -not $lockVersionField) {
     Fail "lock is stale or wrong-schema (missing 'mode:' or 'lock_version:') - run ./scripts/bootstrap.sh"
 }
@@ -367,15 +576,9 @@ function Get-SortedUnique([string[]]$arr) {
 }
 
 if ($Mode -eq "pinned") {
-    # --- exact package-block set: no extra, none missing -----------------------
-    $pkgBlockMatches = [regex]::Matches($lockText, '(?m)^packages:\r?\n((?:  [a-z][a-zA-Z0-9_]*:\r?\n(?:    .+\r?\n)*)*)')
-    $lockPkgNames = @()
-    if ($pkgBlockMatches.Count -gt 0) {
-        $blockText = $pkgBlockMatches[0].Groups[1].Value
-        $nameMatches = [regex]::Matches($blockText, '(?m)^  ([a-z][a-zA-Z0-9_]*):\r?\n')
-        foreach ($nm in $nameMatches) { $lockPkgNames += $nm.Groups[1].Value }
-    }
-    $observedPkgSet = Get-SortedUnique $lockPkgNames
+    # --- exact package-block set: no extra, none missing (the parser already
+    # rejected a duplicate block outright) -------------------------------------
+    $observedPkgSet = Get-SortedUnique @($lockPkgNamesList)
     $expectedPkgSet = Get-SortedUnique $pkgs
     if (-not (@(Compare-Object $observedPkgSet $expectedPkgSet -SyncWindow 0).Count -eq 0)) {
         [Console]::Error.WriteLine("package block set in lock does not match .vis-versions exactly:")
@@ -391,14 +594,9 @@ if ($Mode -eq "pinned") {
         $expectedTag = $tagNames[$i]
         $expectedCommit = $tagCommits[$i]
 
-        $rx = "(?ms)^  $([regex]::Escape($pkg)):[ `t]*\r?\n(.*?)(?=^  [a-z]|^[A-Za-z_]|\z)"
-        $m = [regex]::Match($lockText, $rx)
-        if (-not $m.Success) { Fail "package ${pkg}: lock block incomplete (missing version/tag/tag_commit) - run ./scripts/bootstrap.sh" }
-        $block = $m.Groups[1].Value
-
-        $observedVersion = ([regex]::Match($block, '(?m)^\s*version:\s*(\S+)')).Groups[1].Value
-        $observedTag = ([regex]::Match($block, '(?m)^\s*tag:\s*(\S+)')).Groups[1].Value
-        $observedCommit = ([regex]::Match($block, '(?m)^\s*tag_commit:\s*(\S+)')).Groups[1].Value
+        $observedVersion = $lockPkgField["$pkg`:version"]
+        $observedTag = $lockPkgField["$pkg`:tag"]
+        $observedCommit = $lockPkgField["$pkg`:tag_commit"]
 
         if (-not $observedVersion -or -not $observedTag -or -not $observedCommit) {
             Fail "package ${pkg}: lock block incomplete (missing version/tag/tag_commit) - run ./scripts/bootstrap.sh"
@@ -414,11 +612,9 @@ if ($Mode -eq "pinned") {
         }
     }
 
-    # --- exact conduct_files entry set: no extra, none missing -----------------
-    $pathMatches = [regex]::Matches($lockText, '(?m)^  - path:\s*(\S+)')
-    $lockFilePaths = @()
-    foreach ($pm in $pathMatches) { $lockFilePaths += $pm.Groups[1].Value }
-    $observedFileSet = Get-SortedUnique $lockFilePaths
+    # --- exact conduct_files entry set: no extra, none missing (the parser
+    # already rejected a duplicate entry outright) ------------------------------
+    $observedFileSet = Get-SortedUnique @($lockConductPathsList)
     $expectedFileSet = Get-SortedUnique $importPaths
     if (-not (@(Compare-Object $observedFileSet $expectedFileSet -SyncWindow 0).Count -eq 0)) {
         [Console]::Error.WriteLine("conduct_files entry set in lock does not match what this repo currently imports:")
@@ -454,10 +650,8 @@ if ($Mode -eq "pinned") {
         $sha1alg = [System.Security.Cryptography.SHA1]::Create()
         $pinHash = [System.BitConverter]::ToString($sha1alg.ComputeHash($ms3.ToArray())).Replace("-", "").ToLower()
 
-        $rxp = "(?m)^  - path:\s*$([regex]::Escape($rel))\s*\r?\n\s*sha1:\s*(\S+)"
-        $mm = [regex]::Match($lockText, $rxp)
-        if (-not $mm.Success) { Fail "conduct file not in lock: $rel - run ./scripts/bootstrap.sh" }
-        $lockHash = $mm.Groups[1].Value
+        $lockHash = $lockConductSha1[$rel]
+        if (-not $lockHash) { Fail "conduct file not in lock: $rel - run ./scripts/bootstrap.sh" }
 
         $cacheFile = Join-Path $CacheDir ($rel -replace '/', '\')
         if (-not (Test-Path $cacheFile)) {
@@ -474,16 +668,13 @@ if ($Mode -eq "pinned") {
     }
 } else {
     # --- floating mode: unchanged from the previous design ---------------------
-    $pathMatches = [regex]::Matches($lockText, '(?m)^  - path:\s*(\S+)')
-    $lockFilePaths = @()
-    foreach ($pm in $pathMatches) { $lockFilePaths += $pm.Groups[1].Value }
-    $observedFileSet = Get-SortedUnique $lockFilePaths
+    $observedFileSet = Get-SortedUnique @($lockConductPathsList)
     $expectedFileSet = Get-SortedUnique $importPaths
     if (-not (@(Compare-Object $observedFileSet $expectedFileSet -SyncWindow 0).Count -eq 0)) {
         Fail "conduct_files entry set in lock does not match what this repo currently imports - run ./scripts/bootstrap.sh -Floating"
     }
 
-    $lockHead = ([regex]::Match($lockText, '(?m)^vis_head:\s*(\S+)')).Groups[1].Value
+    $lockHead = $lockTopField['vis_head']
     $liveHead = (& git -C $VisDir rev-parse HEAD).Trim()
     if ($lockHead -ne $liveHead) {
         Fail "vis drift (floating mode): lock says $lockHead, checkout is $liveHead - run ./scripts/bootstrap.ps1 -Floating to re-resolve"
@@ -495,13 +686,19 @@ if ($Mode -eq "pinned") {
             Fail "import resolves to missing file in cache: @.vis-cache/vis/$rel - run ./scripts/bootstrap.sh -Floating"
         }
         $observed = (Get-FileHash $full -Algorithm SHA1).Hash.ToLower()
-        $rxp = "(?m)^  - path:\s*$([regex]::Escape($rel))\s*\r?\n\s*sha1:\s*(\S+)"
-        $mm = [regex]::Match($lockText, $rxp)
-        $expected = $mm.Groups[1].Value
+        $expected = $lockConductSha1[$rel]
         if ($observed -ne $expected) {
             Fail "conduct file $rel modified in the materialized cache since bootstrap - re-bootstrap or revert .vis-cache/"
         }
     }
+}
+
+# Fail-closed: the number of entries actually verified must equal the
+# expected set size, and the expected set itself must be non-trivial (the
+# earlier $importPaths sanity checks already refuse empty/short; this
+# re-confirms nothing was skipped between enumeration and the loops above).
+if ($importPaths.Count -eq 0 -or $lockConductPathsList.Count -ne $importPaths.Count) {
+    Fail "verified entry count ($($lockConductPathsList.Count)) does not equal the expected set size ($($importPaths.Count)) - refusing"
 }
 
 Write-Output "verified ($Mode): $($importPaths.Count) conduct files, $($pkgs.Count) packages, re-derived from the pin"
