@@ -13,8 +13,9 @@ a seed count. The principal interprets.
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, hashlib, json, math, os, re, shutil, signal, subprocess, sys, tempfile, time
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"
@@ -25,6 +26,12 @@ MAX_TOKENS = 2048
 # but a heavy DOMAIN prompt (e.g. a 3500-5500-word architecture spec) legitimately needs
 # longer; override with WIXIE_EFFICACY_TIMEOUT to avoid a spurious TimeoutExpired crash.
 TRIAL_TIMEOUT = int(os.environ.get("WIXIE_EFFICACY_TIMEOUT", "180"))
+# WIX-EFF-001 fix round 1. After a process-tree kill on timeout, pipes should close almost
+# immediately; bound the drain instead of waiting unboundedly for a stray descendant.
+TREE_KILL_DRAIN_TIMEOUT = 5
+# Uniform cap for any raw-CLI-output excerpt persisted as provenance (transport "detail" /
+# "stdout_partial"). Applied AFTER redaction, not instead of it.
+PROVENANCE_EXCERPT_CHARS = 300
 
 
 def resolve_claude_bin() -> str:
@@ -198,55 +205,152 @@ def _has_valid_envelope(stdout: str) -> bool:
     return False
 
 
-def _run_trial_subprocess(cmd: list[str], env: dict, cwd: str) -> tuple["subprocess.CompletedProcess | None", dict]:
+# ---------------------------------------------------------------------------
+# WIX-EFF-001 fix round 1 (independent verifier REJECT on 3770fab). Two residual defects:
+#
+# C5 (blocking): the per-trial timeout was not bounded through a .cmd/.bat shim. On this host
+# (and presumably on any Windows box with a normal npm install), `shutil.which("claude")`
+# resolves to `...\npm\claude.CMD`. Launching that via subprocess spawns an IMPLICIT cmd.exe
+# (Windows' own .cmd/.bat association), which in turn spawns node.exe as a grandchild.
+# subprocess.run's built-in timeout handling calls `Popen.kill()` on timeout, which kills only
+# that direct child (the implicit cmd.exe) — the node.exe grandchild is left alive holding the
+# stdout/stderr pipe handles open, so the communicate() call subprocess.run makes internally
+# after kill() blocks until THAT process exits. Measured: a 3s TRIAL_TIMEOUT took 120.8s for two
+# trials. _kill_process_tree + the Popen/communicate rewrite below fix this by killing the whole
+# process tree (taskkill /T /F on Windows, killpg on POSIX) and bounding the post-kill drain.
+#
+# C9 (blocking): secret-like tokens (sk-ant-*, bearer tokens, ANTHROPIC_API_KEY=...) were
+# persisted verbatim in the "detail" excerpt and, unredacted and untruncated, in runs/*.json's
+# stdout_raw/stderr_raw. _redact_secrets/_redact_deep below are applied at every persistence and
+# print boundary — never to the raw text used for transport/task classification itself, so
+# detection logic (e.g. "unauthorized" in stderr) still runs on the original text.
+# ---------------------------------------------------------------------------
+
+_SECRET_PATTERNS = [
+    re.compile(r"sk-ant-[A-Za-z0-9_\-]{8,}"),           # Anthropic API/OAuth keys
+    re.compile(r"sk-[A-Za-z0-9_\-]{20,}"),               # other vendors' sk- style keys
+    re.compile(r"(?i)bearer\s+[A-Za-z0-9\-_.=]{8,}"),
+    re.compile(r"(?i)(x-api-key|api[-_]?key)\s*[:=]\s*['\"]?[A-Za-z0-9\-_.]{8,}"),
+    re.compile(r"(?i)ANTHROPIC_API_KEY\s*=\s*\S+"),
+]
+
+
+def _redact_secrets(text: str | None) -> str | None:
+    """Replace any credential-shaped substring with a fixed marker. Idempotent, order-independent."""
+    if not text:
+        return text
+    for pat in _SECRET_PATTERNS:
+        text = pat.sub("[REDACTED]", text)
+    return text
+
+
+def _redact_deep(value):
+    """
+    Recursively redact secret-like strings anywhere inside a JSON-shaped value (dict/list/str;
+    other scalars pass through unchanged). Applied once, at the boundary right before a trial or
+    verdict artifact is written to disk or printed — never to values still being used for
+    transport-reason detection or task classification, so redaction cannot mask or alter either.
+    """
+    if isinstance(value, str):
+        return _redact_secrets(value)
+    if isinstance(value, dict):
+        return {k: _redact_deep(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_deep(v) for v in value]
+    return value
+
+
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """
+    Kill a trial's ENTIRE process tree, not just the direct child `proc`.
+
+    proc.kill() alone is not enough when the CLI resolves to a .cmd/.bat shim: Windows launches
+    an implicit cmd.exe to interpret it, which spawns further descendants (e.g. node.exe) that
+    inherit the same stdout/stderr pipe handles. Killing only the implicit cmd.exe leaves those
+    descendants running and still holding the pipes open.
+    """
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=10)
+        except Exception:
+            pass
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def _run_trial_subprocess(cmd: list[str], env: dict, cwd: str) -> tuple["SimpleNamespace | None", dict]:
     """
     Run one `claude -p` trial and report its TRANSPORT outcome, never a task outcome.
 
     Returns (proc, transport). `proc` is None when the process never completed (timeout,
-    spawn failure). `transport` is {"ok": bool, "reason": str | None, "detail": str | None}:
-    reason in {"timeout", "spawn-failure", "auth-failure", "rate-limited", "provider-error",
-    "empty-output", "invalid-envelope"} when ok is False. `detail` carries provenance (exit
-    code / exception text / truncated stderr) for debugging — truncated so a large or
-    credential-bearing stderr blob is never fully persisted.
+    spawn failure); otherwise a SimpleNamespace(returncode, stdout, stderr) — a Popen object's
+    `.stdout`/`.stderr` attributes are pipe objects, not the captured text communicate() returns,
+    so callers get a stable, CompletedProcess-shaped surface either way. `transport` is
+    {"ok": bool, "reason": str | None, "detail": str | None}: reason in {"timeout",
+    "spawn-failure", "auth-failure", "rate-limited", "provider-error", "empty-output",
+    "invalid-envelope"} when ok is False. `detail` carries provenance (exit code / exception
+    text / stderr excerpt) for debugging, redacted and length-capped by _redact_secrets /
+    PROVENANCE_EXCERPT_CHARS — never a large or credential-bearing blob.
     """
     kwargs: dict = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     else:
         kwargs["start_new_session"] = True
+
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True,
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows locale (cp1252) would crash on non-cp1252 bytes
-            env=env, cwd=cwd, timeout=TRIAL_TIMEOUT, **kwargs,
+            env=env, cwd=cwd, **kwargs,
         )
-    except subprocess.TimeoutExpired as exc:
-        partial = exc.stdout
-        if isinstance(partial, bytes):
-            partial = partial.decode("utf-8", "replace")
-        return None, {"ok": False, "reason": "timeout",
-                      "detail": f"trial exceeded TRIAL_TIMEOUT={TRIAL_TIMEOUT}s",
-                      "stdout_partial": (partial or "")[:500]}
     except OSError as exc:
         # binary not found, permission denied, etc. — the CLI never even started.
-        return None, {"ok": False, "reason": "spawn-failure", "detail": str(exc)[:300]}
+        return None, {"ok": False,
+                      "reason": "spawn-failure",
+                      "detail": _redact_secrets(str(exc))[:PROVENANCE_EXCERPT_CHARS]}
 
-    if proc.returncode != 0:
-        stderr_l = (proc.stderr or "").lower()
+    try:
+        stdout, stderr = proc.communicate(timeout=TRIAL_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc)
+        # Pipes should close almost immediately once the whole tree is dead; bound the drain
+        # instead of waiting unboundedly for some stray descendant outside the killed tree.
+        try:
+            partial_stdout, _partial_stderr = proc.communicate(timeout=TREE_KILL_DRAIN_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            partial_stdout = ""
+        return None, {"ok": False, "reason": "timeout",
+                      "detail": f"trial exceeded TRIAL_TIMEOUT={TRIAL_TIMEOUT}s (process tree killed)",
+                      "stdout_partial": _redact_secrets((partial_stdout or ""))[:PROVENANCE_EXCERPT_CHARS]}
+
+    returncode = proc.returncode
+    if returncode != 0:
+        stderr_l = (stderr or "").lower()
         if any(s in stderr_l for s in ("401", "unauthorized", "authentication", "not logged in")):
             reason = "auth-failure"
         elif any(s in stderr_l for s in ("429", "rate limit", "overloaded")):
             reason = "rate-limited"
         else:
             reason = "provider-error"
-        return proc, {"ok": False, "reason": reason,
-                      "detail": f"exit {proc.returncode}: {(proc.stderr or '').strip()[:300]}"}
+        detail = _redact_secrets(f"exit {returncode}: {(stderr or '').strip()}")[:PROVENANCE_EXCERPT_CHARS]
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr), \
+               {"ok": False, "reason": reason, "detail": detail}
 
-    if not (proc.stdout or "").strip():
-        return proc, {"ok": False, "reason": "empty-output",
-                      "detail": "the CLI exited 0 but produced no stdout; nothing was measured"}
+    if not (stdout or "").strip():
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr), \
+               {"ok": False, "reason": "empty-output",
+                "detail": "the CLI exited 0 but produced no stdout; nothing was measured"}
 
-    return proc, dict(TRANSPORT_OK)
+    return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr), dict(TRANSPORT_OK)
 
 
 def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
@@ -325,8 +429,11 @@ def run_fixture(slug: str, n: int, model: str) -> dict:
         transport_failures = []
         for seed in range(n):
             trace, meta = run_trial(sys_md, turns, restricted, model, seed)
+            # WIX-EFF-001 fix round 1 (C9): redact before persisting to disk only — `trace`/
+            # `meta` themselves stay unredacted for classify_trajectory below, so redaction can
+            # never mask or alter a transport/task classification decision.
             (runs_dir / f"{ts}-{arm}-{seed}.json").write_text(
-                json.dumps({"trace": trace, "meta": meta}, indent=2, default=str),
+                json.dumps(_redact_deep({"trace": trace, "meta": meta}), indent=2, default=str),
                 encoding="utf-8")
             # WIX-EFF-001: a trial whose transport failed (auth, empty output, invalid envelope,
             # timeout) never reached the model — its empty trace is NOT evidence the prompt/model
@@ -399,6 +506,10 @@ def run_fixture(slug: str, n: int, model: str) -> dict:
     }
     if any_zero_measured:
         verdict["verdict"] = "NO_MEASUREMENT"
+    # WIX-EFF-001 fix round 1 (C9): redact the whole verdict tree once, here, right before it is
+    # both persisted AND returned — main()'s printed summary is built from this same (now
+    # redacted) object, so stdout and verdict.json are covered by one call.
+    verdict = _redact_deep(verdict)
     (fdir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
     return verdict
 
@@ -507,8 +618,11 @@ def _measure_arm(system_text: str, cases: list[dict], n: int, model: str,
     for case in cases:
         for seed in range(n):
             trace, meta = run_corpus_trial(system_text, case["input"], model, seed)
+            # WIX-EFF-001 fix round 1 (C9): redact before persisting to disk only — see the
+            # matching comment in run_fixture.
             (runs_dir / f"{ts}-{arm}-{case['id']}-{seed}.json").write_text(
-                json.dumps({"trace": trace, "meta": meta}, indent=2, default=str), encoding="utf-8")
+                json.dumps(_redact_deep({"trace": trace, "meta": meta}), indent=2, default=str),
+                encoding="utf-8")
             transport = (meta or {}).get("transport") or TRANSPORT_OK
             if not transport.get("ok", True):
                 transport_failures.append({"case": case["id"], "seed": seed,
@@ -608,6 +722,9 @@ def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_con
         "treatment": treatment, "control": control,
         "decision": decision,
     }
+    # WIX-EFF-001 fix round 1 (C9): redact the whole verdict tree once, here, right before it is
+    # both persisted AND returned — see the matching comment in run_fixture.
+    verdict = _redact_deep(verdict)
     (cdir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
     return verdict
 
