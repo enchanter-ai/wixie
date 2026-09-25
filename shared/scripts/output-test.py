@@ -962,7 +962,6 @@ def try_offline_fix(prompt_text, scores, details):
     if failed_tests and hasattr(convergence, 'FIXERS'):
         # Run convergence-style fixes on the prompt
         pre_text = prompt_text
-        from collections import OrderedDict
 
         # Score the prompt to find weakest axis
         if _self_eval:
@@ -970,9 +969,17 @@ def try_offline_fix(prompt_text, scores, details):
                            for a, fn in zip(_self_eval.AXES, _self_eval.SCORERS)}
             weakest = min(_self_eval.AXES, key=lambda a: prompt_scores[a])
             if weakest in convergence.FIXERS and prompt_scores[weakest] < 9.0:
-                prompt_text = convergence.FIXERS[weakest](prompt_text)
-                if prompt_text != pre_text:
-                    return prompt_text, True, f"Offline fix: improved {weakest} ({prompt_scores[weakest]}/10)"
+                candidate_text = convergence.FIXERS[weakest](prompt_text)
+                if candidate_text != pre_text:
+                    # WIX-CONV-001 item 4: this path applies convergence.py's fixers with
+                    # no gate of its own. Share the same structural gate convergence.py's
+                    # own accept/revert loop uses (protected_regions_equal), so a candidate
+                    # that changed a fenced code block / table / blockquote / <example>
+                    # block is refused here too, regardless of score.
+                    gate = getattr(convergence, "protected_regions_equal", None)
+                    if gate is not None and not gate(pre_text, candidate_text):
+                        return prompt_text, False, None
+                    return candidate_text, True, f"Offline fix: improved {weakest} ({prompt_scores[weakest]}/10)"
 
     return prompt_text, False, None
 
