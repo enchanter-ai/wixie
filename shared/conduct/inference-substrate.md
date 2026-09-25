@@ -96,6 +96,118 @@ Known limits of the identity rule (inherent, not bugs):
   again, a genuinely new line identical in content and coordinates (same session, same date)
   to an already-imported one is treated as a replay. Only an `event_id` can tell them apart.
 
+### Legacy log migration (optional, one-time, operator-run)
+
+The pre-identity limitation above (`state/artifacts.jsonl`'s committed historical records —
+203 as of this writing — carry no `_identity`) is an accepted, documented limitation (D7), not
+reopened by new evidence unless the contract below is violated. It is never rewritten
+automatically and no engine code change is required or permitted to express it: the procedure
+below composes entirely from the existing `backfill` subcommand plus plain file operations.
+
+**When it is useful.** Only if you need copy/concatenation-safe idempotency for the *legacy*
+segment of the log equivalent to what every newly engine-written record already gets for free.
+Normal operation does not need this: `reconcile` already derives a stable per-file
+content-plus-ordinal identity for pre-identity lines for day-to-day accounting. Migration only
+closes the specific gap in "Known limits" above — that an accidental self-concatenation of the
+legacy log is indistinguishable from genuine historical repeats — by giving each legacy record a
+persisted `_identity` so future copies verify instead of being recounted from content.
+
+**What it does.** It does not edit `state/artifacts.jsonl` in place. It reads the existing log
+as a `backfill` *source* against a fresh, empty destination log (an isolated
+`WIXIE_INFERENCE_STATE` directory), which re-emits every record unchanged except for two added
+engine metadata keys (`_identity`, `_session_source`) — same order, same count, every other
+field byte-identical. That output file is the migrated log; swapping it in for the real one is a
+separate, explicit, manual step — never performed automatically, and never as a side effect of
+running `backfill`, `reconcile`, or any other subcommand against the real state directory.
+
+**Procedure.**
+
+1. **Back up and hash first.**
+   ```bash
+   ts=$(date -u +%Y%m%dT%H%M%SZ)
+   sha256sum plugins/inference-engine/state/artifacts.jsonl > /tmp/pre-migration-$ts.sha256
+   cp plugins/inference-engine/state/artifacts.jsonl /tmp/artifacts.jsonl.backup-$ts
+   cp plugins/inference-engine/state/catalog.json /tmp/catalog.json.pre-migration-$ts   # if present
+   ```
+2. **Migrate into an isolated scratch state dir** (never point `WIXIE_INFERENCE_STATE` at the
+   real `plugins/inference-engine/state/`):
+   ```bash
+   mkdir -p /tmp/vis-migrate/scratch && : > /tmp/vis-migrate/scratch/artifacts.jsonl
+   WIXIE_INFERENCE_STATE=/tmp/vis-migrate/scratch \
+     python shared/scripts/inference-engine.py backfill plugins/inference-engine/state/artifacts.jsonl
+   ```
+   Expect `backfilled <N> new records ... (0 already recorded, 0 rejected)` where `N` equals the
+   real log's line count, and exit 0. A nonzero rejected count or a line-count mismatch means
+   stop — do not proceed to step 4.
+3. **Confirm the migration only added identity metadata:**
+   ```bash
+   python -c "
+   import json
+   old=[json.loads(l) for l in open('plugins/inference-engine/state/artifacts.jsonl',encoding='utf-8') if l.strip()]
+   new=[json.loads(l) for l in open('/tmp/vis-migrate/scratch/artifacts.jsonl',encoding='utf-8') if l.strip()]
+   assert len(old)==len(new)
+   for o,n in zip(old,new):
+       nn={k:v for k,v in n.items() if k not in ('_identity','_session_source')}
+       assert nn==o, (o,n)
+   print('OK: %d records, only identity metadata added' % len(old))
+   "
+   ```
+4. **Verify catalog semantic equivalence — pattern-by-pattern**, comparing a reconcile of the
+   unmodified log (in its own isolated copy) against a reconcile of the migrated log, ignoring
+   only wall-clock fields (`elevated_at`, `retired_at`):
+   ```bash
+   mkdir -p /tmp/vis-migrate/pre && cp plugins/inference-engine/state/artifacts.jsonl /tmp/vis-migrate/pre/artifacts.jsonl
+   WIXIE_INFERENCE_STATE=/tmp/vis-migrate/pre    python shared/scripts/inference-engine.py reconcile
+   WIXIE_INFERENCE_STATE=/tmp/vis-migrate/scratch python shared/scripts/inference-engine.py reconcile
+   python -c "
+   import json
+   def norm(p):
+       cat=json.load(open(p,encoding='utf-8'))
+       pats=cat.get('patterns',cat)
+       items=pats.items() if isinstance(pats,dict) else [(x.get('pattern_id'),x) for x in pats]
+       out={}
+       for pid,pp in items:
+           pp=dict(pp)
+           for k in ('reservoir','raw_refs','examples','elevated_at','retired_at'):
+               pp.pop(k,None)
+           out[pid]=pp
+       return out
+   a=norm('/tmp/vis-migrate/pre/catalog.json'); b=norm('/tmp/vis-migrate/scratch/catalog.json')
+   diffs=[pid for pid in set(a)|set(b) if a.get(pid)!=b.get(pid)]
+   print('pattern counts:', len(a), len(b), 'semantic diffs:', len(diffs))
+   assert not diffs
+   "
+   ```
+   Every `verdict`, `llr`, `alpha`/`beta`, `posterior_*`, `weight` and `observations` must match
+   for every pattern. Do not proceed if any diff remains.
+5. **Swap in, only after step 4 passes clean**, as an explicit human-run command (never scripted
+   into an agent's autonomous flow):
+   ```bash
+   cp /tmp/vis-migrate/scratch/artifacts.jsonl plugins/inference-engine/state/artifacts.jsonl
+   python shared/scripts/inference-engine.py reconcile
+   python shared/scripts/inference-engine.py render-briefing wixie
+   ```
+6. **Idempotent by construction.** Re-running step 2 against an already-migrated log (source =
+   the now-real, already-migrated `state/artifacts.jsonl`) into a fresh empty scratch
+   destination reproduces a byte-identical output file (every line already carries a `_identity`
+   that recomputes, so it is appended unchanged, in the same order) — running the whole
+   procedure twice changes nothing. Re-running step 2 with the migrated log as *both* source and
+   an already-populated destination (e.g. by mistake) reports `0 new records (N already
+   recorded)` — a safe no-op, not a duplication.
+7. **Rollback**, at any point before or after step 5, if anything looks wrong:
+   ```bash
+   cp /tmp/artifacts.jsonl.backup-$ts plugins/inference-engine/state/artifacts.jsonl
+   python shared/scripts/inference-engine.py reconcile
+   ```
+   then discard the scratch directories. The catalog and briefings are always safely
+   re-derivable from the log alone.
+
+This procedure was tested end to end (203-record log, all steps above) before being documented;
+see `tranche3/patches/IMPLEMENTATION_NOTES.md` in the remediation workspace for the recorded
+commands and results. It is an explicit operator action; no skill or hook invokes it
+automatically, and completing it does not require, and must not trigger, any change to
+`shared/scripts/inference-engine.py`.
+
 ### Session identity precedence
 
 First match wins, recorded in `_session_source`: record `session_id` > record `source_session` >
