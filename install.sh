@@ -47,6 +47,12 @@ cat <<'EOF'
   That installs all 6 plugins via dependency resolution. To cherry-pick
   a single plugin instead, use e.g. `/plugin install prompt-harden@wixie`.
 
+  Each installed plugin carries the shared-conduct modules it references
+  under its own vendor/ directory (generated from the pinned vis release
+  in .vis-lock), so no vis checkout or bootstrap step is needed for it.
+  The repo-level CLAUDE.md contract applies inside a full checkout (run
+  ./scripts/bootstrap.sh there); see docs/installation.md.
+
   Verify with:   /plugin list
   Expected:      full + 6 plugins installed under the wixie marketplace.
 

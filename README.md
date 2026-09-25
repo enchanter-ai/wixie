@@ -196,6 +196,8 @@ Claude Code resolves the dependency list and installs all 6 plugins. Verify with
 
 **Want to cherry-pick?** Individual plugins are still installable by name — e.g. `/plugin install prompt-harden@wixie` if you only need the hardener. The pipeline is designed to work end-to-end, though, so `full@wixie` is the path we recommend.
 
+**Shared conduct ships inside each plugin.** A marketplace install copies only `plugins/<name>/`, so every shared-conduct module a plugin's skills and agents reference is carried inside that plugin under `vendor/` and referenced as `${CLAUDE_PLUGIN_ROOT}/vendor/...` (Claude Code expands that to the installed location). The files are generated from the pinned vis release recorded in `.vis-lock` by `scripts/vendor-conduct.py`, listed with their tag, commit and sha256 in each plugin's `vendor/VENDORED.json`, and checked byte-identical to the pin in CI. An installed plugin needs no sibling vis checkout and no bootstrap step. The repo-level [CLAUDE.md](CLAUDE.md) contract applies when you work inside a full checkout; see [docs/installation.md](docs/installation.md#what-an-installed-plugin-carries) for exactly what each layout receives.
+
 **Via shell** (also installs `shared/scripts/*.py` locally for `output-test` / `output-eval`):
 
 ```bash
@@ -210,7 +212,7 @@ cd wixie
 ./scripts/bootstrap.sh    # canonical first command — installs vis sibling
 ```
 
-Without `./scripts/bootstrap.sh`, conduct imports will silently miss and Claude Code's `@`-loader will fail-soft. Always bootstrap first.
+Without `./scripts/bootstrap.sh`, the repo-level `CLAUDE.md` conduct imports will silently miss and Claude Code's `@`-loader will fail-soft. Always bootstrap first in a checkout. (Installed plugins do not need this: they carry their own vendored conduct.)
 ## 6 Plugins, 7 Agents, 447 Models
 
 | Plugin | Command | What | Agent |

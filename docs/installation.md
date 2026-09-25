@@ -24,6 +24,35 @@ Claude Code resolves the meta-plugin's dependency list and installs every sub-pl
 
 You should see each sub-plugin listed with its version. If a sub-plugin is missing, check `/plugin marketplace list` and confirm the `enchanter-ai/wixie` entry is present.
 
+## What an installed plugin carries
+
+Claude Code installs a plugin by copying only its own `plugins/<name>/` directory. Nothing from the repository root (`CLAUDE.md`, `.vis-lock`, `.vis-cache/`, `scripts/`, `shared/`) is part of an install, so every shared-conduct module a plugin's own files reference is shipped **inside the plugin**:
+
+- Location: `plugins/<name>/vendor/vis/packages/<pkg>/conduct/<module>.md` for vis conduct, and `plugins/<name>/vendor/wixie/shared/conduct/<module>.md` for Wixie's own shared conduct.
+- References: plugin files point at them as `${CLAUDE_PLUGIN_ROOT}/vendor/...`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the installed plugin root in plugin skill content and plugin agent bodies, so the path resolves wherever the plugin is installed. No sibling vis checkout, no `../vis`, and no post-install bootstrap is involved.
+- Provenance: each plugin's `vendor/VENDORED.json` lists every vendored file with its source path, vis package, version, tag, tag commit, sha256 and sha1. The content is copied from the pinned vis commit recorded in `.vis-lock` (currently `enchanter-<pkg>--v0.7.0` at `904873d`), never hand-edited.
+
+| Plugin | Vendored shared conduct |
+|---|---|
+| deep-research | vis `core`: capability-fidelity, precedent, tier-sizing; vis `web`: citation-verification, mcp-research-discipline, research-pipeline, source-discipline, web-fetch |
+| inference-engine | vis `core`: context; Wixie `shared/conduct/inference-substrate.md` |
+| prompt-tester | vis `core`: tier-sizing; vis `skills`: formatting |
+| convergence-engine, prompt-crafter, prompt-refiner, prompt-harden, prompt-translate, full | none (their files reference no shared-conduct module) |
+
+The repo-level `CLAUDE.md` contract (its imported conduct modules, DEPLOY bar and behavioral contracts) is loaded by Claude Code only when you work inside a full checkout of this repository, where `./scripts/bootstrap.sh` materializes the pinned vis modules into `.vis-cache/vis/`. It is not delivered by a plugin install.
+
+### Maintainers: regenerating vendored conduct
+
+The vendored files are generated; vis stays the source of truth. After changing a pin (`.vis-versions`) or adding/removing a `${CLAUDE_PLUGIN_ROOT}/vendor/...` reference in a plugin:
+
+```bash
+./scripts/bootstrap.sh                   # re-resolve the pin, rewrite .vis-lock
+python scripts/vendor-conduct.py         # regenerate plugins/*/vendor/ from the pinned commit
+python scripts/vendor-conduct.py --check # byte-identity against the pin (needs the ../vis sibling)
+```
+
+Commit `.vis-lock` and `plugins/*/vendor/` together (a marketplace install clones the repository, so the vendored files must be committed). `--check` fails on a missing, extra or non-identical vendored file, a manifest mismatch, a moved tag, or a plugin reference that still points outside the plugin (for example `.vis-cache/` or `../vis/`). CI runs it in `vis-verify.yml`; `tests/distribution/` runs the offline form (`--check --offline`, anchored to the `.vis-lock` hashes) plus drift cases against a synthetic vis release.
+
 ## Cherry-pick a single sub-plugin
 
 Some sub-plugins are useful on their own. To install only one:
