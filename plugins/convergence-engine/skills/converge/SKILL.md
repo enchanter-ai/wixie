@@ -92,8 +92,29 @@ python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py corpus depl
 - Reads `shared/eval-corpus/deploy-bar/corpus.json` (add per-domain corpora with the same schema).
 - Each case scores PASS/FAIL on expect/reject regexes over real model output; pass rate gets a Wilson CI.
 - `--with-control` adds a baseline arm and additionally requires **measured lift** over it.
-- **ACCEPT** (exit 0) = treatment CI lower bound ≥ `rate_floor` (and, with control, CI low > control CI high).
-  **REJECT** (exit 1) = otherwise → the verdict is **HOLD**, regardless of the heuristic score. Re-run convergence.
+
+**WIX-EFF-001 — transport failure is never a measured rejection.** Every trial's TRANSPORT
+(did `claude -p` reach the provider and return a parseable envelope) is recorded separately
+from its TASK outcome (did the model do what the corpus case expects). A trial whose transport
+failed — auth failure, empty output, an invalid/garbled envelope, a hung trial that timed out,
+a provider/rate-limit error — is excluded from the classifier and from the Wilson counts
+entirely; it is never scored as a rejection and never contributes zero-valued evidence. Each
+arm's `transport_failures` list and `measurement_valid` flag are persisted in `verdict.json` with
+cause, attempt (case/seed), exit code and a truncated stderr excerpt.
+
+**Exit codes:**
+
+| Exit | Meaning |
+|------|---------|
+| `0` | **ACCEPT** — treatment CI lower bound ≥ `rate_floor` (and, with control, CI low > control CI high). |
+| `1` | **REJECT** — the bar was applied and not met → the verdict is **HOLD**, regardless of the heuristic score. Re-run convergence. |
+| `2` | Usage error — missing corpus or prompt file. Nothing was run. |
+| `3` | **NO_MEASUREMENT** — an arm had zero valid measurements (every trial in it failed transport). This is neither ACCEPT nor REJECT: the bar was never applied, so it must never be read as DEPLOY *or* as a measured HOLD. `decision.verdict` in `verdict.json` reads `"NO_MEASUREMENT"` (never `"REJECT"`) in this case. Treat like the CLI-unavailable case below — hold at the heuristic pre-check verdict and re-run once the transport issue (auth, network, rate limit) is fixed. |
+
+A **mixed** run (some trials fail transport, others measure) is not NO_MEASUREMENT as long as at
+least one trial in every arm produced a real measurement — the accept/reject decision is computed
+only over the trials that actually measured something, and exit is 0 or 1 as usual.
+
 - Honest-numbers: if the `claude` CLI is unavailable, the measure step cannot run — report that and hold
   at the heuristic pre-check verdict; do NOT claim a measured DEPLOY. Full artifact: `shared/eval-corpus/deploy-bar/verdict.json`.
 
@@ -141,10 +162,12 @@ Tell the user:
 ```
 Convergence complete: X.X → Y.Y in N iterations
 Heuristic pre-check: PASS / HOLD  [axis scores]
-Measured (deploy-bar, n=N): ACCEPT / REJECT  (treatment CI low L.LL, floor 0.75[, lift over control])
-Verdict: DEPLOY (measured ACCEPT) / HOLD (measured REJECT) / HOLD (measure step unavailable)
+Measured (deploy-bar, n=N): ACCEPT / REJECT / NO_MEASUREMENT  (treatment CI low L.LL, floor 0.75[, lift over control])
+Verdict: DEPLOY (measured ACCEPT) / HOLD (measured REJECT) / HOLD (measure step unavailable or NO_MEASUREMENT)
 ```
-DEPLOY requires the measured **ACCEPT**, not just a heuristic pass.
+DEPLOY requires the measured **ACCEPT**, not just a heuristic pass. NO_MEASUREMENT (exit 3) is
+not a measured HOLD — say plainly that the measure step never ran (transport failure), not that
+the prompt failed it.
 
 ## Rules
 - Do NOT ask for permission. Run everything autonomously.
