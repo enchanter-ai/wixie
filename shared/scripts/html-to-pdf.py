@@ -37,21 +37,44 @@ subprocess timeout on *this whole script* must stay larger than OVERALL_TIMEOUT_
 there too) -- otherwise report-gen kills this process at the exact moment it would otherwise
 still be trying the next converter, which is exactly the defect this fixes.
 
+WIX-PDF-001 fix round 2: real Edge on this host has been observed to exit 0 roughly 1.6-1.9s
+BEFORE its own (detached) writer process actually finishes creating the PDF -- the subprocess
+exiting is not proof the file is finished, or even started. LATE_WRITE_POLL_S bounds how long
+convert_one waits, after the browser process itself has exited, for a late write to land before
+declaring failure. Every attempt's output additionally lives inside its own private
+wixie-pdf-attempt-* directory (never the shared OS temp root), so a write that arrives after
+even that bound can only ever land somewhere this module already owns and cleans up (via the
+same bounded retry plus the sweep below) -- never loose in the shared temp root.
+
 Stdlib only. No pip installs.
 """
 import sys, os, subprocess, shutil, platform, tempfile, json, time, types
 
 PER_BROWSER_TIMEOUT_S = 12
 OVERALL_TIMEOUT_S = 45
+LATE_WRITE_POLL_S = 5.0
+_LATE_WRITE_POLL_INTERVAL_S = 0.15
 
-# WIX-PDF-001 fix round 1: a leaked wixie-pdf-profile-* directory that a prior run's own
-# bounded cleanup retry couldn't finish removing (observed live: a transient Windows
-# handle-release race that can outlast even a several-second retry window under heavy real-
-# browser load) is swept up here as a backstop. 600s is comfortably longer than any single
-# invocation's own lifetime (OVERALL_TIMEOUT_S plus cleanup, well under two minutes), so a
-# directory this old can only be abandoned, never one still in use by a concurrently-running
-# invocation.
-STALE_PROFILE_MAX_AGE_S = 600
+# WIX-PDF-001: a leaked wixie-pdf-* temp item that a prior run's own bounded cleanup retry
+# couldn't finish removing (observed live, both round 1 [a profile dir under real-browser load]
+# and round 2 [a late Edge write landing after cleanup had already given up]: a transient
+# Windows handle-release race that can outlast even a several-second retry window) is swept up
+# here as a backstop. 600s is comfortably longer than any single invocation's own lifetime
+# (OVERALL_TIMEOUT_S plus cleanup, well under two minutes), so an item this old can only be
+# abandoned, never one still in use by a concurrently-running invocation.
+STALE_PDF_TEMP_MAX_AGE_S = 600
+
+# (name-prefix, "dir" | "file") pairs the startup sweep looks for, directly inside the OS temp
+# directory. "wixie-pdf-attempt-" is this version's own per-attempt directory (fix round 2).
+# "wixie-pdf-profile-" and "wixie-pdf-out-" are fix-round-1-era names this version no longer
+# creates itself, kept here so an older leftover (from a previous deploy of this same script,
+# or an in-flight process from before an upgrade) still gets cleaned up rather than silently
+# left orphaned forever.
+SWEEP_STALE_TARGETS = (
+    ("wixie-pdf-attempt-", "dir"),
+    ("wixie-pdf-profile-", "dir"),
+    ("wixie-pdf-out-", "file"),
+)
 
 
 BROWSERS = {
@@ -170,7 +193,7 @@ def _rmtree_with_retries(path, attempts=20, delay=0.75):
     the holding process already confirmed dead; a transient kernel-level handle-release race,
     not a permanent lock). A single-attempt ignore_errors=True cleanup measurably leaked these
     on this host across repeated real runs, and even this bounded retry will not always win
-    that race under heavy load -- see _sweep_stale_profile_dirs() for the backstop that
+    that race under heavy load -- see _sweep_stale_pdf_temp_items() for the backstop that
     catches whatever this retry still misses. Bounded (worst case ~15s here, comfortably inside
     OVERALL_TIMEOUT_S when only one or two candidates need it) and best-effort: after the last
     attempt this still gives up silently, exactly as the single-attempt cleanup it replaces
@@ -183,35 +206,49 @@ def _rmtree_with_retries(path, attempts=20, delay=0.75):
             time.sleep(delay)
 
 
-def _sweep_stale_profile_dirs():
-    """Best-effort cleanup of wixie-pdf-profile-* directories a PRIOR run's own
-    _rmtree_with_retries() failed to remove in time (WIX-PDF-001 fix round 1: 5/5 real runs on
-    this host left a 7-9MB profile directory behind past 60s under heavy real-browser load,
-    even though every one of them deleted cleanly moments later once the OS finished releasing
-    whatever handle was still open). Runs once at the start of every invocation of this script.
+def _sweep_stale_pdf_temp_items():
+    """Best-effort cleanup of wixie-pdf-* temp items a PRIOR run's own bounded cleanup retry
+    failed to remove in time -- both this version's own wixie-pdf-attempt-* directories (fix
+    round 2: a late/detached browser write can land after convert_one's own retry window has
+    given up) and fix-round-1-era wixie-pdf-profile-* directories / wixie-pdf-out-* files an
+    older deployed copy of this script may have left behind. Runs once at the start of every
+    invocation of this script (see SWEEP_STALE_TARGETS for the exact prefix/kind list).
 
-    Safety: only ever touches a directory (a) directly inside the OS temp directory (never a
-    subdirectory, never resolved through a symlink target outside it), (b) whose basename
-    matches the exact 'wixie-pdf-profile-' prefix this module itself uses for nothing else,
-    and (c) whose mtime is older than STALE_PROFILE_MAX_AGE_S -- comfortably longer than any
-    single invocation's own lifetime, so a directory this old cannot belong to a
+    Safety, identical for every target: only ever touches an item (a) directly inside the OS
+    temp directory (never a subdirectory, never resolved through a symlink -- os.path.islink is
+    checked before anything else touches the path), (b) whose basename matches one of this
+    module's own exact prefixes and whose kind (file vs directory) matches what that prefix is
+    documented to be, and (c) whose mtime is older than STALE_PDF_TEMP_MAX_AGE_S -- comfortably
+    longer than any single invocation's own lifetime, so an item this old cannot belong to a
     concurrently-running invocation. Never raises; a failure here is silently skipped and left
     for the next sweep or the OS's own temp-directory cleanup."""
     try:
         tmp = os.path.abspath(tempfile.gettempdir())
         now = time.time()
         for name in os.listdir(tmp):
-            if not name.startswith("wixie-pdf-profile-"):
+            kind = None
+            for prefix, expected_kind in SWEEP_STALE_TARGETS:
+                if name.startswith(prefix):
+                    kind = expected_kind
+                    break
+            if kind is None:
                 continue
             path = os.path.join(tmp, name)
             try:
-                if not os.path.isdir(path) or os.path.islink(path):
+                if os.path.islink(path):
                     continue
                 if os.path.dirname(os.path.abspath(path)) != tmp:
                     continue
-                if now - os.path.getmtime(path) < STALE_PROFILE_MAX_AGE_S:
+                if kind == "dir" and not os.path.isdir(path):
                     continue
-                shutil.rmtree(path, ignore_errors=True)
+                if kind == "file" and not os.path.isfile(path):
+                    continue
+                if now - os.path.getmtime(path) < STALE_PDF_TEMP_MAX_AGE_S:
+                    continue
+                if kind == "dir":
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    os.remove(path)
             except OSError:
                 continue
     except OSError:
@@ -280,45 +317,87 @@ def _run_bounded(cmd, timeout):
         _terminate_process_tree(proc.pid)
 
 
+def _wait_for_valid_pdf(path, timeout_s, poll_interval=_LATE_WRITE_POLL_INTERVAL_S):
+    """Poll `path` for up to timeout_s for a file that is non-empty, has a stable size across
+    two consecutive checks (so a write still in progress is never mistaken for a finished one),
+    and starts with a %PDF- header. Returns True/False; never raises.
+
+    WIX-PDF-001 fix round 2: real Edge on this host exits 0 roughly 1.6-1.9s before its own
+    writer process actually finishes creating the file, so checking immediately after the
+    browser subprocess returns produced a false "wrote nothing". This also runs (cheaply -- one
+    extra poll_interval) on the already-written-by-the-time-we-check path, which is a real
+    safety improvement on its own: it means a still-being-written file is never accepted as
+    "done" just because it already has some bytes at the moment of the first check."""
+    deadline = time.time() + timeout_s
+    last_size = -1
+    while True:
+        try:
+            if os.path.isfile(path):
+                size = os.path.getsize(path)
+                if size > 0 and size == last_size:
+                    with open(path, "rb") as fh:
+                        if fh.read(5) == b"%PDF-":
+                            return True
+                last_size = size
+            else:
+                last_size = -1
+        except OSError:
+            last_size = -1
+        if time.time() >= deadline:
+            return False
+        time.sleep(poll_interval)
+
+
 def convert_one(html_path, pdf_path, browser_name, browser_path, browser_type, timeout=PER_BROWSER_TIMEOUT_S):
     """Attempt a single browser conversion. Returns (ok, detail). detail is empty on
     success, or a short, documented reason on failure (bounded to 200 chars of the last
     line of stderr/stdout — WIX-PDF-001's finding specifically flagged that subprocess
     output was previously captured and then discarded entirely on every path).
 
-    WIX-PDF-001 fix round 1 (stale-PDF false success): the browser is always pointed at a
-    FRESH, uniquely-named temp file -- never directly at the final pdf_path. A pre-existing
-    file at pdf_path (a stale report.pdf from a previous run) can therefore never be mistaken
-    for this run's output: the temp file either exists (this run produced something) or it
-    doesn't (it didn't), independent of whatever was already sitting at pdf_path. The temp
-    file is moved into pdf_path via os.replace() only after it has been validated -- an
-    unverified or absent conversion never touches pdf_path at all."""
+    WIX-PDF-001 (stale-PDF false success, fix round 1): the browser is always pointed at a
+    FRESH, uniquely-named output path inside this attempt's own private directory -- never
+    directly at the final pdf_path. A pre-existing file at pdf_path (a stale report.pdf from a
+    previous run) can therefore never be mistaken for this run's output. The output is moved
+    into pdf_path via os.replace() only after it has been validated -- an unverified or absent
+    conversion never touches pdf_path at all.
+
+    WIX-PDF-001 (private per-attempt directory + late-write tolerance, fix round 2): the
+    browser's --user-data-dir profile AND its output file both live inside ONE private,
+    uniquely-named wixie-pdf-attempt-* directory, never in the shared OS temp root. Round 1
+    wrote the output straight into the shared temp root; when real Edge exited before finishing
+    its write, that write was rejected as "wrote nothing" and then landed moments later as a
+    stray file loose in the shared root, undetected and unswept. Now: (a) _wait_for_valid_pdf
+    gives a late write up to LATE_WRITE_POLL_S to land and be accepted as a genuine success
+    instead of a false failure, and (b) even a write that arrives after that bound, or after
+    this function has already returned, can only ever land inside this attempt's own directory
+    -- which is removed as a single unit at the end (bounded retries below, the sweep as the
+    ultimate backstop), never leaving a stray file directly in the shared temp root."""
     abs_html = os.path.abspath(html_path)
     dest_pdf = os.path.abspath(pdf_path)
     file_url = "file:///" + abs_html.replace("\\", "/")
 
-    profile_dir = None
-    work_fd, work_path = tempfile.mkstemp(prefix="wixie-pdf-out-", suffix=".pdf")
-    os.close(work_fd)
+    attempt_dir = tempfile.mkdtemp(prefix="wixie-pdf-attempt-")
+    out_path = os.path.join(attempt_dir, "out.pdf")
+    profile_dir = os.path.join(attempt_dir, "profile")
     try:
         if browser_type == "chromium":
             # WIX-PDF-001: a fresh, private, per-invocation profile forces a genuinely new
             # browser process instead of letting the launch hand off to (and silently rely
             # on) an already-running instance of the same browser.
-            profile_dir = tempfile.mkdtemp(prefix="wixie-pdf-profile-")
+            os.makedirs(profile_dir, exist_ok=True)
             cmd = [browser_path] + CHROMIUM_ARGS + [
                 f"--user-data-dir={profile_dir}",
-                f"--print-to-pdf={work_path}",
+                f"--print-to-pdf={out_path}",
                 file_url,
             ]
         elif browser_type == "firefox":
-            profile_dir = tempfile.mkdtemp(prefix="wixie-pdf-profile-")
+            os.makedirs(profile_dir, exist_ok=True)
             cmd = [
                 browser_path, "--headless", "-no-remote", "-new-instance",
-                "-profile", profile_dir, f"--print-to-file={work_path}", file_url,
+                "-profile", profile_dir, f"--print-to-file={out_path}", file_url,
             ]
         elif browser_type == "wkhtmltopdf":
-            cmd = [browser_path, "--quiet", "--page-size", "A4", "--no-outline", abs_html, work_path]
+            cmd = [browser_path, "--quiet", "--page-size", "A4", "--no-outline", abs_html, out_path]
         else:
             return False, f"unknown browser type '{browser_type}'"
 
@@ -327,38 +406,36 @@ def convert_one(html_path, pdf_path, browser_name, browser_path, browser_type, t
         except (FileNotFoundError, OSError) as exc:
             return False, f"failed to launch: {exc}"
 
-        if timed_out:
-            return False, f"timed out after {timeout}s (process tree terminated)"
-
         def _tail(res):
             lines = (res.stderr or res.stdout or "").strip().splitlines()
             return f": {lines[-1][:200]}" if lines else ""
 
-        if not os.path.isfile(work_path) or os.path.getsize(work_path) == 0:
-            reason = f"exit {result.returncode}" if result.returncode != 0 else "reported success but wrote nothing"
-            return False, f"{reason}{_tail(result)}"
+        if timed_out:
+            # _run_bounded already terminated the whole process tree on timeout, so there is no
+            # writer left that could still produce a late file -- nothing to poll for.
+            return False, f"timed out after {timeout}s (process tree terminated)"
 
-        with open(work_path, "rb") as fh:
-            header_ok = fh.read(5) == b"%PDF-"
-        if not header_ok:
-            return False, f"produced a non-PDF file (missing %PDF- header){_tail(result)}"
+        if _wait_for_valid_pdf(out_path, LATE_WRITE_POLL_S):
+            # Verified: this run's own output exists, is non-empty, size-stable, and starts
+            # with a PDF header. Only now does anything touch pdf_path -- os.replace is atomic
+            # on both Windows and POSIX, so a reader can never observe a half-written
+            # destination file.
+            os.replace(out_path, dest_pdf)
+            return True, ""
 
-        # Verified: this run's own temp output exists, is non-empty, and starts with a PDF
-        # header. Only now does anything touch pdf_path -- os.replace is atomic on both
-        # Windows and POSIX, so a reader can never observe a half-written destination file.
-        os.replace(work_path, dest_pdf)
-        work_path = None
-        return True, ""
+        if os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
+            reason = "produced a non-PDF file (missing %PDF- header)"
+        else:
+            reason = (f"exit {result.returncode}" if result.returncode != 0
+                       else f"reported success but wrote nothing (waited up to {LATE_WRITE_POLL_S}s)")
+        return False, f"{reason}{_tail(result)}"
     finally:
-        # The temp output file must be removed on every non-success path (it holds either
-        # nothing, a partial write, or a rejected non-PDF -- never something to keep).
-        if work_path and os.path.isfile(work_path):
-            try:
-                os.remove(work_path)
-            except OSError:
-                pass
-        if profile_dir:
-            _rmtree_with_retries(profile_dir)
+        # The whole attempt directory -- profile and any output, however late it arrives -- is
+        # removed as one unit. A write that lands after _wait_for_valid_pdf gave up either gets
+        # deleted along with this directory during the retries below, or, failing that, is
+        # caught later by _sweep_stale_pdf_temp_items(), because it is scoped inside a
+        # wixie-pdf-attempt-* directory rather than loose in the shared temp root.
+        _rmtree_with_retries(attempt_dir)
 
 
 def convert_with_fallback(html_path, pdf_path, candidates, overall_timeout=OVERALL_TIMEOUT_S,
@@ -391,10 +468,10 @@ def convert_with_fallback(html_path, pdf_path, candidates, overall_timeout=OVERA
 
 
 def main():
-    # WIX-PDF-001 fix round 1: sweep any stale wixie-pdf-profile-* directory a prior
-    # invocation's own bounded cleanup retry didn't finish removing, before doing anything
-    # else. See _sweep_stale_profile_dirs()'s docstring for the safety bounds.
-    _sweep_stale_profile_dirs()
+    # WIX-PDF-001: sweep any stale wixie-pdf-* temp item a prior invocation's own bounded
+    # cleanup retry didn't finish removing, before doing anything else. See
+    # _sweep_stale_pdf_temp_items()'s docstring for the safety bounds.
+    _sweep_stale_pdf_temp_items()
 
     keep_html = "--keep-html" in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith("--")]

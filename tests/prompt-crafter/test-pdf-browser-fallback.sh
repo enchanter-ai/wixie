@@ -30,6 +30,20 @@ SCRIPT="$REPO_ROOT/shared/scripts/html-to-pdf.py"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# WIX-PDF-001 fix round 2: html-to-pdf.py's own temp usage (mkdtemp/mkstemp, and the sweep) must
+# never touch the user's real %TEMP% during a test run. Git Bash/MSYS auto-translates the TMP/
+# TEMP environment variables specifically (confirmed empirically: a plain forward-slash
+# export TMP=... is seen by native Windows Python's tempfile.gettempdir() as the correct
+# backslash path, both directly and through a nested subprocess's env=), so exporting these once
+# here is enough to redirect every script below -- the CLI subprocess (via env=dict(os.environ))
+# and the in-process probe scripts (via plain os.environ) alike -- without threading an isolated
+# directory through every call site's argv. $WORK itself is not touched by html-to-pdf.py; only
+# its own wixie-pdf-* items would be, and those now land in $WORK/systmp, cleaned up by the trap
+# above, never in the real %TEMP%.
+mkdir -p "$WORK/systmp"
+export TMP="$WORK/systmp"
+export TEMP="$WORK/systmp"
+
 FAILED=0
 fail() { echo "FAIL: $1"; FAILED=1; }
 
