@@ -46,6 +46,7 @@ rest = sys.argv[3:]
 candidates = [rest[i:i + 3] for i in range(0, len(rest), 3)]
 
 env = dict(os.environ)
+env["WIXIE_TEST_MODE"] = "1"
 env["WIXIE_TEST_PDF_BROWSERS"] = json.dumps(candidates)
 
 r = subprocess.run([sys.executable, script, html, "--keep-html"], env=env, capture_output=True, text=True)
@@ -56,11 +57,12 @@ PY
 
 cat > "$WORK/probe_profile.py" <<'PY'
 # argv: <html_to_pdf_script> <work_dir>
-# Directly exercises convert_one()'s isolated-profile lifecycle with subprocess.run faked out,
-# so the profile path and its lifecycle can be asserted precisely instead of scraped from stdout.
-# This also stands in for "browser already open" vs "browser closed": a fresh --user-data-dir
-# behaves like a brand-new instance either way -- there is no separate code path for either case.
-import importlib.util, os, sys
+# Directly exercises convert_one()'s isolated-profile lifecycle with _run_bounded() (the
+# tree-kill-aware launcher convert_one actually calls) faked out, so the profile path and its
+# lifecycle can be asserted precisely instead of scraped from stdout. This also stands in for
+# "browser already open" vs "browser closed": a fresh --user-data-dir behaves like a brand-new
+# instance either way -- there is no separate code path for either case.
+import importlib.util, os, sys, types
 
 script, work_dir = sys.argv[1], sys.argv[2]
 spec = importlib.util.spec_from_file_location("html_to_pdf_mod", script)
@@ -71,7 +73,7 @@ profiles_seen = []
 profile_exists_at_invoke = []
 
 
-def fake_run(cmd, capture_output, text, timeout):
+def fake_run_bounded(cmd, timeout):
     profile = None
     target = None
     for a in cmd:
@@ -84,16 +86,10 @@ def fake_run(cmd, capture_output, text, timeout):
     if target:
         with open(target, "wb") as fh:
             fh.write(b"%PDF-1.4\n% fake\n")
-
-    class R:
-        returncode = 0
-        stdout = ""
-        stderr = ""
-
-    return R()
+    return types.SimpleNamespace(returncode=0, stdout="", stderr=""), False
 
 
-mod.subprocess.run = fake_run
+mod._run_bounded = fake_run_bounded
 
 html = os.path.join(work_dir, "report.html")
 with open(html, "w") as f:

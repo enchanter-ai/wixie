@@ -692,13 +692,21 @@ def convert_to_pdf(html_path, dest_pdf_path, pdf_name="report.pdf"):
 
     produced_pdf = os.path.splitext(html_path)[0] + ".pdf"
 
+    # WIX-PDF-001 fix round 1: html-to-pdf.py's own OVERALL_TIMEOUT_S (45s) already bounds its
+    # entire fallback chain across every candidate browser it tries internally. This outer
+    # timeout must stay strictly larger than that -- 60s, a 15s buffer -- so report-gen never
+    # kills html-to-pdf.py from outside at the exact moment it would otherwise still be trying
+    # the next converter. Making the two equal (as before) meant a single hung first browser
+    # consumed the entire outer budget and no fallback ever ran; see html-to-pdf.py's own
+    # module docstring for the paired PER_BROWSER_TIMEOUT_S/OVERALL_TIMEOUT_S documentation.
+    OUTER_PDF_TIMEOUT_S = 60
     try:
         result = subprocess.run(
             [sys.executable, pdf_script, html_path, "--keep-html"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=OUTER_PDF_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        print("  PDF conversion timed out after 30s", file=sys.stderr)
+        print(f"  PDF conversion timed out after {OUTER_PDF_TIMEOUT_S}s", file=sys.stderr)
         return False
     except OSError as exc:
         print(f"  PDF conversion failed: {exc}", file=sys.stderr)
