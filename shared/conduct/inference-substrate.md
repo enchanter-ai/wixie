@@ -120,15 +120,38 @@ field byte-identical. That output file is the migrated log; swapping it in for t
 separate, explicit, manual step — never performed automatically, and never as a side effect of
 running `backfill`, `reconcile`, or any other subcommand against the real state directory.
 
+**This procedure is documentation and evidence, not an atomic migration primitive.** Step 5
+below runs three separate commands (copy the log, `reconcile`, `render-briefing`) with no
+transaction around them. An interruption between them (crash, Ctrl-C, killed session) can leave
+`artifacts.jsonl` migrated while `catalog.json` and the briefing are still derived from the old
+log — a real, visible inconsistency, not a hidden one (the catalog and briefing are always
+re-derivable from whatever log is currently in place by re-running `reconcile` /
+`render-briefing`, so this is recoverable, just not automatic). This is acceptable *because* the
+procedure is explicit, operator-run and supervised, never invoked by a skill, hook or agent on
+its own initiative — not because the risk doesn't exist. If atomicity across all three files is
+ever needed, that is an engine-code change out of this procedure's scope; say so and stop rather
+than improvising a partial transaction.
+
 **Procedure.**
 
-1. **Back up and hash first.**
+1. **Back up and hash the entire affected state first** — not just the log. Migration (via
+   step 5) can change `artifacts.jsonl`, `catalog.json`, and any file under `briefings/`
+   (`render-briefing` writes only the one plugin slug you pass, but every existing briefing
+   becomes stale the moment `reconcile` changes the catalog, so back up the whole directory, not
+   just the slug you intend to re-render):
    ```bash
    ts=$(date -u +%Y%m%dT%H%M%SZ)
-   sha256sum plugins/inference-engine/state/artifacts.jsonl > /tmp/pre-migration-$ts.sha256
-   cp plugins/inference-engine/state/artifacts.jsonl /tmp/artifacts.jsonl.backup-$ts
-   cp plugins/inference-engine/state/catalog.json /tmp/catalog.json.pre-migration-$ts   # if present
+   BACKUP=/tmp/vis-migrate-backup-$ts
+   mkdir -p "$BACKUP"
+   cp -r plugins/inference-engine/state/. "$BACKUP/"    # artifacts.jsonl, catalog.json, briefings/*
+   sha256sum plugins/inference-engine/state/artifacts.jsonl \
+             plugins/inference-engine/state/catalog.json \
+             plugins/inference-engine/state/briefings/*.md \
+             > "$BACKUP/pre-migration.sha256" 2>/dev/null || true
+   cat "$BACKUP/pre-migration.sha256"
    ```
+   Keep `$BACKUP` until you are done (including well after step 5, in case a problem only shows
+   up later) — it is both the rollback source and the pre-migration hash record.
 2. **Migrate into an isolated scratch state dir** (never point `WIXIE_INFERENCE_STATE` at the
    real `plugins/inference-engine/state/`):
    ```bash
@@ -187,6 +210,19 @@ running `backfill`, `reconcile`, or any other subcommand against the real state 
    python shared/scripts/inference-engine.py reconcile
    python shared/scripts/inference-engine.py render-briefing wixie
    ```
+   **Post-migration hash step — record what you ended up with:**
+   ```bash
+   sha256sum plugins/inference-engine/state/artifacts.jsonl \
+             plugins/inference-engine/state/catalog.json \
+             plugins/inference-engine/state/briefings/wixie.md \
+             > "$BACKUP/post-migration.sha256"
+   cat "$BACKUP/post-migration.sha256"
+   ```
+   This is a record, not a check with a pass/fail condition (the catalog and briefing are
+   *expected* to change bytes — new `_identity`-bearing content, a fresh `resolved_at`/
+   `elevated_at` — only `artifacts.jsonl`'s *record content*, verified in step 3, is expected to
+   be unchanged modulo identity metadata). Keep it alongside `$BACKUP` so a later question about
+   "what did this migration actually change" has a citable answer.
 6. **Idempotent by construction.** Re-running step 2 against an already-migrated log (source =
    the now-real, already-migrated `state/artifacts.jsonl`) into a fresh empty scratch
    destination reproduces a byte-identical output file (every line already carries a `_identity`
@@ -194,17 +230,35 @@ running `backfill`, `reconcile`, or any other subcommand against the real state 
    procedure twice changes nothing. Re-running step 2 with the migrated log as *both* source and
    an already-populated destination (e.g. by mistake) reports `0 new records (N already
    recorded)` — a safe no-op, not a duplication.
-7. **Rollback**, at any point before or after step 5, if anything looks wrong:
+7. **Rollback**, at any point before or after step 5, if anything looks wrong. Restore the
+   **actual backed-up bytes** from `$BACKUP` (step 1) for every file migration can have touched —
+   do **not** rely on re-running `reconcile`/`render-briefing` to "regenerate" the old state: a
+   fresh reconcile writes new `resolved_at`/`elevated_at` wall-clock stamps and is not guaranteed
+   to reproduce the prior catalog byte-for-byte, so it is not a rollback, only a recovery of
+   equivalent (not identical) derived state.
    ```bash
-   cp /tmp/artifacts.jsonl.backup-$ts plugins/inference-engine/state/artifacts.jsonl
-   python shared/scripts/inference-engine.py reconcile
+   cp "$BACKUP/artifacts.jsonl" plugins/inference-engine/state/artifacts.jsonl
+   cp "$BACKUP/catalog.json" plugins/inference-engine/state/catalog.json
+   cp "$BACKUP/briefings/"*.md plugins/inference-engine/state/briefings/
+   sha256sum plugins/inference-engine/state/artifacts.jsonl \
+             plugins/inference-engine/state/catalog.json \
+             plugins/inference-engine/state/briefings/*.md \
+     | diff "$BACKUP/pre-migration.sha256" -   # must be empty (byte-identical)
    ```
-   then discard the scratch directories. The catalog and briefings are always safely
-   re-derivable from the log alone.
+   then discard the scratch directories (`$BACKUP` itself is cheap to keep). If you only want to
+   discard the migration attempt *before* step 5 ever ran, no restore is needed at all — nothing
+   under `plugins/inference-engine/state/` was touched; just delete the scratch dirs from step 2.
 
-This procedure was tested end to end (203-record log, all steps above) before being documented;
-see `tranche3/patches/IMPLEMENTATION_NOTES.md` in the remediation workspace for the recorded
-commands and results. It is an explicit operator action; no skill or hook invokes it
+**Tested end to end, including rollback byte-equality**, in a scratch copy of the real
+203-record state (`artifacts.jsonl` + `catalog.json` + both existing briefings,
+`briefings/all.md` and `briefings/wixie.md`), never against the real committed state directory:
+steps 1–5 ran exactly as documented (203/203 migrated, reconcile → 197 patterns, briefing
+re-rendered), then step 7's rollback restored `artifacts.jsonl`, `catalog.json` and
+`briefings/wixie.md` to their pre-migration sha256 exactly (`briefings/all.md`, which this
+procedure never writes, was confirmed unchanged throughout and still restored anyway, since
+step 7 restores the whole backed-up directory rather than reasoning file-by-file about what
+should have changed). The recorded commands and every hash quoted above came from that scratch
+run, not from reasoning about the code. It is an explicit operator action; no skill or hook invokes it
 automatically, and completing it does not require, and must not trigger, any change to
 `shared/scripts/inference-engine.py`.
 
