@@ -16,7 +16,7 @@ Exit codes (documented terminal states — see WIX-G0-REPORT-001):
        outcome, never an unhandled exception.
     2  usage error (missing prompt-folder argument, or metadata.json not found).
 """
-import sys, os, json, subprocess, tempfile, shutil
+import sys, os, json, subprocess, tempfile, shutil, html
 from datetime import datetime
 
 
@@ -56,15 +56,20 @@ def analyze_prompt(meta, registry, prompt_dir=None):
     strengths = []
 
     model_id = meta.get("target_model", "")
-    model_info = registry.get("models", {}).get(model_id, {})
+    model_info = registry.get("models", {}).get(model_id, {}) if isinstance(model_id, str) else {}
     domain = meta.get("task_domain", "")
     fmt = meta.get("format", "")
     techniques = meta.get("techniques", [])
+    techniques = [t for t in techniques if isinstance(t, str)] if isinstance(techniques, list) else []
     avoided = meta.get("techniques_avoided", [])
     tokens = meta.get("tokens", {})
+    tokens = tokens if isinstance(tokens, dict) else {}
     scores = meta.get("scores", {})
+    scores = scores if isinstance(scores, dict) else {}
     config = meta.get("config", {})
+    config = config if isinstance(config, dict) else {}
     s = scores.get("after", scores) if "after" in scores else scores
+    s = s if isinstance(s, dict) else {}
 
     # ── Read actual prompt content for deeper analysis ──
     prompt_text = ""
@@ -204,7 +209,7 @@ def analyze_prompt(meta, registry, prompt_dir=None):
     # ── Domain-specific ──
     if domain == "image-gen":
         suggestions.append("Image prompts: standard axes (completeness, resilience) don't apply. Evaluate by visual output quality.")
-    elif domain == "coding" and est and est < 200:
+    elif domain == "coding" and _numeric(est) and est < 200:
         warnings.append("Coding prompt under 200 tokens — likely too underspecified. Add constraints, format, and edge cases.")
     elif domain == "analysis" and not any("Structured" in t for t in techniques):
         suggestions.append("Analysis tasks benefit from Structured Output for consistent, parseable results.")
@@ -258,6 +263,11 @@ def generate_verdict(overall, warnings):
 # ─── HTML Generation ───────────────────────────────────────────────────────────
 
 def score_bar(val):
+    if not _numeric(val):
+        # A malformed score (non-numeric, or missing and defaulted to something
+        # odd upstream) can never reach the arithmetic below. Render the escaped
+        # value as an inert placeholder bar instead of raising.
+        return f'<div class="bar-wrap"><span class="bar-val ts">{esc(val)}</span></div>'
     pct = (val / 10) * 100
     c = "#22c55e" if val >= 9 else ("#eab308" if val >= 7 else ("#f97316" if val >= 5 else "#ef4444"))
     return f'<div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:{pct}%;background:{c}"></div></div><span class="bar-val" style="color:{c}">{val}/10</span></div>'
@@ -268,8 +278,39 @@ def _numeric(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+# ─── HTML escaping (WIX-SEC-REPORT-001) ────────────────────────────────────────
+#
+# Every value that reaches build_html's template originates from metadata.json,
+# tests.json, the prompt text, or models-registry.json lookups keyed by those —
+# all untrusted. esc() is the single boundary every such value crosses right
+# before HTML interpolation, whether it lands in a text node or inside a
+# double-or-single-quoted attribute value. html.escape(str(value), quote=True)
+# neutralizes '&', '<', '>', '"' and "'" alike, which is sufficient for both
+# contexts because this template never writes an unquoted attribute. Non-string
+# inputs (numbers, None, bool, lists, dicts) are stringified first, so a
+# malformed field renders as escaped text instead of raising. report-gen.py
+# never builds an href/src/url from metadata- or tests-derived data — nothing
+# here turns a value into a clickable or fetchable URL — so a payload shaped
+# like "javascript:..." or "data:..." is just escaped text like anything else;
+# there is no scheme to allowlist because there is no URL sink.
+def esc(value):
+    """HTML-escape any value for a text node or a quoted attribute value."""
+    return html.escape(str(value), quote=True)
+
+
+def num_or_esc(value, fmt=""):
+    """Render a field that is supposed to be numeric. A non-numeric or absent
+    value never reaches a numeric format spec (which raises ValueError/
+    TypeError) -- it renders as its own escaped text instead, so a malformed
+    metadata.json degrades to visible-but-inert output rather than crashing
+    report generation."""
+    if _numeric(value):
+        return format(value, fmt) if fmt else str(value)
+    return esc(value)
+
+
 def pill(text, kind="green"):
-    return f'<span class="pill-{kind}">{text}</span>'
+    return f'<span class="pill-{kind}">{esc(text)}</span>'
 
 
 def get_prompt_stats(prompt_dir):
@@ -312,30 +353,37 @@ def build_html(meta, prompt_dir):
     mode = meta.get("mode", "create")
     title = "Refinement Report" if mode == "refine" else "Creation Report"
     model = meta.get("target_model", "unknown")
-    model_info = registry.get("models", {}).get(model, {})
+    model_info = registry.get("models", {}).get(model, {}) if isinstance(model, str) else {}
     domain = meta.get("task_domain", "unknown")
     version = meta.get("version", 1)
     task = meta.get("task", "No description.")
     status = meta.get("status", "unknown")
-    created = meta.get("created", "?")[:10]
-    refined = meta.get("refined", "")[:10] if meta.get("refined") else ""
+    created_raw = meta.get("created", "?")
+    created = created_raw[:10] if isinstance(created_raw, str) else str(created_raw)
+    refined_raw = meta.get("refined", "")
+    refined = refined_raw[:10] if isinstance(refined_raw, str) and refined_raw else (str(refined_raw) if refined_raw else "")
     tokens = meta.get("tokens", {})
+    tokens = tokens if isinstance(tokens, dict) else {}
     scores = meta.get("scores", {})
+    scores = scores if isinstance(scores, dict) else {}
     config = meta.get("config", {})
+    config = config if isinstance(config, dict) else {}
     techniques = meta.get("techniques", [])
+    techniques = [t for t in techniques if isinstance(t, str)] if isinstance(techniques, list) else []
     avoided = meta.get("techniques_avoided", [])
+    avoided = [t for t in avoided if isinstance(t, str)] if isinstance(avoided, list) else []
 
     est = tokens.get("estimated", tokens.get("refined", tokens.get("original", "?")))
     window = tokens.get("context_window", "?")
     pct = tokens.get("usage_percent", "?")
-    # These three are rendered with a thousands separator ({est:,}, {window:,}), which raises
-    # "ValueError: Cannot specify ',' with 's'" on the "?" default. Any metadata.json without
-    # token fields therefore crashed report generation outright, before the PDF step and before
-    # the fallback could run. Pre-format to strings here so the template never applies a numeric
-    # spec to a non-numeric placeholder.
-    est_str = f"{est:,}" if _numeric(est) else str(est)
-    window_str = f"{window:,}" if _numeric(window) else str(window)
-    pct_str = f"{pct}%" if _numeric(pct) else str(pct)
+    # These three used to be rendered with a thousands separator ({est:,}, {window:,}), which
+    # raises "ValueError: Cannot specify ',' with 's'" on the "?" default, and a non-numeric
+    # metadata.json value (e.g. a string payload) reached the template as raw, unescaped text.
+    # num_or_esc never applies a numeric format spec to a non-numeric value and always escapes
+    # the non-numeric fallback (WIX-SEC-REPORT-001 / adjacent to the WIX-G0-REPORT-001 crash).
+    est_str = num_or_esc(est, ",")
+    window_str = num_or_esc(window, ",")
+    pct_str = (num_or_esc(pct) + "%") if _numeric(pct) else num_or_esc(pct)
     cost = estimate_cost(est if isinstance(est, int) else 0, model)
     cost_str = f"${cost}" if cost else "N/A"
     monthly = f"${round(cost * 1000, 2)}/mo" if cost else ""
@@ -348,24 +396,46 @@ def build_html(meta, prompt_dir):
     # Scores
     has_ba = "before" in scores and "after" in scores
     s = scores.get("after", scores) if has_ba else scores
+    s = s if isinstance(s, dict) else {}
     overall = s.get("overall", 0)
+    # generate_verdict compares overall with >=, which raises TypeError on a non-numeric value
+    # (e.g. a string in metadata.json). The raw, possibly-non-numeric overall is still shown via
+    # score_bar's own placeholder path below; the verdict computation falls back to a safe,
+    # documented default instead of raising.
+    overall_for_verdict = overall if _numeric(overall) else 0
     axes = ["clarity", "completeness", "efficiency", "model_fit", "failure_resilience"]
-    verdict_label, verdict_color, verdict_text = generate_verdict(overall, warnings)
+    verdict_label, verdict_color, verdict_text = generate_verdict(overall_for_verdict, warnings)
+
+    def score_cell(value):
+        """Text-cell rendering for a score value: raw (safe) if numeric, escaped otherwise."""
+        return str(value) if _numeric(value) else esc(value)
 
     # Score rows
     if has_ba:
-        before, after = scores["before"], scores["after"]
+        before, after = scores.get("before"), scores.get("after")
+        before = before if isinstance(before, dict) else {}
+        after = after if isinstance(after, dict) else {}
         srows = ""
         for ax in axes:
             label = ax.replace("_", " ").title()
             b, a = before.get(ax, 0), after.get(ax, 0)
-            d = a - b
-            dc = "#10b981" if d > 0 else ("#f43f5e" if d < 0 else "var(--ts)")
-            srows += f'<tr><td>{label}</td><td class="c">{b}</td><td>{score_bar(a)}</td><td class="c" style="color:{dc};font-weight:600">{("+" if d > 0 else "")}{d}</td></tr>'
+            if _numeric(b) and _numeric(a):
+                d = a - b
+                dc = "#10b981" if d > 0 else ("#f43f5e" if d < 0 else "var(--ts)")
+                d_disp = f'{("+" if d > 0 else "")}{d}'
+            else:
+                dc = "var(--ts)"
+                d_disp = "?"
+            srows += f'<tr><td>{label}</td><td class="c">{score_cell(b)}</td><td>{score_bar(a)}</td><td class="c" style="color:{dc};font-weight:600">{d_disp}</td></tr>'
         bo, ao = before.get("overall", 0), after.get("overall", 0)
-        do_ = round(ao - bo, 1)
-        doc = "#10b981" if do_ > 0 else ("#f43f5e" if do_ < 0 else "var(--ts)")
-        srows += f'<tr class="tot"><td>Overall</td><td class="c">{bo}</td><td>{score_bar(ao)}</td><td class="c" style="color:{doc}">{("+" if do_ > 0 else "")}{do_}</td></tr>'
+        if _numeric(bo) and _numeric(ao):
+            do_ = round(ao - bo, 1)
+            doc = "#10b981" if do_ > 0 else ("#f43f5e" if do_ < 0 else "var(--ts)")
+            do_disp = f'{("+" if do_ > 0 else "")}{do_}'
+        else:
+            doc = "var(--ts)"
+            do_disp = "?"
+        srows += f'<tr class="tot"><td>Overall</td><td class="c">{score_cell(bo)}</td><td>{score_bar(ao)}</td><td class="c" style="color:{doc}">{do_disp}</td></tr>'
         sheader = '<tr><th>Axis</th><th class="c">Before</th><th>After</th><th class="c">+/-</th></tr>'
     else:
         srows = ""
@@ -382,17 +452,19 @@ def build_html(meta, prompt_dir):
     # Config pills
     cfg_html = ""
     if config:
-        items = " ".join(f'<span class="cfg"><b>{k}:</b> {v}</span>' for k, v in config.items())
+        items = " ".join(f'<span class="cfg"><b>{esc(k)}:</b> {esc(v)}</span>' for k, v in config.items())
         cfg_html = f'<div class="sec"><div class="sl">Runtime Config</div><div class="cfg-row">{items}</div></div>'
 
-    # Findings (warnings + suggestions combined as audit findings)
+    # Findings (warnings + suggestions combined as audit findings). warnings/suggestions are
+    # built by analyze_prompt from metadata/prompt-text fragments and are escaped exactly once,
+    # right here at the HTML boundary, rather than piecemeal inside analyze_prompt.
     findings_html = ""
     all_findings = [(w, "crit") for w in warnings] + [(s, "warn") for s in suggestions]
     if all_findings:
         shown = all_findings[:6]
         overflow = len(all_findings) - len(shown)
         items = "".join(
-            f'<div class="finding f-{kind}"><span class="f-tag">{"CRITICAL" if kind == "crit" else "WARNING"}</span> {text}</div>'
+            f'<div class="finding f-{kind}"><span class="f-tag">{"CRITICAL" if kind == "crit" else "WARNING"}</span> {esc(text)}</div>'
             for text, kind in shown
         )
         if overflow > 0:
@@ -402,29 +474,31 @@ def build_html(meta, prompt_dir):
     # Strengths
     str_html = ""
     if strengths:
-        items = " ".join(f'<span class="pill-g">{s}</span>' for s in strengths)
+        items = " ".join(f'<span class="pill-g">{esc(st)}</span>' for st in strengths)
         str_html = f'<div class="sec"><div class="sl">Confirmed Strengths</div><div class="pills">{items}</div></div>'
 
-    # Model profile from registry
+    # Model profile from registry. Registry values are lower-risk (repo-owned, not
+    # metadata/tests-derived) but reach the same template, so they cross the same boundary.
     mp_html = ""
     if model_info:
         mi = model_info
         mp_html = f"""<div class="sl">Model Profile</div>
     <div class="g6">
-      <div class="cd"><div class="cl">Model</div><div class="cv2">{mi.get('display_name','?')}</div></div>
-      <div class="cd"><div class="cl">Family</div><div class="cv2">{mi.get('family','?')}</div></div>
-      <div class="cd"><div class="cl">Reasoning</div><div class="cv2">{mi.get('reasoning','?')}</div></div>
-      <div class="cd"><div class="cl">Format</div><div class="cv2">{mi.get('format','?')}</div></div>
-      <div class="cd"><div class="cl">Few-Shot</div><div class="cv2">{mi.get('few_shot','?')[:25]}</div></div>
-      <div class="cd"><div class="cl">CoT</div><div class="cv2">{mi.get('cot_approach','?')[:30]}</div></div>
+      <div class="cd"><div class="cl">Model</div><div class="cv2">{esc(mi.get('display_name','?'))}</div></div>
+      <div class="cd"><div class="cl">Family</div><div class="cv2">{esc(mi.get('family','?'))}</div></div>
+      <div class="cd"><div class="cl">Reasoning</div><div class="cv2">{esc(mi.get('reasoning','?'))}</div></div>
+      <div class="cd"><div class="cl">Format</div><div class="cv2">{esc(mi.get('format','?'))}</div></div>
+      <div class="cd"><div class="cl">Few-Shot</div><div class="cv2">{esc(str(mi.get('few_shot','?'))[:25])}</div></div>
+      <div class="cd"><div class="cl">CoT</div><div class="cv2">{esc(str(mi.get('cot_approach','?'))[:30])}</div></div>
     </div>"""
 
-    # Prompt stats
+    # Prompt stats (all computed internally from file content -- words/lines/sentences/sections/
+    # chars are ints; file is one of a fixed extension tuple. Escaped anyway for consistency.)
     ps_html = ""
     if prompt_stats:
         ps = prompt_stats
         ps_html = f"""<div class="g6">
-      <div class="cd"><div class="cl">File</div><div class="cv2">{ps['file']}</div></div>
+      <div class="cd"><div class="cl">File</div><div class="cv2">{esc(ps['file'])}</div></div>
       <div class="cd"><div class="cl">Words</div><div class="cv2">{ps['words']}</div></div>
       <div class="cd"><div class="cl">Lines</div><div class="cv2">{ps['lines']}</div></div>
       <div class="cd"><div class="cl">Sentences</div><div class="cv2">{ps['sentences']}</div></div>
@@ -432,12 +506,13 @@ def build_html(meta, prompt_dir):
       <div class="cd"><div class="cl">Characters</div><div class="cv2">{ps['chars']:,}</div></div>
     </div>"""
 
-    # Test coverage
+    # Test coverage. tag/name values originate from tests.json -- untrusted -- so both are
+    # escaped at this boundary (tag counts are ints from our own Counter-style dict, safe raw).
     tc_html = ""
     if test_summary:
         ts_data = test_summary
-        tag_pills = " ".join(f'<span class="pill-g">{tag} ({c})</span>' for tag, c in ts_data['tags'].items())
-        test_names = " &middot; ".join(ts_data['names'][:6])
+        tag_pills = " ".join(f'<span class="pill-g">{esc(tag)} ({c})</span>' for tag, c in ts_data['tags'].items())
+        test_names = " &middot; ".join(esc(n) for n in ts_data['names'][:6])
         tc_html = f"""<div class="sl">Test Coverage ({ts_data['count']} cases)</div>
     <div class="pills" style="margin:4px 0">{tag_pills}</div>
     <div class="ts" style="margin:2px 0">{test_names}</div>"""
@@ -452,13 +527,15 @@ def build_html(meta, prompt_dir):
         next_steps = ["Focus on the lowest-scoring axes first.", "Add missing components flagged in warnings.", "Run /refine with specific improvement goals.", "Re-score after each iteration."]
     elif verdict_label in ("REWORK", "DO NOT DEPLOY"):
         next_steps = ["Do not use this prompt in production.", "Address ALL critical findings before proceeding.", "Consider rewriting from scratch with /create for a fresh start.", "Verify technique and format match the target model."]
-    ns_html = "".join(f'<div class="ns">{i+1}. {s}</div>' for i, s in enumerate(next_steps))
+    # next_steps can embed the untrusted `model` value (e.g. "Deploy with {model} ..."); escape
+    # each rendered line at this single HTML boundary rather than at each f-string above.
+    ns_html = "".join(f'<div class="ns">{i+1}. {esc(step)}</div>' for i, step in enumerate(next_steps))
 
     return f"""<!DOCTYPE html>
 <html lang="en" class="theme-dark">
 <head>
 <meta charset="UTF-8">
-<title>{title}: {name}</title>
+<title>{esc(title)}: {esc(name)}</title>
 <style>
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0;}}
 html.theme-dark{{
@@ -534,22 +611,22 @@ td{{padding:5px 8px;border-bottom:1px solid var(--bd);}}
 <div class="content">
   <div class="hdr">
     <div>
-      <h1>{name}</h1>
+      <h1>{esc(name)}</h1>
       <div class="meta">
         <span class="badge {'b-ok' if status in ('pass','deploy') else 'b-no'}">{'DEPLOY' if status == 'deploy' else 'PASS' if status == 'pass' else 'NEEDS WORK'}</span>
-        &nbsp;v{version} &middot; {model} &middot; {domain} &middot; {created}{f' &rarr; {refined}' if refined else ''}
+        &nbsp;v{esc(version)} &middot; {esc(model)} &middot; {esc(domain)} &middot; {esc(created)}{f' &rarr; {esc(refined)}' if refined else ''}
       </div>
     </div>
   </div>
 
-  <div class="task">{task}</div>
+  <div class="task">{esc(task)}</div>
 
   <div class="g">
     <div class="cd"><div class="cl">Tokens</div><div class="cv">~{est_str}</div></div>
     <div class="cd"><div class="cl">Window</div><div class="cv">{window_str}</div></div>
     <div class="cd"><div class="cl">Usage</div><div class="cv">{pct_str}</div></div>
     <div class="cd"><div class="cl">Est. Cost</div><div class="cv">{cost_str}</div></div>
-    <div class="cd"><div class="cl">Format</div><div class="cv">{meta.get('format','?')}</div></div>
+    <div class="cd"><div class="cl">Format</div><div class="cv">{esc(meta.get('format','?'))}</div></div>
   </div>
 
   {mp_html}
@@ -667,7 +744,16 @@ def generate_report(prompt_dir):
         return 2
 
     with open(meta_path, "r", encoding="utf-8") as f:
-        meta = json.load(f)
+        try:
+            meta = json.load(f)
+        except json.JSONDecodeError as exc:
+            print(f"Error: {meta_path} is not valid JSON: {exc}", file=sys.stderr)
+            return 2
+    if not isinstance(meta, dict):
+        # A metadata.json whose top level is not an object (a list, a string, a number...)
+        # would otherwise crash every meta.get(...) call below. Degrade to an empty report
+        # rather than raise.
+        meta = {}
 
     html_content = build_html(meta, prompt_dir)
 
