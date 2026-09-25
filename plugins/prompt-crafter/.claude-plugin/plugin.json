@@ -1,6 +1,6 @@
 {
   "name": "wixie-prompt-crafter",
-  "display_name": "Prompt Crafter",
+  "displayName": "Prompt Crafter",
   "description": "Creates production-ready prompts. Scans project context, asks targeted questions, selects from 16 techniques, adapts format to 274 models, then runs the Convergence Engine until DEPLOY quality.",
   "version": "0.1.0",
   "author": {
@@ -16,7 +16,6 @@
     "./skills/prompt-creator/",
     "./skills/prompt-reviewer/"
   ],
-  "agents": "./agents/",
   "hooks": "./hooks/hooks.json",
   "dependencies": []
 }

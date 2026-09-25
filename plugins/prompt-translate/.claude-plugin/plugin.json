@@ -1,6 +1,6 @@
 {
   "name": "wixie-prompt-translate",
-  "display_name": "Prompt Translate",
+  "displayName": "Prompt Translate",
   "description": "Converts prompts optimized for one model into the optimal format for another. XML to Markdown, CoT to no-CoT, verbose to minimal. Preserves intent and domain content; only changes prompt engineering.",
   "version": "0.1.0",
   "author": {
@@ -15,6 +15,5 @@
   "skills": [
     "./skills/translate/"
   ],
-  "agents": "./agents/",
   "dependencies": []
 }

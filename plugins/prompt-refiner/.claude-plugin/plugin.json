@@ -1,6 +1,6 @@
 {
   "name": "wixie-prompt-refiner",
-  "display_name": "Prompt Refiner",
+  "displayName": "Prompt Refiner",
   "description": "Improves existing prompts while preserving intent. Diagnoses weaknesses, checks model fit, re-selects techniques, and runs the Convergence Engine to push toward DEPLOY quality.",
   "version": "0.1.0",
   "author": {
@@ -15,6 +15,5 @@
   "skills": [
     "./skills/prompt-improver/"
   ],
-  "agents": "./agents/",
   "dependencies": []
 }

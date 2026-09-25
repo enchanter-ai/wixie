@@ -1,6 +1,6 @@
 {
   "name": "wixie-prompt-tester",
-  "display_name": "Prompt Tester",
+  "displayName": "Prompt Tester",
   "description": "Executes tests.json regression cases against prompts. Runs each test case through the prompt, checks output against expected_contains assertions, and reports pass/fail with failure reasons.",
   "version": "0.1.0",
   "author": {
@@ -15,6 +15,5 @@
   "skills": [
     "./skills/test-runner/"
   ],
-  "agents": "./agents/",
   "dependencies": []
 }
