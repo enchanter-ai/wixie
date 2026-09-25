@@ -1,35 +1,78 @@
 #!/usr/bin/env bash
 # bootstrap.sh — canonical first command for an @enchanter-ai sibling plugin.
 #
-# Behavior (per s2.0 4-layer recommendation, Layer 1):
-#   1. Read .vis-versions (YAML-ish: "<pkg>: \"~<ver>\"").
-#   2. Ensure ../vis exists (clone if missing).
-#   3. Fetch tags; checkout each pinned package tag (enchanter-<pkg>--v<ver>).
-#      Note: tags retain the historical `enchanter-` prefix even after the
-#      repo rename; the script prepends it during tag lookup.
-#   4. Verify every @../vis/... reference in CLAUDE.md resolves.
-#   5. Write .vis-lock with vis SHA, per-package tag commits,
-#      and SHA-1 of every conduct file referenced by CLAUDE.md.
+# WIX-INSTALL-002 architecture (D8): production Wixie uses an immutable vis
+# package version, never floating HEAD. declared version -> immutable exact
+# commit -> exact content materialized -> Wixie imports THAT content ->
+# .vis-lock records what was actually materialized.
+#
+# Two modes:
+#
+#   PINNED (default; the only mode CI and production use):
+#     For every package declared in .vis-versions, resolve the tag
+#     enchanter-<pkg>--v<version> to an exact commit in the vis sibling, then
+#     read every @-imported file's content directly out of THAT commit via
+#     `git show <sha>:<path>` — never from the sibling's checked-out working
+#     tree, and the sibling's HEAD/index/working tree are never touched.
+#     The materialized content is written into a Wixie-local cache
+#     (.vis-cache/vis/, gitignored) that CLAUDE.md's @-imports point at.
+#     A version whose tag does not resolve, or whose content is missing a
+#     file CLAUDE.md needs, fails loud before anything is written — no
+#     fallback to HEAD, no partial lock.
+#
+#   FLOATING (opt-in only, --floating; local dev convenience, never default,
+#   never CI):
+#     Reads the same @-imported files from the sibling's current live
+#     working tree (read-only) and copies them into the same cache location,
+#     so CLAUDE.md's import paths resolve identically either way. The lock
+#     records mode: floating and the sibling HEAD it copied from, so --verify
+#     can detect drift against that HEAD. This is the pre-remediation
+#     behavior, now explicit and never silently substituted for a pin.
 #
 # Modes:
-#   ./scripts/bootstrap.sh           — perform full bootstrap, write lock
-#   ./scripts/bootstrap.sh --verify  — read-only; re-resolve and compare against
-#                                      .vis-lock; exit 1 on any mismatch.
-#                                      Used by CI (hash-coverage all-or-nothing).
+#   ./scripts/bootstrap.sh                    — pinned bootstrap, write .vis-lock
+#   ./scripts/bootstrap.sh --verify            — pinned verify (read-only, no network)
+#   ./scripts/bootstrap.sh --floating          — floating bootstrap (opt-in, dev only)
+#   ./scripts/bootstrap.sh --floating --verify — floating verify
 #
-# Idempotent. Fails loud on any drift.
+# Idempotent: re-running bootstrap in the same mode against unchanged inputs
+# reproduces byte-identical cache content and an identical lock (modulo the
+# resolved_at timestamp). Fails loud on any drift or unresolved input; never
+# silently falls back to a different mode or to unpinned content.
 
 set -uo pipefail
 
-MODE="${1:-bootstrap}"
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VIS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/vis"
 VIS_REPO="${VIS_REPO:-https://github.com/enchanter-ai/vis}"
 VERSIONS_FILE="$PLUGIN_DIR/.vis-versions"
 LOCK_FILE="$PLUGIN_DIR/.vis-lock"
 CLAUDE_MD="$PLUGIN_DIR/CLAUDE.md"
+CACHE_ROOT="$PLUGIN_DIR/.vis-cache"
+CACHE_DIR="$CACHE_ROOT/vis"
 
 err() { printf '%s\n' "$*" >&2; }
+
+# --- argument parsing (order-independent) ------------------------------------
+
+VERIFY=0
+FLOATING=0
+for arg in "$@"; do
+  case "$arg" in
+    --verify) VERIFY=1 ;;
+    --floating) FLOATING=1 ;;
+    *)
+      err "unknown argument: $arg (supported: --verify --floating)"
+      exit 2
+      ;;
+  esac
+done
+
+if [[ "$FLOATING" -eq 1 ]]; then
+  MODE="floating"
+else
+  MODE="pinned"
+fi
 
 # --- preflight ---------------------------------------------------------------
 
@@ -43,6 +86,27 @@ if [[ ! -f "$CLAUDE_MD" ]]; then
   exit 1
 fi
 
+if [[ "$VERIFY" -eq 1 ]]; then
+  if [[ ! -d "$VIS_DIR/.git" ]]; then
+    err "vis sibling missing — run ./scripts/bootstrap.sh"
+    exit 1
+  fi
+else
+  # Bootstrap (either mode): the sibling only needs to exist and hold the
+  # objects/files we will read. Clone if missing; best-effort fetch of tags
+  # (never fatal — a disposable/offline sibling that already holds the
+  # needed objects must still work with no network).
+  if [[ ! -d "$VIS_DIR/.git" ]]; then
+    err "vis sibling missing at $VIS_DIR — cloning"
+    git clone -- "$VIS_REPO" "$VIS_DIR" || {
+      err "clone failed — set VIS_REPO or clone manually"
+      exit 1
+    }
+  fi
+  git -C "$VIS_DIR" fetch --tags --quiet 2>/dev/null \
+    || err "note: git fetch --tags failed or unavailable (offline?) — continuing with local refs"
+fi
+
 # --- parse .vis-versions --------------------------------------------
 # Format: lines like  core: "~0.6.0"
 # We extract (pkg, version) pairs. Comment lines (#…) and blanks ignored.
@@ -50,14 +114,11 @@ fi
 declare -a PKGS=()
 declare -a VERS=()
 while IFS= read -r line; do
-  # strip comments + whitespace
   line="${line%%#*}"
   line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   [[ -z "$line" ]] && continue
-  # match: <pkg>: "<spec>"
   if [[ "$line" =~ ^([a-z]+):[[:space:]]*\"?([~^]?[0-9][^\"[:space:]]*)\"?[[:space:]]*$ ]]; then
     PKGS+=("${BASH_REMATCH[1]}")
-    # strip a leading ~ or ^ for the tag lookup
     raw="${BASH_REMATCH[2]}"
     VERS+=("${raw#[~^]}")
   else
@@ -70,82 +131,134 @@ if [[ "${#PKGS[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-# --- ensure vis sibling exists --------------------------------------
+# --- resolve per-package pin (pinned mode only) -------------------------------
 
-if [[ "$MODE" != "--verify" ]]; then
-  if [[ ! -d "$VIS_DIR/.git" ]]; then
-    err "vis sibling missing at $VIS_DIR — cloning"
-    git clone "$VIS_REPO" "$VIS_DIR" || {
-      err "clone failed — set VIS_REPO or clone manually"
+declare -a TAG_NAMES=()
+declare -a TAG_COMMITS=()
+if [[ "$MODE" == "pinned" ]]; then
+  for i in "${!PKGS[@]}"; do
+    pkg="${PKGS[$i]}"
+    ver="${VERS[$i]}"
+    tag="enchanter-${pkg}--v${ver}"
+    sha=$(git -C "$VIS_DIR" rev-list -n 1 "refs/tags/${tag}" -- 2>/dev/null || true)
+    if [[ -z "$sha" ]]; then
+      err "tag missing in vis: ${tag}"
+      err "  -> bump .vis-versions or check available tags: git -C $VIS_DIR tag"
       exit 1
-    }
-  fi
-  git -C "$VIS_DIR" fetch --tags --quiet || {
-    err "git fetch --tags failed in $VIS_DIR"
-    exit 1
-  }
-else
-  if [[ ! -d "$VIS_DIR/.git" ]]; then
-    err "vis sibling missing — run ./scripts/bootstrap.sh"
-    exit 1
-  fi
+    fi
+    TAG_NAMES+=("$tag")
+    TAG_COMMITS+=("$sha")
+  done
 fi
 
-# --- resolve per-package tag commits ----------------------------------------
+pkg_index_for() {
+  # $1 = package name -> prints array index, or nothing if not declared
+  local want="$1"
+  for i in "${!PKGS[@]}"; do
+    [[ "${PKGS[$i]}" == "$want" ]] && { printf '%s' "$i"; return 0; }
+  done
+  return 1
+}
 
-declare -a TAG_COMMITS=()
-for i in "${!PKGS[@]}"; do
-  pkg="${PKGS[$i]}"
-  ver="${VERS[$i]}"
-  tag="enchanter-${pkg}--v${ver}"
-  sha=$(git -C "$VIS_DIR" rev-list -n 1 "refs/tags/${tag}" 2>/dev/null || true)
-  if [[ -z "$sha" ]]; then
-    err "tag missing in vis: ${tag}"
-    err "  → bump .vis-versions or check available tags: git -C $VIS_DIR tag"
-    exit 1
-  fi
-  TAG_COMMITS+=("$sha")
-done
+# --- walk CLAUDE.md for @-imports under the cache prefix ----------------------
 
-# Vis checkout SHA = HEAD of vis (used as overall pointer).
-FOUND_SHA=$(git -C "$VIS_DIR" rev-parse HEAD)
-
-# --- walk CLAUDE.md for @-imports and SHA-1 each --------------------------
-
-# Capture every line of the form  @../vis/<rel-path>
-# Tolerates surrounding markdown (e.g., "- @../vis/...md — desc").
 mapfile -t IMPORT_PATHS < <(
-  grep -oE '@\.\./vis/[A-Za-z0-9._/-]+' "$CLAUDE_MD" | \
-    sed 's#^@\.\./vis/##' | LC_ALL=C sort -u
+  grep -oE '@\.vis-cache/vis/packages/[a-z]+/[A-Za-z0-9._/-]+\.[a-zA-Z]+' "$CLAUDE_MD" | \
+    sed 's#^@\.vis-cache/vis/##' | LC_ALL=C sort -u
 )
 
 if [[ "${#IMPORT_PATHS[@]}" -eq 0 ]]; then
-  err "warning: no @../vis/... imports found in $CLAUDE_MD"
+  err "warning: no @.vis-cache/vis/... imports found in $CLAUDE_MD"
 fi
 
-# Compute SHA-1 of each referenced file. Bail loud on any miss.
+# --- materialize into a staging dir, never touching the sibling's checkout ---
+
+STAGE_DIR="$CACHE_ROOT/.stage-$$"
+cleanup_stage() { rm -rf "$STAGE_DIR" 2>/dev/null || true; }
+trap cleanup_stage EXIT
+
 declare -a HASH_PATHS=()
 declare -a HASH_VALUES=()
 MISSING=0
-for rel in "${IMPORT_PATHS[@]}"; do
-  full="$VIS_DIR/$rel"
-  if [[ ! -f "$full" ]]; then
-    err "import resolves to missing file: @../vis/$rel"
-    MISSING=1
-    continue
-  fi
-  # sha1sum on Git-Bash/Windows produces "<hash> *<path>" or "<hash>  <path>"; first field is hash.
-  h=$(sha1sum "$full" | awk '{print $1}')
-  HASH_PATHS+=("$rel")
-  HASH_VALUES+=("$h")
-done
 
-if [[ "$MISSING" -ne 0 ]]; then
-  err "one or more @-imports unresolved — run ./scripts/bootstrap.sh after fixing .vis-versions"
-  exit 1
+if [[ "$VERIFY" -eq 0 ]]; then
+  rm -rf "$STAGE_DIR"
+  mkdir -p "$STAGE_DIR"
+
+  for rel in "${IMPORT_PATHS[@]}"; do
+    dest="$STAGE_DIR/$rel"
+    mkdir -p "$(dirname "$dest")"
+
+    if [[ "$MODE" == "pinned" ]]; then
+      pkg="$(printf '%s' "$rel" | sed -nE 's#^packages/([^/]+)/.*#\1#p')"
+      if [[ -z "$pkg" ]]; then
+        err "import path does not belong to a package/: @.vis-cache/vis/$rel"
+        MISSING=1
+        continue
+      fi
+      idx="$(pkg_index_for "$pkg")" || {
+        err "import references package '$pkg' not declared in $VERSIONS_FILE: @.vis-cache/vis/$rel"
+        MISSING=1
+        continue
+      }
+      sha="${TAG_COMMITS[$idx]}"
+      if ! git -C "$VIS_DIR" show "${sha}:${rel}" -- > "$dest" 2>/dev/null; then
+        rm -f "$dest"
+        err "import resolves to missing file at pin: @.vis-cache/vis/$rel (package $pkg @ ${TAG_NAMES[$idx]} = $sha)"
+        MISSING=1
+        continue
+      fi
+    else
+      src="$VIS_DIR/$rel"
+      if [[ ! -f "$src" ]]; then
+        err "import resolves to missing file: @.vis-cache/vis/$rel (floating, vis working tree)"
+        MISSING=1
+        continue
+      fi
+      cp -- "$src" "$dest"
+    fi
+
+    h=$(sha1sum "$dest" | awk '{print $1}')
+    HASH_PATHS+=("$rel")
+    HASH_VALUES+=("$h")
+  done
+
+  if [[ "$MISSING" -ne 0 ]]; then
+    err "one or more @-imports unresolved — the vis sibling is unchanged; nothing was written"
+    exit 1
+  fi
+
+  # Atomic-ish swap: build fully in STAGE_DIR, then replace CACHE_DIR only on
+  # full success. A failed run above never reaches here, so a previously
+  # working CACHE_DIR is left untouched by a failed re-bootstrap attempt.
+  rm -rf "$CACHE_DIR"
+  mkdir -p "$CACHE_ROOT"
+  mv "$STAGE_DIR" "$CACHE_DIR"
+else
+  # --verify: re-hash whatever is currently materialized in CACHE_DIR. Never
+  # touches the sibling's working tree; for pinned mode it does not even
+  # require the sibling's checked-out HEAD to be anything in particular.
+  if [[ ! -d "$CACHE_DIR" || ! -f "$LOCK_FILE" ]]; then
+    err "vis not bootstrapped — run ./scripts/bootstrap.sh"
+    exit 1
+  fi
+  for rel in "${IMPORT_PATHS[@]}"; do
+    full="$CACHE_DIR/$rel"
+    if [[ ! -f "$full" ]]; then
+      err "import resolves to missing file in cache: @.vis-cache/vis/$rel — run ./scripts/bootstrap.sh"
+      MISSING=1
+      continue
+    fi
+    h=$(sha1sum "$full" | awk '{print $1}')
+    HASH_PATHS+=("$rel")
+    HASH_VALUES+=("$h")
+  done
+  if [[ "$MISSING" -ne 0 ]]; then
+    exit 1
+  fi
 fi
 
-# --- write or verify .vis-lock --------------------------------------
+# --- write or verify .vis-lock ------------------------------------------------
 
 generate_lock() {
   local iso
@@ -153,14 +266,20 @@ generate_lock() {
   {
     echo "# .vis-lock — auto-generated by scripts/bootstrap.sh"
     echo "# Do not edit by hand. Run ./scripts/bootstrap.sh to refresh."
-    echo "vis_commit: $FOUND_SHA"
+    echo "lock_version: 2"
+    echo "mode: $MODE"
     echo "resolved_at: $iso"
-    echo "packages:"
-    for i in "${!PKGS[@]}"; do
-      echo "  ${PKGS[$i]}:"
-      echo "    version: v${VERS[$i]}"
-      echo "    tag_commit: ${TAG_COMMITS[$i]}"
-    done
+    if [[ "$MODE" == "pinned" ]]; then
+      echo "packages:"
+      for i in "${!PKGS[@]}"; do
+        echo "  ${PKGS[$i]}:"
+        echo "    version: v${VERS[$i]}"
+        echo "    tag: ${TAG_NAMES[$i]}"
+        echo "    tag_commit: ${TAG_COMMITS[$i]}"
+      done
+    else
+      echo "vis_head: $(git -C "$VIS_DIR" rev-parse HEAD)"
+    fi
     echo "conduct_files:"
     for i in "${!HASH_PATHS[@]}"; do
       echo "  - path: ${HASH_PATHS[$i]}"
@@ -169,44 +288,55 @@ generate_lock() {
   } > "$LOCK_FILE"
 }
 
-if [[ "$MODE" != "--verify" ]]; then
+if [[ "$VERIFY" -eq 0 ]]; then
   generate_lock
-  echo "bootstrapped: ${#PKGS[@]} packages, ${#HASH_PATHS[@]} conduct files, vis SHA $FOUND_SHA"
+  echo "bootstrapped ($MODE): ${#PKGS[@]} packages, ${#HASH_PATHS[@]} conduct files"
+  echo "materialized: $CACHE_DIR"
   echo "wrote $LOCK_FILE"
   exit 0
 fi
 
-# --verify path: lock must exist and match exactly.
+# --verify path (both modes): lock must exist and match exactly.
 
-if [[ ! -f "$LOCK_FILE" ]]; then
-  err "vis not bootstrapped — run ./scripts/bootstrap.sh"
+lock_text="$(cat "$LOCK_FILE")"
+
+lock_mode=$(printf '%s\n' "$lock_text" | grep -E '^mode:' | awk '{print $2}')
+if [[ -z "$lock_mode" ]]; then
+  err "lock is stale or wrong-schema (missing 'mode:') — run ./scripts/bootstrap.sh"
+  exit 1
+fi
+if [[ "$lock_mode" != "$MODE" ]]; then
+  err "lock mode mismatch: lock says $lock_mode, verify requested $MODE — re-run bootstrap in that mode first"
   exit 1
 fi
 
-# Compare vis_commit
-lock_found=$(grep -E '^vis_commit:' "$LOCK_FILE" | awk '{print $2}')
-if [[ "$lock_found" != "$FOUND_SHA" ]]; then
-  err "vis drift: lock says $lock_found, checkout is $FOUND_SHA — run ./scripts/bootstrap.sh to re-resolve"
-  exit 1
-fi
-
-# Compare per-package tag_commit. Sequential grep is fine; the package count is small.
-for i in "${!PKGS[@]}"; do
-  pkg="${PKGS[$i]}"
-  expected="${TAG_COMMITS[$i]}"
-  # Pull the tag_commit line that follows the package header in YAML.
-  observed=$(awk -v pkg="$pkg" '
-    $0 ~ "^  "pkg":" { in_pkg=1; next }
-    in_pkg && /^  [a-z]/ && $0 !~ "^    " { in_pkg=0 }
-    in_pkg && /^    tag_commit:/ { print $2; exit }
-  ' "$LOCK_FILE")
-  if [[ "$observed" != "$expected" ]]; then
-    err "package ${pkg}: lock ${observed}, checkout ${expected} — run ./scripts/bootstrap.sh"
+if [[ "$MODE" == "pinned" ]]; then
+  for i in "${!PKGS[@]}"; do
+    pkg="${PKGS[$i]}"
+    expected="${TAG_COMMITS[$i]}"
+    observed=$(awk -v pkg="$pkg" '
+      $0 ~ "^  "pkg":" { in_pkg=1; next }
+      in_pkg && /^  [a-z]/ && $0 !~ "^    " { in_pkg=0 }
+      in_pkg && /^    tag_commit:/ { print $2; exit }
+    ' "$LOCK_FILE")
+    if [[ -z "$observed" ]]; then
+      err "package ${pkg}: missing from lock — run ./scripts/bootstrap.sh"
+      exit 1
+    fi
+    if [[ "$observed" != "$expected" ]]; then
+      err "package ${pkg}: recorded tag/version no longer resolves to the same content (lock ${observed}, tag now resolves to ${expected}) — a moved/retagged pin, or .vis-versions changed without re-bootstrapping. Run ./scripts/bootstrap.sh"
+      exit 1
+    fi
+  done
+else
+  lock_head=$(printf '%s\n' "$lock_text" | grep -E '^vis_head:' | awk '{print $2}')
+  live_head=$(git -C "$VIS_DIR" rev-parse HEAD)
+  if [[ "$lock_head" != "$live_head" ]]; then
+    err "vis drift (floating mode): lock says $lock_head, checkout is $live_head — run ./scripts/bootstrap.sh --floating to re-resolve"
     exit 1
   fi
-done
+fi
 
-# Compare every conduct file SHA-1.
 for i in "${!HASH_PATHS[@]}"; do
   rel="${HASH_PATHS[$i]}"
   expected="${HASH_VALUES[$i]}"
@@ -220,10 +350,10 @@ for i in "${!HASH_PATHS[@]}"; do
     exit 1
   fi
   if [[ "$observed" != "$expected" ]]; then
-    err "conduct file $rel modified since bootstrap — re-bootstrap or revert"
+    err "conduct file $rel modified in the materialized cache since bootstrap — re-bootstrap or revert .vis-cache/"
     exit 1
   fi
 done
 
-echo "verified: ${#HASH_PATHS[@]} conduct files, ${#PKGS[@]} packages, vis SHA $FOUND_SHA"
+echo "verified ($MODE): ${#HASH_PATHS[@]} conduct files, ${#PKGS[@]} packages"
 exit 0

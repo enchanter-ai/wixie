@@ -1,6 +1,10 @@
 # .vis-versions — vis packages this sibling consumes
 # Update via: bump version + pull from canonical at ../vis
-core: "~0.6.0"
-skills: "~0.6.0"
-web: "~0.6.0"
-orchestration: "~0.6.0"
+# WIX-INSTALL-002: pinned mode requires enchanter-<pkg>--v<version> to exist
+# in vis and to contain every packages/<pkg>/... file this repo's CLAUDE.md
+# imports. v0.7.0 = the candidate cut at vis commit ab0d5b4 (t3/vis-candidate)
+# — see tranche3/patches/IMPLEMENTATION_NOTES.md for the version decision.
+core: "~0.7.0"
+skills: "~0.7.0"
+web: "~0.7.0"
+orchestration: "~0.7.0"
