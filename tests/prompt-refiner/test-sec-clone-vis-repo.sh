@@ -81,6 +81,19 @@ rc3="$(run_bash_canary "not-a-repo-and-not-a-path")"
 [[ "$rc3" -ne 0 ]] && ok || bad "expected nonzero exit for an unsupported VIS_REPO form (bash)"
 grep -q "not a supported source form" "$TMP/out.txt" && ok || bad "missing 'not a supported source form' message (bash)"
 
+# 2.5. Fix round 1 (VERIFICATION.md item 9 note): Windows PowerShell 5.1
+#      splits a VIS_REPO value containing an embedded double quote into
+#      several native argv entries when invoking git, which is fragile even
+#      behind `--`. None of the supported source forms (https/http/ssh/
+#      git@host:path/absolute path) ever need a literal `"`, so it is
+#      refused outright, on both entry points, before any git call.
+rm -f "$SENTINEL"
+CANARY_QUOTE='https://example.invalid/"; touch '"$SENTINEL"'; echo "'
+rc25="$(run_bash_canary "$CANARY_QUOTE")"
+[[ -f "$SENTINEL" ]] && bad "sentinel created via an embedded-quote VIS_REPO (bash)" || ok
+[[ "$rc25" -ne 0 ]] && ok || bad "expected nonzero exit for a quote-containing VIS_REPO (bash)"
+grep -q "double quote" "$TMP/out.txt" && ok || bad "missing explicit 'double quote' refusal message (bash)"
+
 # 4. A normal, legitimate local absolute-path source still works (no
 #    regression): clone a tiny real repo.
 LEGIT_SRC="$TMP/legit-vis"
@@ -102,7 +115,7 @@ if [[ -f "$PLUGIN/scripts/bootstrap.ps1" ]] && command -v powershell.exe >/dev/n
   echo "== PowerShell 5.1 entry point =="
   rm -f "$SENTINEL"
   rm -rf "$TMP/vis" 2>/dev/null || true
-  OUT_PS="$(cd "$PLUGIN" && VIS_REPO="--upload-pack=touch \"$SENTINEL\"" powershell.exe -NoProfile -File scripts/bootstrap.ps1 2>&1)"
+  OUT_PS="$(cd "$PLUGIN" && VIS_REPO="--upload-pack=touch \"$SENTINEL\"" powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 2>&1)"
   RC_PS=$?
   if [[ -f "$SENTINEL" ]]; then
     bad "sentinel file was created -- VIS_REPO reached git as an option (PowerShell)"
@@ -111,6 +124,14 @@ if [[ -f "$PLUGIN/scripts/bootstrap.ps1" ]] && command -v powershell.exe >/dev/n
   fi
   [[ "$RC_PS" -ne 0 ]] && ok || bad "expected nonzero exit for an option-shaped VIS_REPO (PowerShell)"
   printf '%s' "$OUT_PS" | grep -q "command-line option" && ok || bad "missing explicit refusal message (PowerShell): $OUT_PS"
+
+  rm -f "$SENTINEL"
+  rm -rf "$TMP/vis" 2>/dev/null || true
+  OUT_PS2="$(cd "$PLUGIN" && VIS_REPO="$CANARY_QUOTE" powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 2>&1)"
+  RC_PS2=$?
+  [[ -f "$SENTINEL" ]] && bad "sentinel created via an embedded-quote VIS_REPO (PowerShell)" || ok
+  [[ "$RC_PS2" -ne 0 ]] && ok || bad "expected nonzero exit for a quote-containing VIS_REPO (PowerShell)"
+  printf '%s' "$OUT_PS2" | grep -q "double quote" && ok || bad "missing explicit 'double quote' refusal message (PowerShell): $OUT_PS2"
 else
   echo "  (bootstrap.ps1 or powershell.exe unavailable -- skipping PowerShell canary)"
 fi

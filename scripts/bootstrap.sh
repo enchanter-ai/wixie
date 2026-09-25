@@ -89,10 +89,16 @@ err() { printf '%s\n' "$*" >&2; }
 # a hardcoded constant — and is passed to `git clone`. A value beginning with
 # "-" (e.g. "--upload-pack=touch pwned") would otherwise be parsed by git as
 # an option, and an option like --upload-pack runs an arbitrary command on
-# this host: real argument-injection, not hypothetical. Two independent
+# this host: real argument-injection, not hypothetical. A value containing an
+# embedded double quote is also refused: none of the supported source forms
+# ever need one, and Windows PowerShell 5.1 splits such a value into several
+# native argv entries when invoking an external command (verified: a VIS_REPO
+# containing a literal `"` reaches git as more than one argument even behind
+# `--`), which is fragile regardless of what comes after. Three independent
 # layers close this:
 #   1. This allowlist rejects anything that is not a plausible git source
-#      (https/http/ssh/git@ URL or an absolute path) BEFORE any git call.
+#      (https/http/ssh/git@ URL or an absolute path), and separately rejects
+#      any value containing a `"`, BEFORE any git call.
 #   2. Every git invocation that takes VIS_REPO places `--` immediately
 #      before it, so even a value this allowlist would (wrongly) accept can
 #      never be parsed as an option by git itself.
@@ -102,6 +108,10 @@ validate_vis_repo() {
   local v="$1"
   if [[ "$v" == -* ]]; then
     err "VIS_REPO looks like a command-line option, not a repository: $v"
+    return 1
+  fi
+  if [[ "$v" == *'"'* ]]; then
+    err "VIS_REPO contains a double quote, which no supported source form needs: $v"
     return 1
   fi
   case "$v" in

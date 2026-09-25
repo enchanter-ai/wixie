@@ -93,10 +93,17 @@ function Fail([string]$msg) {
     exit 1
 }
 
-# WIX-SEC-CLONE-001: VIS_REPO allowlist, mirroring bootstrap.sh exactly.
+# WIX-SEC-CLONE-001: VIS_REPO allowlist, mirroring bootstrap.sh exactly (see
+# that file for the full rationale, including why an embedded double quote
+# is refused: PowerShell 5.1 splits such a value into several native argv
+# entries when invoking an external command, verified live).
 function Test-VisRepo([string]$v) {
     if ($v.StartsWith("-")) {
         [Console]::Error.WriteLine("VIS_REPO looks like a command-line option, not a repository: $v")
+        return $false
+    }
+    if ($v.Contains('"')) {
+        [Console]::Error.WriteLine("VIS_REPO contains a double quote, which no supported source form needs: $v")
         return $false
     }
     if ($v -match '^(https?|ssh)://') { return $true }
