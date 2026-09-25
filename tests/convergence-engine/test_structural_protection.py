@@ -2,19 +2,28 @@
 """
 WIX-CONV-001 — convergence.py's fixers (fix_clarity's '; ' -> '.\\n' split on lines over
 50 words, fix_efficiency's blank-line/whitespace rewrite, etc.) must never modify content
-inside a "protected region" -- a fenced code block (any language), a Markdown/GFM table,
-a blockquote, or an <example>...</example> block -- and the accept/revert gate must revert
-any candidate whose protected regions differ from the previous iteration's text, regardless
-of whether the heuristic score improved. The same guarantee must hold for every exit path
+inside a full-freeze "protected region" -- a fenced code block (any language), a
+Markdown/GFM table, a blockquote, a bare (unfenced) JSON object/array, or a real, PAIRED
+<example>...</example> block -- and must never change the ordered sequence of XML/HTML-like
+tags (names, attributes, open/close) anywhere in the document, even though the PROSE inside
+a generic XML tag (<role>, <instructions>, <context>, ...) stays freely editable. The
+accept/revert gate must revert any candidate that violates either invariant, regardless of
+whether the heuristic score improved. The same guarantee must hold for every exit path
 (DEPLOY, plateau, max-iterations) and for output-test.py's try_offline_fix, which applies
-the same fixers with no gate of its own. Line endings and encoding of the input file must
-be preserved on save (the pre-fix bug used to rewrite the whole file to CRLF on Windows,
-unconditionally, via _save()'s text-mode open()).
+the same fixers with no gate of its own. Line endings (per line -- a mixed CRLF/LF input
+must not be normalized to one style) and encoding of the input file must be preserved on
+save.
 
-These are the implementer's own fixtures (not the investigator's or the independent
-verifier's held-out ones) covering every protected construct named in the finding, every
-exit path, try_offline_fix, CRLF and LF inputs, and a plain-prose control that must still
-be editable.
+Round 2 (this revision): the independent verifier REJECTED round 1 (commit bba9a6a) for
+(1) bare JSON/XML examples outside a fence or <example> still being corrupted, including an
+exit-0/DEPLOY case with invalid JSON on disk, and the same via try_offline_fix; (2) a literal
+"<example>" mentioned in prose (no closing tag) opening a region that swallowed the rest of
+the document, blocking all later legitimate edits; (3) mixed line endings being rewritten to
+all-CRLF. This file's fixtures were extended accordingly (still the implementer's own, not
+the investigator's or verifier's held-out ones): every protected construct named in the
+finding (now including bare JSON and generic XML tag structure), every exit path,
+try_offline_fix, CRLF/LF/mixed inputs, an unpaired <example> mention, and a plain-prose
+control (inside and outside XML tags) that must still be editable.
 
 Usage: python test_structural_protection.py <REPO_ROOT>   (exit 0 = pass)
 """
@@ -197,11 +206,36 @@ def test_scanner_tilde_fence_and_mismatched_fence_char(mod):
     assert "prose after" not in text[regions[0][0]:regions[0][1]]
 
 
-def test_scanner_example_same_line_open_close(mod):
-    text = "prose <example>inline example; with a semicolon</example> more prose\n"
-    regions = mod.find_protected_regions(text)
+def test_scanner_example_requires_own_line_pairing(mod):
+    """Round 2 (verifier REJECT on bba9a6a): <example> is recognized only as a
+    real, paired BLOCK tag -- the opening tag alone on its own line, and a
+    matching closing tag alone on a later line. An inline mention sharing a
+    line with other prose must never create a region at all (previously it
+    matched as "same-line open/close" and, when unpaired, swallowed the rest
+    of the document to EOF -- exactly the bug the verifier reproduced)."""
+    inline = "prose <example>inline mention</example> more prose\n"
+    assert mod.find_protected_regions(inline) == [], \
+        "an inline <example>...</example> sharing a line with prose must not be a region"
+
+    block = "<example>\nreal block content\n</example>\n"
+    regions = mod.find_protected_regions(block)
     assert len(regions) == 1 and regions[0][2] == "example"
-    assert text[regions[0][0]:regions[0][1]] == "<example>inline example; with a semicolon</example>"
+    assert block[regions[0][0]:regions[0][1]] == "<example>\nreal block content\n</example>"
+
+
+def test_scanner_unpaired_example_mention_does_not_swallow_document(mod):
+    """The exact liveness bug the verifier found: "<example>" mentioned in
+    prose with NO closing tag anywhere must create no region -- and must not
+    prevent scanning/editing the rest of the document."""
+    text = (
+        "Wrap the final answer in an <example> tag as shown below.\n\n"
+        + LONG_SEMI_PROSE_CONTROL + "\n"
+    )
+    assert mod.find_protected_regions(text) == [], \
+        "an unpaired <example> mention must not open any region"
+    out = mod.fix_clarity(text)
+    assert LONG_SEMI_PROSE_CONTROL not in out, \
+        "prose AFTER the unpaired mention must still be editable, not frozen to EOF"
 
 
 def test_protected_regions_equal_detects_content_change(mod):
@@ -279,6 +313,83 @@ def test_fix_model_fit_protects_regions(mod):
     assert mod.protected_regions_equal(text, out)
     fence = re.search(r'```\n(.*?)\n```', out, re.S).group(1)
     assert fence == "think step by step inside code stays literal"
+
+
+# ─── Round 2 (verifier REJECT on bba9a6a) ─────────────────────────────────────────
+# C1/C2/C3: bare (unfenced) JSON/XML examples were still corrupted, including one
+# exit-0/DEPLOY case with invalid JSON, and the same damage via try_offline_fix.
+# C5: an unterminated <example> mention swallowed the rest of the document.
+# C4: mixed CRLF/LF input got rewritten to all-CRLF.
+
+BARE_JSON_SAMPLE = (
+    '{"summary": "This is a fairly long descriptive value that goes on and on and '
+    'on and on and on and on and on and on for quite a while just to pad it out; '
+    'and then it continues after the semicolon with more words to reach the fifty '
+    'word threshold reliably here for the test fixture padding words."}'
+)
+
+
+def test_bare_json_outside_any_fence_is_protected(mod):
+    """C1/C2: a JSON object that is NOT inside a fenced code block or <example>
+    must still be recognized and content-frozen -- this is the exact class of
+    damage the verifier's new_bare_json_inline / new_deployhedge_bare_json
+    fixtures reproduced (including one that reached exit 0 / DEPLOY with broken
+    JSON on disk)."""
+    text = f"Here is sample output: {BARE_JSON_SAMPLE} That covers the format.\n"
+    regions = mod.find_protected_regions(text)
+    kinds = [k for _s, _e, k in regions]
+    assert "json" in kinds, f"expected a bare 'json' region, got {regions}"
+
+    out = mod.fix_clarity(text)
+    assert mod.protected_regions_equal(text, out)
+    start = out.index('{')
+    end = out.rindex('}') + 1
+    assert out[start:end] == BARE_JSON_SAMPLE
+    json.loads(out[start:end])
+
+
+def test_bare_json_inside_quoted_braces_not_desynced(mod):
+    """The JSON scan uses the real parser (raw_decode), not brace counting, so a
+    '{' or '}' living inside a JSON string literal can't desync the scan."""
+    text = '{"note": "a { b } c", "list": [1, 2, {"x": "}"}]}\n'
+    regions = mod.find_protected_regions(text)
+    assert len(regions) == 1 and regions[0][2] == "json"
+    s, e, _k = regions[0]
+    assert text[s:e] == text.rstrip("\n")
+    json.loads(text[s:e])
+
+
+def test_xml_section_prose_editable_but_tag_structure_protected(mod):
+    """Design guidance: Wixie's Claude-format prompts are built from XML sections
+    (<role>, <instructions>, <context>...). Prose INSIDE a generic XML tag (not
+    <example>) must remain freely editable -- splitting a long sentence keeps the
+    document well-formed -- but the tag sequence itself (names, attributes,
+    open/close) must be identical before and after."""
+    text = (
+        "<role>You are a helpful assistant.</role>\n"
+        "<instructions>\n"
+        + LONG_SEMI_PROSE_CONTROL + "\n"
+        "</instructions>\n"
+        '<context source="doc1">Some context text.</context>\n'
+    )
+    out = mod.fix_clarity(text)
+    assert mod._extract_tag_sequence(text) == mod._extract_tag_sequence(out), \
+        "the XML tag sequence (names, attributes, open/close) must be unchanged"
+    assert LONG_SEMI_PROSE_CONTROL not in out, \
+        "the long prose sentence INSIDE <instructions> must still have been split"
+    assert mod.protected_regions_equal(text, out), \
+        "protected_regions_equal must accept this: only tag structure is invariant here"
+
+
+def test_xml_tag_rename_or_attribute_change_is_detected(mod):
+    """Sanity check on the invariant itself: protected_regions_equal must reject a
+    renamed tag or a changed attribute, not just accept everything with a tag in it."""
+    a = '<context source="doc1">text</context>\n'
+    renamed = '<context source="doc1">text</ctx>\n'
+    changed_attr = '<context source="doc2">text</context>\n'
+    assert mod.protected_regions_equal(a, a) is True
+    assert mod.protected_regions_equal(a, renamed) is False
+    assert mod.protected_regions_equal(a, changed_attr) is False
 
 
 # ─── run() integration: the accept/revert gate (requirement 2) ───────────────────
@@ -507,6 +618,46 @@ def test_lf_input_preserved_end_to_end(repo_root, tmp_path):
     assert b"\r" not in raw, "LF-only input must never gain CRLF (this is the OBS-05 regression)"
 
 
+def test_mixed_line_endings_preserved_per_line(repo_root, tmp_path):
+    """C4 (verifier REJECT): a file that mixes CRLF and LF lines must NOT be
+    normalized to a single style. Every line that survives content-unchanged
+    (the fenced JSON block and its delimiters, deliberately given alternating
+    terminators here) must keep its OWN original terminator, and the saved
+    file must still contain a genuine mix afterward."""
+    lines_terms = [
+        ("maybe you are a helper.", "\r\n"),   # will be edited (hedge removed)
+        ("", "\n"),
+        ("```json", "\r\n"),                    # untouched -> keeps \r\n
+        (LONG_SEMI_JSON, "\n"),                 # untouched (protected) -> keeps \n
+        ("```", "\r\n"),                        # untouched -> keeps \r\n
+        ("", "\n"),
+    ]
+    raw_in = "".join(l + t for l, t in lines_terms)
+    prompt_path = tmp_path / "mixed" / "prompt.md"
+    prompt_path.parent.mkdir()
+    prompt_path.write_bytes(raw_in.encode("utf-8"))
+
+    subprocess.run(
+        [sys.executable, str(repo_root / "shared" / "scripts" / "convergence.py"),
+         str(prompt_path), "--max", "5"],
+        cwd=str(repo_root), capture_output=True, text=True,
+    )
+    raw_out = prompt_path.read_bytes()
+
+    assert b"\r\n" in raw_out, "the file must still contain SOME CRLF lines"
+    bare_lf = raw_out.replace(b"\r\n", b"").count(b"\n")
+    assert bare_lf > 0, "the file must still contain SOME bare-LF lines -- mixed input must not be normalized to one style"
+
+    # The three untouched lines must each keep their OWN original terminator.
+    assert b"```json\r\n" in raw_out, "unchanged '```json' line must keep its own CRLF"
+    assert (LONG_SEMI_JSON + "\n").encode("utf-8") in raw_out, \
+        "unchanged (protected) JSON fence content must keep its own LF"
+    assert b"```\r\n" in raw_out, "unchanged closing fence line must keep its own CRLF"
+
+    fence = re.search(rb'```json\r?\n(.*?)\r?\n```', raw_out, re.S).group(1).decode("utf-8")
+    assert json.loads(fence) == json.loads(LONG_SEMI_JSON)
+
+
 # ─── output-test.py try_offline_fix (requirement 4) ───────────────────────────────
 
 def test_try_offline_fix_refuses_structural_damage(conv_mod, ot_mod):
@@ -545,6 +696,45 @@ def test_try_offline_fix_refuses_structural_damage(conv_mod, ot_mod):
     assert applied is False, f"applied must be False, got desc={desc!r}"
 
 
+def test_try_offline_fix_refuses_bare_json_damage(conv_mod, ot_mod):
+    """C3 (verifier REJECT): try_offline_fix 'applies the corruption to a bare
+    JSON example' -- reproduced directly with a hostile fixer against JSON that
+    is NOT inside a fence or <example>, exactly the verifier's failing case."""
+    text = f"Here is sample output: {BARE_JSON_SAMPLE} That covers the format.\n"
+
+    def hostile_fixer(t):
+        lines = t.split('\n')
+        new = []
+        for line in lines:
+            if len(line.split()) > 50 and ('; ' in line or ', and ' in line):
+                line = re.sub(r';\s+', '.\n', line, count=1)
+            new.append(line)
+        return '\n'.join(new)
+
+    conv_mod.FIXERS = dict(conv_mod.FIXERS)
+    conv_mod.FIXERS["Clarity"] = hostile_fixer
+
+    class FakeSelfEval:
+        AXES = ["Clarity"]
+        SCORERS = [staticmethod(lambda t: 1.0)]
+
+    real_try_import = ot_mod._try_import
+
+    def fake_try_import(filename, module_name):
+        if filename == "convergence.py":
+            return conv_mod
+        return real_try_import(filename, module_name)
+
+    ot_mod._try_import = fake_try_import
+    ot_mod._self_eval = FakeSelfEval()
+
+    details = {"test_results": [{"passed": False, "name": "x"}]}
+    new_text, applied, desc = ot_mod.try_offline_fix(text, {}, details)
+
+    assert new_text == text, "a fix that corrupts bare JSON must never be returned"
+    assert applied is False, f"applied must be False, got desc={desc!r}"
+
+
 def test_try_offline_fix_still_applies_legitimate_fix(conv_mod, ot_mod):
     text = "maybe you should try to write something possibly helpful.\n"
 
@@ -580,7 +770,8 @@ def main():
         test_scanner_nesting_fence_swallows_lookalike_markers,
         test_scanner_unterminated_fence_runs_to_eof,
         test_scanner_tilde_fence_and_mismatched_fence_char,
-        test_scanner_example_same_line_open_close,
+        test_scanner_example_requires_own_line_pairing,
+        test_scanner_unpaired_example_mention_does_not_swallow_document,
         test_protected_regions_equal_detects_content_change,
         test_protected_regions_equal_ignores_line_ending_style,
         test_protected_regions_equal_allows_unrelated_prose_changes,
@@ -588,6 +779,10 @@ def main():
         test_fix_efficiency_protects_regions_but_cleans_prose,
         test_fix_completeness_insertion_skips_protected_first_line,
         test_fix_model_fit_protects_regions,
+        test_bare_json_outside_any_fence_is_protected,
+        test_bare_json_inside_quoted_braces_not_desynced,
+        test_xml_section_prose_editable_but_tag_structure_protected,
+        test_xml_tag_rename_or_attribute_change_is_detected,
         test_safe_text_for_save_backstop,
     ]
     for t in pure_tests:
@@ -622,10 +817,20 @@ def main():
         test_lf_input_preserved_end_to_end(repo_root, sub)
         print("  PASS  test_lf_input_preserved_end_to_end")
 
+        sub = tmp_path / "mixed_e2e"
+        sub.mkdir(exist_ok=True)
+        test_mixed_line_endings_preserved_per_line(repo_root, sub)
+        print("  PASS  test_mixed_line_endings_preserved_per_line")
+
         conv_mod = load_convergence(repo_root)
         ot_mod = load_output_test(repo_root)
         test_try_offline_fix_refuses_structural_damage(conv_mod, ot_mod)
         print("  PASS  test_try_offline_fix_refuses_structural_damage")
+
+        conv_mod_json = load_convergence(repo_root)
+        ot_mod_json = load_output_test(repo_root)
+        test_try_offline_fix_refuses_bare_json_damage(conv_mod_json, ot_mod_json)
+        print("  PASS  test_try_offline_fix_refuses_bare_json_damage")
 
         conv_mod2 = load_convergence(repo_root)
         ot_mod2 = load_output_test(repo_root)
