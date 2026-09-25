@@ -37,7 +37,7 @@ payload always agree; none of them can be read as a full DEPLOY when another dis
 
 Stdlib only. No pip installs.
 """
-import sys, os, re, json, copy, statistics
+import sys, os, re, json, copy, statistics, bisect, functools
 from datetime import datetime
 from collections import Counter
 
@@ -125,333 +125,624 @@ def run_assertions(text):
     return results
 
 
-# ─── Protected-region scanner (WIX-CONV-001) ────────────────────────────────────
-# Two different guarantees, deliberately not the same mechanism:
+# ─── Editable-prose allow-list (WIX-CONV-001) ──────────────────────────────────
+# Text-rewriting fixers may modify ONLY "editable prose". Everything else is frozen,
+# and the gate compares a structural fingerprint of the frozen content. The design is
+# a POSITIVE allow-list: nothing is editable unless it is positively known to be prose.
 #
-#   (A) FULL-FREEZE regions -- fenced code (any language), a Markdown/GFM table, a
-#       blockquote, a bare (unfenced) JSON object/array literal, or a real, PAIRED
-#       <example>...</example> block -- must come out of a fixer byte-identical.
-#       Wixie's Claude-format prompts are built from XML sections (<role>,
-#       <instructions>, <context>, ...), and a long plain-prose sentence inside
-#       <instructions> must still be splittable -- so generic XML/HTML-like tags
-#       are deliberately NOT a full-freeze region; only their own STRUCTURE is
-#       protected, via (B) below.
-#   (B) STRUCTURE-ONLY invariant -- the ordered sequence of XML/HTML-like tags
-#       (name, attributes, open/close/self-close) anywhere in the document must
-#       be identical before and after. A tag can never be split, merged, renamed,
-#       or dropped, and text can never move across a tag boundary into an
-#       attribute -- but the TEXT between two tags is free to be edited.
+# Editable prose is:
+#   * top-level prose lines (outside every XML/HTML-like element), and
+#   * prose lines inside a PAIRED XML element whose tag name (case-insensitive) is in
+#     EDITABLE_XML_SECTIONS below -- the instruction sections Wixie's Claude-format
+#     prompts are built from.
 #
-# find_protected_regions() covers (A) with one left-to-right, line-oriented pass
-# over the document (not independent regexes applied line by line), so a
-# construct nested inside another (a fenced code block inside an <example> block,
-# a line that merely *looks* like a table divider while inside an open fence) is
-# resolved once, in document order. Fences take top priority: once one is open,
-# nothing else is recognized until its own close marker (or end of document).
-# <example> is recognized ONLY as a real block-level pair: the opening tag must
-# be alone on its own line, and a matching closing tag must be alone on a LATER
-# line -- a mention of "<example>" inside prose or inline code (not alone on its
-# line, or with no matching closer anywhere in the document) creates NO region at
-# all. That is deliberate: an unpaired/inline mention must never swallow the rest
-# of the document the way an "unterminated construct runs to EOF" rule would.
-# Bare JSON objects/arrays (fenced or not) are found separately, using the real
-# JSON parser (json.JSONDecoder.raw_decode) rather than brace-counting, so a
-# quoted '{' inside a JSON string can never desynchronize the scan.
+# Non-editable (frozen) content is:
+#   * fenced code blocks (``` or ~~~, any language, any indentation; an unterminated
+#     fence runs to end of document),
+#   * top-level indented code blocks (4 spaces / tab after a blank line),
+#   * Markdown/GFM tables and blockquotes,
+#   * a bracket block: a line whose first character is '{' or '[' and whose bracket
+#     closes on a later line or ends the line (multi-line or stand-alone JSON/arrays),
+#   * the entire content of any PAIRED element whose tag name is NOT in
+#     EDITABLE_XML_SECTIONS (unknown tags default to frozen -- this is how XML/JSON data
+#     examples such as <sample_json>, <output>, <data> stay content-equal), and always
+#     the paired <example>/<examples> blocks (ALWAYS_FROZEN_XML_ELEMENTS) however their
+#     tags are placed (alone on a line, sharing a line, or both on one line),
+#   * every tag token itself (so tag names/attributes can never change).
+#   An UNPAIRED tag (e.g. the word "<example>" mentioned in prose) freezes only its own
+#   characters, never the text after it.
 #
-# protected_regions_equal() -- the actual gate -- checks BOTH (A) and (B) as one
-# document-level structural fingerprint.
+# Within an editable line, an edit may not land inside an inline span: a (), [], {}
+# bracket span, a "..." / curly-quote span, or a `backtick` code span (an unclosed
+# opener runs to end of line). A line whose only candidate edit position is inside
+# such a span is simply skipped; it is not frozen for other safe edits.
+#
+# Every parser below is iterative and linear in the input (explicit stacks, no
+# recursion, no per-bracket JSON decoding), so deeply nested or adversarial input
+# cannot overflow the stack or go quadratic.
+EDITABLE_XML_SECTIONS = frozenset({
+    "role", "persona", "task", "objective", "goal", "goals", "purpose",
+    "instructions", "instruction", "context", "background", "constraints", "rules",
+    "guidelines", "requirements", "steps", "process", "approach", "edge_cases",
+    "failure_modes", "preconditions", "success_criteria", "tone", "style", "audience",
+})
+ALWAYS_FROZEN_XML_ELEMENTS = frozenset({"example", "examples"})
 
-_FENCE_RE = re.compile(r'^(\s{0,3})(`{3,}|~{3,})(.*)$')
+_FENCE_RE = re.compile(r'^[ \t]*(`{3,}|~{3,})(.*)$')
 _TABLE_DELIM_RE = re.compile(r'^\s{0,3}\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$')
-_BLOCKQUOTE_RE = re.compile(r'^\s{0,3}>')
-_EXAMPLE_OPEN_LINE_RE = re.compile(r'^\s*<example\b[^>]*>\s*$', re.I)
-_EXAMPLE_CLOSE_LINE_RE = re.compile(r'^\s*</example\s*>\s*$', re.I)
-_JSON_START_CHARS = "{["
-_TAG_RE = re.compile(
-    r'<(/)?([A-Za-z][\w:.-]*)((?:\s+[A-Za-z_:][\w:.-]*'
-    r'(?:\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'<>/]+))?)*)\s*(/)?>'
-)
-
-PROTECTED_KINDS = ("fenced_code", "example", "table", "blockquote", "json")
-
-
-def _line_spans(text):
-    """(line_text_without_newline, start_offset, end_offset_incl_newline) for every
-    physical line, so callers can map a line back to its position in `text`."""
-    spans = []
-    pos = 0
-    for line in text.split('\n'):
-        start = pos
-        end = start + len(line)
-        spans.append((line, start, end))
-        pos = end + 1  # +1 for the '\n' the split() consumed
-    return spans
-
-
-def find_protected_regions(text):
-    """Single left-to-right scan. Returns a sorted, non-overlapping list of
-    (start, end, kind) character-offset spans (end exclusive), kind in
-    PROTECTED_KINDS. An unterminated fence or <example> block runs to end of
-    document rather than silently vanishing."""
-    lines = _line_spans(text)
-    n = len(lines)
-    regions = []
-    i = 0
-    while i < n:
-        line, start, end = lines[i]
-
-        # 1) Fenced code block -- highest priority; swallows everything until its
-        #    own matching close (same fence char, length >= opening length, and
-        #    nothing but the fence itself on that line).
-        m = _FENCE_RE.match(line)
-        if m:
-            fence_char = m.group(2)[0]
-            fence_len = len(m.group(2))
-            j = i + 1
-            close_end = None
-            while j < n:
-                jline, jstart, jend = lines[j]
-                jm = _FENCE_RE.match(jline)
-                if jm and jm.group(2)[0] == fence_char and len(jm.group(2)) >= fence_len and not jm.group(3).strip():
-                    close_end = jend
-                    i = j
-                    break
-                j += 1
-            if close_end is None:
-                close_end = lines[n - 1][2]
-                i = n - 1
-            regions.append((start, close_end, "fenced_code"))
-            i += 1
-            continue
-
-        # 2) <example> block -- second priority, but ONLY a real, paired block
-        #    tag: the opening tag must be alone on its own line, and a matching
-        #    closing tag must be alone on a LATER line. If no matching close
-        #    exists anywhere in the document, this is NOT a region at all -- fall
-        #    through and keep scanning normally from the next line, so a bare
-        #    mention like "wrap the answer in an <example> tag" never swallows
-        #    the rest of the document.
-        if _EXAMPLE_OPEN_LINE_RE.match(line):
-            j = i + 1
-            close_idx = None
-            while j < n:
-                if _EXAMPLE_CLOSE_LINE_RE.match(lines[j][0]):
-                    close_idx = j
-                    break
-                j += 1
-            if close_idx is not None:
-                regions.append((start, lines[close_idx][2], "example"))
-                i = close_idx + 1
-                continue
-            # No matching close: not a real block. Do NOT `continue` -- let this
-            # line fall through to the table/blockquote checks and, failing
-            # those, the plain i += 1 at the bottom, so it stays ordinary,
-            # editable prose.
-
-        # 3) Markdown/GFM table -- a '|' row immediately followed by a valid
-        #    delimiter row, then any further contiguous non-blank '|' rows.
-        if '|' in line and i + 1 < n:
-            next_line = lines[i + 1][0]
-            if '|' in next_line and _TABLE_DELIM_RE.match(next_line.strip()):
-                region_end = lines[i + 1][2]
-                j = i + 2
-                while j < n and lines[j][0].strip() and '|' in lines[j][0]:
-                    region_end = lines[j][2]
-                    j += 1
-                regions.append((start, region_end, "table"))
-                i = j
-                continue
-
-        # 4) Blockquote -- a maximal run of '>' -prefixed lines.
-        if _BLOCKQUOTE_RE.match(line):
-            region_end = end
-            j = i + 1
-            while j < n and _BLOCKQUOTE_RE.match(lines[j][0]):
-                region_end = lines[j][2]
-                j += 1
-            regions.append((start, region_end, "blockquote"))
-            i = j
-            continue
-
-        i += 1
-
-    regions.sort(key=lambda r: r[0])
-    regions.extend(_find_bare_json_regions(text, regions))
-    regions.sort(key=lambda r: r[0])
-    return regions
-
-
-def _find_bare_json_regions(text, exclude_spans):
-    """Scan `text` for contiguous JSON object/array literals that json.loads
-    actually accepts -- fenced or not -- skipping anything already covered by
-    `exclude_spans` (fenced code / table / blockquote / paired <example>, which
-    are already fully protected, so re-detecting JSON inside them would just be
-    redundant). Uses json.JSONDecoder.raw_decode at every '{'/'[' candidate
-    start, which is the real JSON parser -- not brace-counting -- so a '{' or
-    '}' inside a quoted JSON string can never desynchronize the scan."""
-    decoder = json.JSONDecoder()
-    regions = []
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        if ch in _JSON_START_CHARS and not _overlaps_any(i, i + 1, exclude_spans):
-            try:
-                obj, end = decoder.raw_decode(text, i)
-            except (ValueError,):
-                obj, end = None, None
-            if obj is not None and isinstance(obj, (dict, list)) and not _overlaps_any(i, end, exclude_spans):
-                regions.append((i, end, "json"))
-                i = end
-                continue
-        i += 1
-    return regions
-
-
-def _extract_tag_sequence(text):
-    """Ordered list of (is_closing, tag_name, normalized_attrs, is_selfclosing)
-    for every XML/HTML-like tag anywhere in `text` -- a pure structure
-    fingerprint. Attribute text is whitespace-normalized (so incidental
-    re-wrapping doesn't count) but otherwise compared exactly, so a rename
-    (including a case change), a dropped/added/merged/split tag, or text moved
-    across a tag boundary into an attribute all change this sequence."""
-    out = []
-    for m in _TAG_RE.finditer(text):
-        closing, name, attrs, selfclose = m.groups()
-        norm_attrs = re.sub(r'\s+', ' ', (attrs or '')).strip()
-        out.append((bool(closing), name, norm_attrs, bool(selfclose)))
-    return out
-
-
-def _overlaps_any(s, e, spans):
-    for rs, re_, _kind in spans:
-        if s < re_ and e > rs:
-            return True
-    return False
-
-
-def _protected_safe_sub(pattern, repl, text, spans, flags=0, count=0):
-    """Like re.sub, but any match that overlaps a protected span is left
-    untouched instead of substituted. Recomputing `spans` on the exact `text`
-    passed in (not a stale/original copy) is the caller's responsibility."""
-    if isinstance(pattern, str):
-        pattern = re.compile(pattern, flags)
-    out = []
-    last = 0
-    n_done = 0
-    for m in pattern.finditer(text):
-        if count and n_done >= count:
-            break
-        s, e = m.span()
-        if _overlaps_any(s, e, spans):
-            continue
-        out.append(text[last:s])
-        out.append(m.expand(repl) if isinstance(repl, str) else repl(m))
-        last = e
-        n_done += 1
-    out.append(text[last:])
-    return ''.join(out)
+_BLOCKQUOTE_RE = re.compile(r'^[ \t]*>')
+_INDENT_CODE_RE = re.compile(r'^(?: {4}|\t)')
+_TAG_RE = re.compile(  # attribute values may be quoted and then contain '<' / '>'
+    r'<(/?)([A-Za-z_][\w.:-]*)((?:\s(?:[^<>"\'\n]|"[^"\n]*"|\'[^\'\n]*\')*?)?)(/?)>')
+_BACKTICK_RUN_RE = re.compile(r'`+')
+_JSON_CHARS_RE = re.compile(r'[\[\]{}"\\]')
+_LOCAL_CHARS_RE = re.compile('[\\[\\](){}"\\\\“”]')
+_CLOSER_OF = {']': '[', '}': '{', ')': '('}
 
 
 def _normalize_newlines(text):
     return text.replace('\r\n', '\n').replace('\r', '\n')
 
 
-def extract_protected_contents(text):
-    """Ordered list of (kind, content) for every full-freeze protected region in
-    `text` (fenced code / table / blockquote / bare JSON / paired <example>),
-    content newline-normalized. Comparing two of these lists is how two versions
-    of a document are checked for full-freeze equivalence -- same regions, same
-    order, same content -- regardless of what legitimately changed in the prose
-    around them. Does NOT cover the structure-only XML tag-sequence invariant --
-    see protected_regions_equal()."""
-    norm = _normalize_newlines(text)
-    return [(kind, norm[s:e]) for s, e, kind in find_protected_regions(norm)]
+def _merge_intervals(items):
+    """Sort (start, end, kind) intervals and merge overlapping ones; the merged interval
+    keeps the kind of its outermost (earliest-starting, longest) member."""
+    items = sorted(items, key=lambda r: (r[0], -r[1]))
+    out = []
+    for s, e, k in items:
+        if out and s < out[-1][1]:
+            if e > out[-1][1]:
+                out[-1] = (out[-1][0], e, out[-1][2])
+        else:
+            out.append((s, e, k))
+    return out
+
+
+def _backtick_spans(seg):
+    """Inline code spans in one line: a run of N backticks closed by the next run of
+    exactly N backticks. Linear (next-same-length index precomputed)."""
+    runs = [(m.start(), m.end()) for m in _BACKTICK_RUN_RE.finditer(seg)]
+    if len(runs) < 2:
+        return []
+    nxt = [None] * len(runs)
+    last = {}
+    for k in range(len(runs) - 1, -1, -1):
+        length = runs[k][1] - runs[k][0]
+        nxt[k] = last.get(length)
+        last[length] = k
+    out = []
+    k = 0
+    while k < len(runs):
+        j = nxt[k]
+        if j is not None:
+            out.append((runs[k][0], runs[j][1]))
+            k = j + 1
+        else:
+            k += 1
+    return out
+
+
+def _local_spans(text, s, e):
+    """No-edit inline spans inside text[s:e] (one editable line segment): backtick code
+    spans, "..." / curly-quote spans, and (), [], {} bracket spans. Iterative, linear;
+    an unclosed opener runs to the end of the segment. Returns absolute (start, end)."""
+    seg = text[s:e]
+    bts = _backtick_spans(seg)
+    spans = list(bts)
+    stack = []
+    counts = {'(': 0, '[': 0, '{': 0}
+    in_q = None
+    start = None
+    skip_to = -1
+    bi = 0
+    for m in _LOCAL_CHARS_RE.finditer(seg):
+        p = m.start()
+        if p < skip_to:
+            continue
+        while bi < len(bts) and bts[bi][1] <= p:
+            bi += 1
+        if bi < len(bts) and bts[bi][0] <= p:
+            continue
+        ch = m.group()
+        if in_q is not None:
+            if ch == '\\':
+                skip_to = p + 2
+            elif (in_q == '"' and ch == '"') or (in_q == '“' and ch == '”'):
+                in_q = None
+                if not stack:
+                    spans.append((start, p + 1))
+                    start = None
+            continue
+        if ch == '"' or ch == '“':
+            if not stack:
+                start = p
+            in_q = ch
+        elif ch in '([{':
+            if not stack:
+                start = p
+            stack.append(ch)
+            counts[ch] += 1
+        elif ch in ')]}':
+            want = _CLOSER_OF[ch]
+            if not counts[want]:
+                continue
+            while stack:
+                top = stack.pop()
+                counts[top] -= 1
+                if top == want:
+                    break
+            if not stack:
+                spans.append((start, p + 1))
+                start = None
+    if start is not None:
+        spans.append((start, len(seg)))
+    return [(s + a, s + b) for a, b in spans]
+
+
+class _Structure(object):
+    """Result of analyze_structure(): frozen block intervals, inline no-edit spans,
+    XML elements, tag tokens, and the structural fingerprint. Treat as immutable."""
+    __slots__ = ("text", "frozen", "_frozen_starts", "inline", "no_edit", "_no_edit_starts",
+                 "elements", "tags", "fingerprint")
+
+    def touches_frozen(self, s, e):
+        """True if [s, e) overlaps a frozen block region (inline spans ignored)."""
+        k = bisect.bisect_left(self._frozen_starts, e) - 1
+        return k >= 0 and self.frozen[k][1] > s
+
+    def blocked(self, s, e):
+        """True if the edit range [s, e) touches any frozen or inline no-edit span."""
+        spans = self.no_edit
+        k = bisect.bisect_left(self._no_edit_starts, e) - 1
+        return k >= 0 and spans[k][1] > s
+
+    def live_close_tag(self, name):
+        """Start offset of the closing tag of the first PAIRED `name` element that is
+        not itself inside frozen content, or None."""
+        for o_s, o_e, c_s, c_e, nm in self.elements:
+            if nm.lower() != name:
+                continue
+            k = bisect.bisect_right(self._no_edit_starts, c_s) - 1
+            if k >= 0 and self.no_edit[k][0] < c_s < self.no_edit[k][1]:
+                continue  # inside a larger frozen interval (e.g. inside an <example>)
+            if k >= 0 and self.no_edit[k][0] == c_s and self.no_edit[k][1] > c_e:
+                continue
+            return c_s
+        return None
+
+
+def _free_segments(lines, starts, intervals):
+    """Yield (line_index, [(s, e), ...]) -- the parts of each line not covered by the
+    sorted, disjoint `intervals`. One pointer sweep: linear."""
+    p = 0
+    m = len(intervals)
+    for i, line in enumerate(lines):
+        ls = starts[i]
+        le = ls + len(line)
+        while p < m and intervals[p][1] <= ls:
+            p += 1
+        if le == ls:
+            covered = p < m and intervals[p][0] <= ls
+            yield i, ([] if covered else [(ls, ls)])
+            continue
+        segs = []
+        cur = ls
+        q = p
+        while q < m and intervals[q][0] < le:
+            a, b = intervals[q][0], intervals[q][1]
+            if a > cur:
+                segs.append((cur, a))
+            cur = max(cur, b)
+            if b > le:
+                break
+            q += 1
+        if cur < le:
+            segs.append((cur, le))
+        yield i, segs
+
+
+@functools.lru_cache(maxsize=32)
+def analyze_structure(text):
+    """Classify `text` ('\\n'-normalized) into editable prose vs frozen content (see
+    the EDITABLE_XML_SECTIONS comment block). Linear time, no recursion."""
+    lines = text.split('\n')
+    n = len(lines)
+    starts = [0] * n
+    pos = 0
+    for i, line in enumerate(lines):
+        starts[i] = pos
+        pos += len(line) + 1
+
+    def line_end(i):
+        return starts[i] + len(lines[i])
+
+    def line_of(offset):
+        return bisect.bisect_right(starts, offset) - 1
+
+    raw = []  # (start, end, kind) frozen intervals, merged at the end
+
+    # 1) Fenced code blocks (highest priority; one forward pass).
+    fence_line = bytearray(n)
+    i = 0
+    while i < n:
+        m = _FENCE_RE.match(lines[i])
+        if m and not (m.group(1)[0] == '`' and '`' in m.group(2)):
+            ch, length = m.group(1)[0], len(m.group(1))
+            j = i + 1
+            close = None
+            while j < n:
+                cm = _FENCE_RE.match(lines[j])
+                if cm and cm.group(1)[0] == ch and len(cm.group(1)) >= length and not cm.group(2).strip():
+                    close = j
+                    break
+                j += 1
+            last = close if close is not None else n - 1
+            for k in range(i, last + 1):
+                fence_line[k] = 1
+            raw.append((starts[i], line_end(last), "fenced_code"))
+            i = last + 1
+            continue
+        i += 1
+
+    # 2) Tag tokens on non-fence lines, outside inline backtick code.
+    tokens = []  # (start, end, name, kind) kind: 'open' | 'close' | 'self'
+    bt_by_line = {}
+    for i, line in enumerate(lines):
+        if fence_line[i] or '<' not in line and '`' not in line:
+            continue
+        bts = _backtick_spans(line) if '`' in line else []
+        if bts:
+            bt_by_line[i] = bts
+        if '<' not in line:
+            continue
+        bi = 0
+        for m in _TAG_RE.finditer(line):
+            a, b = m.span()
+            while bi < len(bts) and bts[bi][1] <= a:
+                bi += 1
+            if bi < len(bts) and bts[bi][0] < b:
+                continue
+            kind = 'close' if m.group(1) else ('self' if m.group(4) else 'open')
+            if kind == 'close' and m.group(4):
+                kind = 'self'
+            tokens.append((starts[i] + a, starts[i] + b, m.group(2), kind))
+
+    # 3) Pair tags with an explicit stack (linear, amortized): a close tag pairs with
+    #    the nearest open tag of the same name; opens skipped over stay unpaired.
+    elements = []
+    stack = []
+    open_count = {}
+    for t in tokens:
+        name = t[2]
+        if t[3] == 'open':
+            stack.append(t)
+            open_count[name] = open_count.get(name, 0) + 1
+        elif t[3] == 'close' and open_count.get(name):
+            while stack:
+                top = stack.pop()
+                open_count[top[2]] -= 1
+                if top[2] == name:
+                    elements.append((top[0], top[1], t[0], t[1], name))
+                    break
+    elements.sort()
+
+    for o_s, o_e, c_s, c_e, name in elements:
+        lname = name.lower()
+        if lname in ALWAYS_FROZEN_XML_ELEMENTS:
+            raw.append((o_s, c_e, "example"))
+        elif lname not in EDITABLE_XML_SECTIONS:
+            raw.append((o_s, c_e, "xml_element"))
+    for t in tokens:
+        raw.append((t[0], t[1], "tag"))
+
+    hard = _merge_intervals(raw)
+
+    # Lines in an allow-listed section (for the top-level-only indented-code rule).
+    diff = [0] * (n + 1)
+    for o_s, o_e, c_s, c_e, name in elements:
+        if name.lower() in EDITABLE_XML_SECTIONS and name.lower() not in ALWAYS_FROZEN_XML_ELEMENTS:
+            diff[line_of(o_s)] += 1
+            diff[line_of(c_s) + 1] -= 1
+    in_section = bytearray(n)
+    run = 0
+    for i in range(n):
+        run += diff[i]
+        in_section[i] = 1 if run > 0 else 0
+
+    # Lines touching any hard-frozen interval, and bracket matching for bracket blocks.
+    touched = bytearray(n)
+    free_by_line = {}
+    for i, segs in _free_segments(lines, starts, hard):
+        if segs != [(starts[i], line_end(i))]:
+            touched[i] = 1
+        free_by_line[i] = segs
+    for i in range(n):
+        if fence_line[i]:
+            touched[i] = 1
+
+    match = {}
+    need_match = any(
+        not touched[i] and lines[i].lstrip()[:1] in ('{', '[') for i in range(n))
+    if need_match:
+        bstack = []
+        bcount = {'{': 0, '[': 0}
+        for i in range(n):
+            if fence_line[i]:
+                continue
+            bts = bt_by_line.get(i, ())
+            in_str = False
+            skip_to = -1
+            for s, e in free_by_line.get(i, ()):
+                bi = 0
+                for m in _JSON_CHARS_RE.finditer(text, s, e):
+                    p = m.start()
+                    if p < skip_to:
+                        continue
+                    rel = p - starts[i]
+                    while bi < len(bts) and bts[bi][1] <= rel:
+                        bi += 1
+                    if bi < len(bts) and bts[bi][0] <= rel:
+                        continue
+                    ch = m.group()
+                    if in_str:
+                        if ch == '\\':
+                            skip_to = p + 2
+                        elif ch == '"':
+                            in_str = False
+                        continue
+                    if ch == '"':
+                        in_str = True
+                    elif ch in '{[':
+                        bstack.append((p, ch))
+                        bcount[ch] += 1
+                    elif ch in '}]':
+                        want = _CLOSER_OF[ch]
+                        if not bcount[want]:
+                            continue
+                        while bstack:
+                            op, oc = bstack.pop()
+                            bcount[oc] -= 1
+                            if oc == want:
+                                match[op] = p
+                                break
+
+    # 4) Block constructs on lines untouched by fences/elements/tags.
+    blocks = []
+    i = 0
+    while i < n:
+        line = lines[i]
+        if touched[i] or not line.strip():
+            i += 1
+            continue
+        if ('|' in line and i + 1 < n and not touched[i + 1] and '|' in lines[i + 1]
+                and _TABLE_DELIM_RE.match(lines[i + 1].strip())):
+            j = i + 2
+            while j < n and not touched[j] and lines[j].strip() and '|' in lines[j]:
+                j += 1
+            blocks.append((starts[i], line_end(j - 1), "table"))
+            i = j
+            continue
+        if _BLOCKQUOTE_RE.match(line):
+            # A '>' run plus its lazy-continuation lines (non-blank lines directly after
+            # it without a '>' -- Markdown renders them inside the same quote).
+            j = i + 1
+            while j < n and not touched[j] and lines[j].strip():
+                j += 1
+            blocks.append((starts[i], line_end(j - 1), "blockquote"))
+            i = j
+            continue
+        if (not in_section[i] and _INDENT_CODE_RE.match(line)
+                and (i == 0 or not lines[i - 1].strip())):
+            j = i + 1
+            last = i
+            while (j < n and not touched[j] and not in_section[j]
+                   and (not lines[j].strip() or _INDENT_CODE_RE.match(lines[j]))):
+                if lines[j].strip():
+                    last = j
+                j += 1
+            blocks.append((starts[i], line_end(last), "indented_code"))
+            i = last + 1
+            continue
+        stripped = line.lstrip()
+        if stripped[:1] in ('{', '['):
+            p = starts[i] + len(line) - len(stripped)
+            c = match.get(p)
+            if c is not None:
+                j = line_of(c)
+                if j > i or text[c + 1:line_end(i)].strip() in ('', ',', ';'):
+                    blocks.append((starts[i], line_end(j), "json"))
+                    i = j + 1
+                    continue
+        i += 1
+
+    frozen = _merge_intervals(hard + blocks)
+
+    # 5) Inline no-edit spans on the editable remainder of every line.
+    inline = []
+    for i, segs in _free_segments(lines, starts, frozen):
+        if fence_line[i]:
+            continue
+        for s, e in segs:
+            if e > s:
+                inline.extend(_local_spans(text, s, e))
+    inline = _merge_intervals([(s, e, "inline") for s, e in inline])
+
+    st = _Structure()
+    st.text = text
+    st.frozen = frozen
+    st._frozen_starts = [r[0] for r in frozen]
+    st.inline = inline
+    st.no_edit = [(s, e) for s, e, _k in _merge_intervals(frozen + inline)]
+    st._no_edit_starts = [s for s, _e in st.no_edit]
+    st.elements = elements
+    st.tags = tuple(re.sub(r'\s+', ' ', text[t[0]:t[1]]) for t in tokens)
+    st.fingerprint = (tuple(text[s:e] for s, e in st.no_edit), st.tags)
+    return st
+
+
+def structure_fingerprint(text):
+    """Structural fingerprint (WIX-CONV-001): the ordered contents of every non-editable
+    region (frozen blocks + inline no-edit spans) plus the ordered tag sequence. Two
+    versions of a document with equal fingerprints differ only in editable prose."""
+    return analyze_structure(_normalize_newlines(text)).fingerprint
+
+
+def find_protected_regions(text):
+    """Sorted, disjoint (start, end, kind) frozen block regions of `text`
+    ('\\n'-normalized offsets). Inline no-edit spans are not included."""
+    return list(analyze_structure(_normalize_newlines(text)).frozen)
 
 
 def protected_regions_equal(before_text, after_text):
-    """The structural gate (WIX-CONV-001): True iff `after_text` preserves, vs.
-    `before_text` (line-ending-normalized):
-      (A) every full-freeze protected region verbatim, in the same order and
-          count (fenced code, tables, blockquotes, bare JSON, paired <example>
-          blocks) -- see extract_protected_contents(); AND
-      (B) the exact ordered sequence of XML/HTML-like tags (name, attributes,
-          open/close/self-close) anywhere in the document -- see
-          _extract_tag_sequence().
-    Prose between tags, and prose outside every full-freeze region, is free to
-    change -- only these two structural fingerprints are compared. A candidate
-    that fails either check must be reverted regardless of its heuristic score."""
-    if extract_protected_contents(before_text) != extract_protected_contents(after_text):
-        return False
-    norm_before = _normalize_newlines(before_text)
-    norm_after = _normalize_newlines(after_text)
-    return _extract_tag_sequence(norm_before) == _extract_tag_sequence(norm_after)
+    """The structural gate (WIX-CONV-001): True iff both texts have the same structural
+    fingerprint (line endings normalized). A candidate failing it must be reverted
+    regardless of its heuristic score."""
+    return structure_fingerprint(before_text) == structure_fingerprint(after_text)
+
+
+def _keep_if_structure_same(before, after):
+    """Per-step guard used inside every fixer: an edit step whose result changes the
+    structural fingerprint is dropped (the fixer continues from `before`)."""
+    if after == before:
+        return before
+    return after if protected_regions_equal(before, after) else before
+
+
+def _safe_sub(pattern, repl, text, count=0, allow_newline=False):
+    """re.sub restricted to editable prose: a match touching any frozen region or inline
+    no-edit span is skipped, and (unless allow_newline) so is a match containing a line
+    break. The whole step is then checked with _keep_if_structure_same."""
+    if not pattern.search(text):
+        return text
+    st = analyze_structure(text)
+    out = []
+    last = 0
+    done = 0
+    for m in pattern.finditer(text):
+        if count and done >= count:
+            break
+        s, e = m.span()
+        if e == s or (not allow_newline and '\n' in m.group(0)) or st.blocked(s, e):
+            continue
+        out.append(text[last:s])
+        out.append(m.expand(repl))
+        last = e
+        done += 1
+    if not done:
+        return text
+    out.append(text[last:])
+    return _keep_if_structure_same(text, ''.join(out))
+
+
+def _append_safely(text, addition):
+    """Additive fixers append a new section at the end -- only if doing so leaves every
+    existing non-editable region unchanged (e.g. not inside an unterminated fence). If
+    appending directly would change a region (e.g. become a blockquote's lazy
+    continuation), a blank-line-separated append is tried before giving up."""
+    for candidate in (text + addition, text + "\n" + addition):
+        if protected_regions_equal(text, candidate):
+            return candidate
+    return text
+
+
+def _insert_before_close(text, name, insertion):
+    """Insert `insertion` right before the closing tag of the first live, paired
+    `name` element. Returns (new_text, inserted_bool)."""
+    c = analyze_structure(text).live_close_tag(name)
+    if c is None:
+        return text, False
+    new = _keep_if_structure_same(text, text[:c] + insertion + text[c:])
+    return new, new != text
 
 
 # ─── Fix functions ─────────────────────────────────────────────────────────────
-# Every fixer below is protected-region-aware: it recomputes spans on its current
-# `text` before each transformation and routes substitutions through
-# `_protected_safe_sub` / explicit span checks so it never edits inside a fenced
-# code block, table, blockquote, or <example> block. This is a best-effort
-# guarantee inside the fixers themselves; the hard guarantee is the accept/revert
-# gate in run() (protected_regions_equal), which reverts any candidate that slips
-# through regardless of cause.
+# Every text-rewriting edit goes through the editable-prose allow-list above
+# (_safe_sub / analyze_structure().blocked) and every step is fingerprint-checked.
+# The hard guarantee is still the gate in run() plus the exit-path backstop.
+
+_HEDGE_RE = re.compile(
+    r'\b(?:maybe|perhaps|possibly|somewhat|try to|might want to)(?:[ \t]+|(?=\n)|\Z)'
+    r'|\bif possible,?[ \t]*', re.I)
+_SPLIT_RE = re.compile(r';\s+')
+_BLOCK_START_CHARS = ('>', '|', '{', '[', '```', '~~~')
+
 
 def fix_clarity(text):
-    hedges = [(r'\bmaybe\s+', ''), (r'\bperhaps\s+', ''), (r'\bpossibly\s+', ''),
-              (r'\bsomewhat\s+', ''), (r'\btry to\s+', ''), (r'\bif possible,?\s*', ''),
-              (r'\bmight want to\s+', '')]
-    for p, r in hedges:
-        spans = find_protected_regions(text)
-        text = _protected_safe_sub(p, r, text, spans, flags=re.I)
-    spans = find_protected_regions(text)
+    text = _safe_sub(_HEDGE_RE, '', text)
+    st = analyze_structure(text)
+    lines = text.split('\n')
+    pos = 0
     new = []
-    for line, start, end in _line_spans(text):
-        if (not _overlaps_any(start, end, spans)
-                and len(line.split()) > 50 and ('; ' in line or ', and ' in line)):
-            line = re.sub(r';\s+', '.\n', line, count=1)
+    changed = False
+    for line in lines:
+        start = pos
+        pos += len(line) + 1
+        if len(line.split()) > 50 and ('; ' in line or ', and ' in line):
+            for m in _SPLIT_RE.finditer(line):
+                rest = line[m.end():]
+                if (not rest.strip() or rest.lstrip().startswith(_BLOCK_START_CHARS)
+                        or st.blocked(start + m.start(), start + m.end())):
+                    continue
+                line = line[:m.start()] + '.\n' + rest
+                changed = True
+                break
         new.append(line)
-    return '\n'.join(new)
+    if not changed:
+        return text
+    return _keep_if_structure_same(text, '\n'.join(new))
 
 
 def fix_completeness(text):
     tl = text.lower()
     if not re.search(r'\b(you are|act as|role:|your role)\b', tl):
-        spans = find_protected_regions(text)
-        for idx, (line, start, end) in enumerate(_line_spans(text)):
+        st = analyze_structure(text)
+        pos = 0
+        for idx, line in enumerate(text.split('\n')):
+            start = pos
+            pos += len(line) + 1
             if (line.strip() and not line.strip().startswith(('<', '#', '---'))
-                    and not _overlaps_any(start, end, spans)):
-                parts = text.split('\n')
-                parts.insert(idx, "You are a domain expert.\n")
-                text = '\n'.join(parts)
+                    and not st.touches_frozen(start, start + len(line))):
+                text = _keep_if_structure_same(
+                    text, text[:start] + "You are a domain expert.\n\n" + text[start:])
                 break
     if not re.search(r'\b(task:|objective:|goal:|your job|you will|you should)\b', tl):
-        text = text.replace("You are a domain expert.\n", "You are a domain expert. Your job is to complete the following task.\n", 1)
+        text = _safe_sub(re.compile(re.escape("You are a domain expert.\n")),
+                         "You are a domain expert. Your job is to complete the following task.\n",
+                         text, count=1, allow_newline=True)
     if not re.search(r'\b(output format|respond in|format:|json|xml|markdown|<output|<format)\b', tl):
-        text += "\n\nOutput format: structure your response clearly with headers and sections.\n"
+        text = _append_safely(text, "\n\nOutput format: structure your response clearly with headers and sections.\n")
     if not re.search(r"\b(do not|don't|never|must not|avoid)\b", tl):
-        text += "\nDo not include information you are unsure about.\n"
+        text = _append_safely(text, "\nDo not include information you are unsure about.\n")
     return text
 
 
+_FILLER_RE = re.compile(
+    r"it's worth noting that[ \t]*|please note that[ \t]*|as an AI,?[ \t]*|I want you to[ \t]*"
+    r"|I need you to[ \t]*|please make sure[ \t]*(?:to[ \t]*)?|it is important to note that[ \t]*"
+    r"|keep in mind that[ \t]*|I would like you to[ \t]*|please ensure that[ \t]*"
+    r"|in order to(?:[ \t]+|(?=\n))", re.I)
+_BLANK_RUN_RE = re.compile(r'\n{3,}')
+_TRAILING_WS_RE = re.compile(r'[ \t]+$')
+
+
 def fix_efficiency(text):
-    fillers = [r"it's worth noting that\s*", r"please note that\s*", r"as an AI,?\s*",
-               r"I want you to\s*", r"I need you to\s*", r"please make sure\s*(to\s*)?",
-               r"it is important to note that\s*", r"keep in mind that\s*",
-               r"I would like you to\s*", r"please ensure that\s*", r"in order to\s+"]
-    for f in fillers:
-        spans = find_protected_regions(text)
-        text = _protected_safe_sub(f, '', text, spans, flags=re.I)
-    spans = find_protected_regions(text)
-    text = _protected_safe_sub(r'\n{3,}', '\n\n', text, spans)
-    spans = find_protected_regions(text)
-    new_lines = []
-    for line, start, end in _line_spans(text):
-        if _overlaps_any(start, end, spans):
-            new_lines.append(line)
-        else:
-            new_lines.append(line.rstrip())
-    return '\n'.join(new_lines)
+    text = _safe_sub(_FILLER_RE, '', text)
+    text = _safe_sub(_BLANK_RUN_RE, '\n\n', text, allow_newline=True)
+    st = analyze_structure(text)
+    pos = 0
+    new = []
+    changed = False
+    for line in text.split('\n'):
+        start = pos
+        pos += len(line) + 1
+        m = _TRAILING_WS_RE.search(line)
+        if m and not st.blocked(start + m.start(), start + m.end()):
+            line = line[:m.start()]
+            changed = True
+        new.append(line)
+    if not changed:
+        return text
+    return _keep_if_structure_same(text, '\n'.join(new))
 
 
 def fix_model_fit(text):
@@ -460,17 +751,15 @@ def fix_model_fit(text):
     gpt = bool(re.search(r'\b(gpt-4|gpt-5|openai|chatgpt)\b', tl))
     oseries = bool(re.search(r'\b(o1|o3|o4-mini|o-series)\b', tl))
     if claude and 'think thoroughly' not in tl:
-        spans = find_protected_regions(text)
-        text = _protected_safe_sub(r'(</instructions>)', r'\nThink thoroughly before responding.\n\1', text, spans, count=1)
-        if '</instructions>' not in text:
-            text += "\n\nThink thoroughly before responding.\n"
-        spans = find_protected_regions(text)
-        text = _protected_safe_sub(r'\bthink step by step\b', 'think thoroughly', text, spans, flags=re.I)
+        text, inserted = _insert_before_close(
+            text, "instructions", "\nThink thoroughly before responding.\n")
+        if not inserted:
+            text = _append_safely(text, "\n\nThink thoroughly before responding.\n")
+        text = _safe_sub(re.compile(r'\bthink step by step\b', re.I), 'think thoroughly', text)
     if gpt and not re.search(r'\b(step by step|think through)\b', tl):
-        text += "\n\nThink step by step through your analysis before providing the final answer.\n"
+        text = _append_safely(text, "\n\nThink step by step through your analysis before providing the final answer.\n")
     if oseries:
-        spans = find_protected_regions(text)
-        text = _protected_safe_sub(r'\n.*think step by step.*\n', '\n', text, spans, flags=re.I)
+        text = _safe_sub(re.compile(r'\n.*think step by step.*\n', re.I), '\n', text, allow_newline=True)
     return text
 
 
@@ -486,11 +775,12 @@ def fix_failure_resilience(text):
     if not re.search(r'\b(validate|verify|check that|ensure that|confirm|if unclear)\b', tl):
         additions.append("Verify your output against the requirements before delivering the final response.")
     if additions:
+        inserted = False
         if '<edge_cases>' in text:
-            idx = text.index('</edge_cases>')
-            text = text[:idx] + '\n' + '\n'.join(additions) + '\n' + text[idx:]
-        else:
-            text += '\n\n' + '\n'.join(additions) + '\n'
+            text, inserted = _insert_before_close(
+                text, "edge_cases", '\n' + '\n'.join(additions) + '\n')
+        if not inserted:
+            text = _append_safely(text, '\n\n' + '\n'.join(additions) + '\n')
     return text
 
 
@@ -877,6 +1167,9 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
         _usage_error(f"{prompt_path} not found", want_json, json_out)
 
     text, original_lines, original_terms, bom = _read_text_preserving(prompt_path)
+    with open(prompt_path, "rb") as f:
+        original_raw = f.read()  # restored verbatim if any exit-path check trips
+    io_state = (original_lines, original_terms, bom, original_raw)
 
     if not text.strip():
         _usage_error("Empty prompt file.", want_json, json_out)
@@ -884,6 +1177,7 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
     # WIX-CONV-001: the structural baseline every exit path is checked against.
     # Never reassigned -- it is the file's content the moment run() started.
     original_text = text
+    original_fp = structure_fingerprint(original_text)
 
     prompt_dir = os.path.dirname(os.path.abspath(prompt_path))
     history = []
@@ -953,32 +1247,21 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
         # an honest-numbers violation: it shipped prompts the DEPLOY bar rejects.)
         deploy, sigma, floor = deploy_verdict(scores, assertions, text)
         if deploy:
-            # WIX-CONV-001 item 3: DEPLOY / exit 0 is impossible while a protected-region
-            # check fails. The per-iteration gate below should already guarantee `text`'s
-            # protected regions match `original_text`'s -- this is a defense-in-depth
-            # backstop, checked again right before the DEPLOY save.
-            safe_text, structurally_ok = _safe_text_for_save(original_text, text)
+            # WIX-CONV-001: DEPLOY / exit 0 is impossible while the structural check fails.
+            # The write goes through _write_exit_file (fingerprint check before the write
+            # AND on the written file); on any mismatch the original bytes are restored and
+            # the verdict is forced to HOLD.
+            written, structurally_ok = _write_exit_file(prompt_path, text, original_text, io_state)
             if not structurally_ok:
-                print(f"  Iteration {iteration}: STRUCTURAL SAFETY TRIP -- a protected region "
-                      f"changed right before DEPLOY save. Falling back to the original, "
-                      f"unmodified prompt and forcing HOLD (WIX-CONV-001).")
-                safe_scores = score_prompt(safe_text)
-                safe_assertions = run_assertions(safe_text)
-                _save(prompt_path, safe_text, original_lines=original_lines, original_terms=original_terms, bom=bom)
-                _print_final(safe_scores, safe_assertions, iteration, safe_text)
-                learnings.append({
-                    "iteration": iteration, "axis": "n/a",
-                    "hypothesis": "n/a", "reasoning": "structural safety trip before DEPLOY save",
-                    "result": "reverted", "outcome": "REVERTED — structural gate tripped at save time",
-                    "delta": 0, "start_score": overall, "end_score": overall,
-                    "why_failed": "A protected region (fenced code / table / blockquote / "
-                                   "<example> block) differed from the input right before a "
-                                   "DEPLOY save; forced HOLD instead of persisting damage.",
-                })
-                save_learnings(prompt_dir, learnings, prev_learnings, safe_text)
+                print(f"  Iteration {iteration}: STRUCTURAL SAFETY TRIP at DEPLOY save -- the "
+                      f"original, unmodified prompt was kept and the verdict forced to HOLD "
+                      f"(WIX-CONV-001).")
+                learnings.append(_structural_trip_entry("DEPLOY", iteration, overall))
+                safe_scores = score_prompt(written)
+                _print_final(safe_scores, run_assertions(written), iteration, written, force_hold=True)
+                save_learnings(prompt_dir, learnings, prev_learnings, written)
                 return safe_scores
             print(f"  Iteration {iteration}: {overall}/10 — DEPLOY ({len(passed)}/{len(assertions)} assertions, sigma {sigma:.2f} <= {floor:.2f})")
-            _save(prompt_path, text, original_lines=original_lines, original_terms=original_terms, bom=bom)
             _print_final(scores, assertions, iteration, text)
             save_learnings(prompt_dir, learnings, prev_learnings, text)
             return scores
@@ -988,25 +1271,15 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
             plateau_count += 1
             if plateau_count >= 1:
                 print(f"  Iteration {iteration}: {overall}/10 — PLATEAU (HOLD — bar not met)")
-                safe_best_text, structurally_ok = _safe_text_for_save(original_text, best_text)
+                written, structurally_ok = _write_exit_file(prompt_path, best_text, original_text, io_state)
                 if not structurally_ok:
-                    print("  STRUCTURAL SAFETY TRIP at PLATEAU save -- falling back to the "
-                          "original, unmodified prompt (WIX-CONV-001).")
-                    learnings.append({
-                        "iteration": iteration, "axis": "n/a", "hypothesis": "n/a",
-                        "reasoning": "structural safety trip before PLATEAU save",
-                        "result": "reverted", "outcome": "REVERTED — structural gate tripped at save time",
-                        "delta": 0, "start_score": overall, "end_score": overall,
-                        "why_failed": "A protected region (fenced code / table / blockquote / "
-                                       "bare JSON / <example> block) or the XML tag sequence "
-                                       "differed from the input right before a PLATEAU save; "
-                                       "saved the original instead of persisting damage.",
-                    })
-                safe_scores = score_prompt(safe_best_text)
-                safe_assertions = run_assertions(safe_best_text)
-                _save(prompt_path, safe_best_text, original_lines=original_lines, original_terms=original_terms, bom=bom)
-                _print_final(safe_scores, safe_assertions, iteration, safe_best_text)
-                save_learnings(prompt_dir, learnings, prev_learnings, safe_best_text)
+                    print("  STRUCTURAL SAFETY TRIP at PLATEAU save -- the original, unmodified "
+                          "prompt was kept (WIX-CONV-001).")
+                    learnings.append(_structural_trip_entry("PLATEAU", iteration, overall))
+                safe_scores = score_prompt(written)
+                _print_final(safe_scores, run_assertions(written), iteration, written,
+                             force_hold=not structurally_ok)
+                save_learnings(prompt_dir, learnings, prev_learnings, written)
                 return safe_scores
 
         # Form hypothesis — Gauss Method: target weakest axis, weighted by confidence
@@ -1057,24 +1330,26 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
         if failed:
             reasoning += f" Also had {len(failed)} failing assertion(s): {', '.join(a[0] for a in failed)}."
 
-        # Structural gate (WIX-CONV-001): a candidate whose protected regions (fenced
-        # code, tables, blockquotes, <example> blocks) differ from the previous
-        # iteration's text is reverted regardless of score -- this check runs BEFORE
+        # Structural gate (WIX-CONV-001): a candidate whose structural fingerprint (all
+        # non-editable content + the tag sequence, see analyze_structure) differs from
+        # the input's is reverted regardless of score -- this check runs BEFORE
         # and independently of the score-drop check below, so a candidate that raises
         # `overall` (or leaves it flat) is not exempt.
-        structurally_ok = protected_regions_equal(pre_fix_text, text)
+        structurally_ok = _candidate_is_structurally_safe(text, original_fp)
 
         if not structurally_ok:
             text = pre_fix_text
             delta = new_scores["overall"] - overall
-            outcome = "REVERTED — structural gate: a protected region (fenced code / " \
-                      "table / blockquote / <example> block) was changed by the fixer"
+            outcome = ("REVERTED — structural gate: the fixer changed non-editable content "
+                       "(structural fingerprint mismatch)")
             learnings.append({
                 "iteration": iteration, "axis": weakest, "hypothesis": hypothesis,
                 "reasoning": reasoning,
                 "result": "reverted", "outcome": outcome, "delta": delta,
                 "start_score": overall, "end_score": overall,
-                "why_failed": f"Fixer for {weakest} modified a protected region; reverted "
+                "why_failed": f"Fixer for {weakest} changed non-editable content (fenced/indented "
+                               f"code, table, blockquote, bracket block, frozen XML element, "
+                               f"<example> block, inline span or tag sequence); reverted "
                                f"regardless of score delta ({overall} -> {new_scores['overall']}) "
                                f"per WIX-CONV-001.",
             })
@@ -1105,43 +1380,36 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
 
     # Max iterations
     print(f"\n  Max iterations ({max_iterations}) reached. Best: {best_score}/10")
-    safe_best_text, structurally_ok = _safe_text_for_save(original_text, best_text)
+    written, structurally_ok = _write_exit_file(prompt_path, best_text, original_text, io_state)
     if not structurally_ok:
-        print("  STRUCTURAL SAFETY TRIP at MAX-ITERATIONS save -- falling back to the "
-              "original, unmodified prompt (WIX-CONV-001).")
-        learnings.append({
-            "iteration": max_iterations, "axis": "n/a", "hypothesis": "n/a",
-            "reasoning": "structural safety trip before MAX-ITERATIONS save",
-            "result": "reverted", "outcome": "REVERTED — structural gate tripped at save time",
-            "delta": 0, "start_score": best_score, "end_score": best_score,
-            "why_failed": "A protected region (fenced code / table / blockquote / bare "
-                           "JSON / <example> block) or the XML tag sequence differed from "
-                           "the input right before a MAX-ITERATIONS save; saved the "
-                           "original instead of persisting damage.",
-        })
-    _save(prompt_path, safe_best_text, original_lines=original_lines, original_terms=original_terms, bom=bom)
-    scores = score_prompt(safe_best_text)
-    _print_final(scores, run_assertions(safe_best_text), max_iterations, safe_best_text)
-    save_learnings(prompt_dir, learnings, prev_learnings, safe_best_text)
+        print("  STRUCTURAL SAFETY TRIP at MAX-ITERATIONS save -- the original, unmodified "
+              "prompt was kept (WIX-CONV-001).")
+        learnings.append(_structural_trip_entry("MAX-ITERATIONS", max_iterations, best_score))
+    scores = score_prompt(written)
+    _print_final(scores, run_assertions(written), max_iterations, written,
+                 force_hold=not structurally_ok)
+    save_learnings(prompt_dir, learnings, prev_learnings, written)
     return scores
+
+
+_LINE_TERM_RE = re.compile(r'\r\n|\n|\r')
 
 
 def _split_keepends_and_strip(raw_text):
     """Split `raw_text` (already str-decoded) into (lines, terminators): `lines[i]`
     is physical line i with its terminator removed, `terminators[i]` is exactly
     what followed it ("\\r\\n", "\\n", "\\r", or "" for a final line with no
-    trailing terminator at all). Round-trips any mix of line-ending styles."""
-    parts = raw_text.splitlines(keepends=True)
+    trailing terminator at all). Only CR/LF are line terminators -- U+2028, form
+    feed, etc. stay inside their line. Round-trips any mix of line-ending styles."""
     lines, terms = [], []
-    for p in parts:
-        if p.endswith("\r\n"):
-            lines.append(p[:-2]); terms.append("\r\n")
-        elif p.endswith("\n"):
-            lines.append(p[:-1]); terms.append("\n")
-        elif p.endswith("\r"):
-            lines.append(p[:-1]); terms.append("\r")
-        else:
-            lines.append(p); terms.append("")
+    pos = 0
+    for m in _LINE_TERM_RE.finditer(raw_text):
+        lines.append(raw_text[pos:m.start()])
+        terms.append(m.group())
+        pos = m.end()
+    if pos < len(raw_text):
+        lines.append(raw_text[pos:])
+        terms.append("")
     return lines, terms
 
 
@@ -1174,6 +1442,61 @@ def _safe_text_for_save(original_text, candidate_text):
     if protected_regions_equal(original_text, candidate_text):
         return candidate_text, True
     return original_text, False
+
+
+def _candidate_is_structurally_safe(candidate_text, original_fp):
+    """Per-iteration accept/revert gate (WIX-CONV-001): the candidate's structural
+    fingerprint must equal the input's. Independent of the exit-path backstop
+    (_write_exit_file), which re-checks with protected_regions_equal."""
+    return structure_fingerprint(candidate_text) == original_fp
+
+
+def _structural_trip_entry(stage, iteration, score):
+    """learnings.json entry for an exit-path backstop trip (distinguishable from a
+    score regression and from a per-iteration structural revert)."""
+    return {
+        "iteration": iteration, "axis": "n/a", "hypothesis": "n/a",
+        "reasoning": f"structural safety trip before {stage} save",
+        "result": "reverted", "outcome": "REVERTED — structural gate tripped at save time",
+        "delta": 0, "start_score": score, "end_score": score,
+        "why_failed": (f"The structural fingerprint of the text to be written at the {stage} "
+                       f"exit (or of the file as written) differed from the input's; the "
+                       f"original file was kept and the verdict forced to HOLD (WIX-CONV-001)."),
+    }
+
+
+def _written_file_matches(path, original_text):
+    """Re-read the file just written and compare its structural fingerprint with the
+    input's -- the check runs on the WRITTEN FILE, not only on the in-memory text."""
+    try:
+        written_text = _read_text_preserving(path)[0]
+    except (OSError, UnicodeDecodeError):
+        return False
+    return protected_regions_equal(original_text, written_text)
+
+
+def _write_exit_file(path, candidate, original_text, io_state):
+    """Every exit path writes through here (WIX-CONV-001). The candidate is written only
+    if its fingerprint matches the input's, and the written file is then re-read and
+    checked again; on any mismatch the ORIGINAL bytes are restored verbatim.
+    Returns (text_now_on_disk, structurally_ok)."""
+    original_lines, original_terms, bom, original_raw = io_state
+    safe, ok = _safe_text_for_save(original_text, candidate)
+    if ok:
+        _save(path, safe, original_lines=original_lines, original_terms=original_terms, bom=bom)
+        if _written_file_matches(path, original_text):
+            return safe, True
+    _atomic_write_bytes(path, original_raw)
+    return original_text, False
+
+
+def _atomic_write_bytes(path, data):
+    """Write via a temp file + os.replace so a crash mid-write never leaves a
+    partially written prompt on disk."""
+    tmp = f"{path}.convergence-tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
 
 
 def _save(path, text, original_lines=None, original_terms=None, bom=False):
@@ -1223,8 +1546,7 @@ def _save(path, text, original_lines=None, original_terms=None, bom=False):
     data = "".join(pieces).encode("utf-8")
     if bom:
         data = b"\xef\xbb\xbf" + data
-    with open(path, "wb") as f:
-        f.write(data)
+    _atomic_write_bytes(path, data)
 
 
 def _verdict_payload(scores=None, deploy=False, sigma=0.0, floor=0.0, passed=0, total=0,
@@ -1294,7 +1616,7 @@ def _usage_error(msg, want_json, json_out, show_usage=False):
     sys.exit(EXIT_USAGE_ERROR)
 
 
-def _print_final(scores, assertions, iterations, text):
+def _print_final(scores, assertions, iterations, text, force_hold=False):
     print(f"\n{'=' * 60}")
     print(f"  FINAL SCORES (after {iterations} iteration{'s' if iterations != 1 else ''})")
     print(f"{'=' * 60}")
@@ -1309,6 +1631,9 @@ def _print_final(scores, assertions, iterations, text):
     # gates the exit code on — instead of a second, independent recomputation here. One source
     # of truth means the printed line and the exit code cannot drift apart again.
     deploy, sigma, floor = deploy_verdict(scores, assertions, text)
+    if force_hold:
+        # WIX-CONV-001: an exit-path structural trip can never be reported as DEPLOY.
+        deploy = False
     sigma_pass = sigma <= floor
     print(f"  {'SIGMA:'.ljust(22)}{sigma:4.2f} (floor {floor:.2f})  {'PASS' if sigma_pass else 'FAIL'}")
 

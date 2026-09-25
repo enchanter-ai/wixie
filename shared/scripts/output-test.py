@@ -971,13 +971,14 @@ def try_offline_fix(prompt_text, scores, details):
             if weakest in convergence.FIXERS and prompt_scores[weakest] < 9.0:
                 candidate_text = convergence.FIXERS[weakest](prompt_text)
                 if candidate_text != pre_text:
-                    # WIX-CONV-001 item 4: this path applies convergence.py's fixers with
-                    # no gate of its own. Share the same structural gate convergence.py's
-                    # own accept/revert loop uses (protected_regions_equal), so a candidate
-                    # that changed a fenced code block / table / blockquote / <example>
-                    # block is refused here too, regardless of score.
+                    # WIX-CONV-001: this path applies convergence.py's fixers with no gate
+                    # of its own. Share the structural gate convergence.py's own
+                    # accept/revert loop uses (protected_regions_equal: fingerprint of all
+                    # non-editable content + tag sequence), so a candidate that changed any
+                    # of it is refused here too, regardless of score. Fail closed: a
+                    # convergence module without the gate never gets a fix applied.
                     gate = getattr(convergence, "protected_regions_equal", None)
-                    if gate is not None and not gate(pre_text, candidate_text):
+                    if gate is None or not gate(pre_text, candidate_text):
                         return prompt_text, False, None
                     return candidate_text, True, f"Offline fix: improved {weakest} ({prompt_scores[weakest]}/10)"
 
