@@ -51,8 +51,18 @@ if command -v powershell.exe >/dev/null 2>&1; then
   cp "$PS1" "$TMP/plugin/scripts/bootstrap.ps1"
   echo "core: \"~1.0.0\"" > "$TMP/plugin/.vis-versions"
   echo "# fixture" > "$TMP/plugin/CLAUDE.md"
+  # -ExecutionPolicy Bypass: required when this test itself runs under WSL
+  # with Windows interop enabled. powershell.exe launched from a WSL shell
+  # gets a CWD translated to a \\wsl.localhost\... (or \\wsl$\...) UNC path;
+  # Windows treats scripts run from a UNC path as a stricter security zone,
+  # and the default "RemoteSigned"/"Restricted" policy then blocks execution
+  # with a SecurityError that is easy to mistake for a parse failure (it
+  # isn't one -- it never gets far enough to parse). -ExecutionPolicy Bypass
+  # for this one invocation sidesteps that without touching the host's
+  # actual policy. On a native Windows shell (no UNC path involved) this
+  # flag is a no-op.
   set +e
-  OUT="$(cd "$TMP/plugin" && powershell.exe -NoProfile -File scripts/bootstrap.ps1 -Verify 2>&1)"
+  OUT="$(cd "$TMP/plugin" && powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 -Verify 2>&1)"
   RC=$?
   set -e
   if printf '%s' "$OUT" | grep -qi "ParserError\|MissingEndParenthesis\|Unrecognized token"; then
