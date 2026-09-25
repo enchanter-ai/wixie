@@ -42,7 +42,14 @@ def estimate_cost(tokens_count, model_id):
         "gemini-2.5-pro": 0.00125, "gemini-2.5-flash": 0.00015, "gemini-3": 0.002,
         "deepseek-r1": 0.0014, "deepseek-v3": 0.0003,
     }
-    rate = pricing_per_1k_input.get(model_id, 0)
+    # OBS-14: a metadata.json target_model given as a JSON list or dict is unhashable and
+    # crashes dict.get() with an uncaught TypeError before any HTML (including the fallback)
+    # is ever written. A malformed model_id just never matches a known price, same as any
+    # other unrecognized value -- it doesn't need to be hashable to fail that lookup gracefully.
+    try:
+        rate = pricing_per_1k_input.get(model_id, 0)
+    except TypeError:
+        rate = 0
     if not rate:
         return None
     return round(tokens_count / 1000 * rate, 4)
