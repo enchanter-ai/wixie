@@ -2,7 +2,12 @@
 #
 # Same semantics and CLI as scripts/bootstrap.sh (see that file for the full
 # WIX-INSTALL-002 spec: pinned vs floating mode, materialization into
-# .vis-cache/vis/, the sibling vis checkout is never mutated).
+# .vis-cache/vis/, the sibling vis checkout is never mutated, no fetch, the
+# whole repo tree is scanned for @.vis-cache/vis/... imports, --verify
+# re-derives every expected file from the pin and enforces exact schema and
+# entry-set equality). This file must produce a BYTE-IDENTICAL .vis-lock to
+# bash's for the same inputs (see the lock writer below) since the lock is
+# committed to a repo other platforms also verify against.
 #
 # Modes:
 #   .\scripts\bootstrap.ps1                     - pinned bootstrap, write .vis-lock
@@ -40,12 +45,12 @@
 # encoding stops mattering; the BOM is kept anyway so a future edit that
 # reintroduces non-ASCII text (an em-dash pasted from prose, a curly quote)
 # still parses correctly instead of silently reintroducing this exact defect.
-# ASCII-only was chosen over "just add a BOM and allow UTF-8 content" because
-# a BOM is fragile on its own: any editor or tool that re-saves the file
-# without preserving it (common; BOMs are easy to strip accidentally) puts
-# WIX-INSTALL-001 right back. ASCII content has no such single point of
-# failure. Keep new edits to this file ASCII; if non-ASCII text is genuinely
-# needed, verify parsing under real Windows PowerShell 5.1 before committing.
+# Keep new edits to this file ASCII; if non-ASCII text is genuinely needed,
+# verify parsing under real Windows PowerShell 5.1 before committing.
+#
+# NOTE: the BOM/ASCII rule above is about THIS SCRIPT FILE. The .vis-lock
+# it WRITES is a different file with its own, narrower rule: no BOM, LF-only
+# line endings, ASCII content -- see the lock writer below.
 # ---------------------------------------------------------------------------
 
 [CmdletBinding()]
@@ -69,9 +74,10 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
 # PowerShell promotes that redirected stderr into a terminating
 # NativeCommandError even when git's own exit code is handled correctly,
 # which would crash the script with a raw exception instead of this script's
-# own curated "tag missing in vis: ..." message.
+# own curated error message.
 $ErrorActionPreference = "Continue"
 
+$LockSchemaVersion = "2"
 $PluginDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $VisDir = (Resolve-Path (Join-Path $PluginDir "..")).Path + "\vis"
 $VisRepo = if ($env:VIS_REPO) { $env:VIS_REPO } else { "https://github.com/enchanter-ai/vis" }
@@ -87,11 +93,7 @@ function Fail([string]$msg) {
     exit 1
 }
 
-# WIX-SEC-CLONE-001: VIS_REPO allowlist, mirroring bootstrap.sh exactly. See
-# that file for the full rationale (two independent layers: this allowlist,
-# plus `--` immediately before $VisRepo at every git invocation that takes
-# it, so an option-shaped value can never be parsed as an option by git even
-# if this allowlist were somehow bypassed).
+# WIX-SEC-CLONE-001: VIS_REPO allowlist, mirroring bootstrap.sh exactly.
 function Test-VisRepo([string]$v) {
     if ($v.StartsWith("-")) {
         [Console]::Error.WriteLine("VIS_REPO looks like a command-line option, not a repository: $v")
@@ -113,22 +115,27 @@ if (-not (Test-Path $ClaudeMd)) {
     Fail "missing $ClaudeMd - bootstrap verifies @-imports against this file"
 }
 
-if ($Verify) {
-    if (-not (Test-Path (Join-Path $VisDir ".git"))) {
+if (-not (Test-Path (Join-Path $VisDir ".git"))) {
+    if ($Verify) {
         Fail "vis sibling missing - run ./scripts/bootstrap.sh"
     }
-} else {
-    if (-not (Test-Path (Join-Path $VisDir ".git"))) {
-        if (-not (Test-VisRepo $VisRepo)) { exit 1 }
-        [Console]::Error.WriteLine("vis sibling missing at $VisDir - cloning")
-        & git clone -- $VisRepo $VisDir
-        if ($LASTEXITCODE -ne 0) { Fail "clone failed - set VIS_REPO or clone manually" }
-    }
-    & git -C $VisDir fetch --tags --quiet 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        [Console]::Error.WriteLine("note: git fetch --tags failed or unavailable (offline?) - continuing with local refs")
-    }
+    # Creating a NEW sibling (nothing existing to mutate) is not the same as
+    # fetching into one that's already there -- see the no-fetch note below.
+    if (-not (Test-VisRepo $VisRepo)) { exit 1 }
+    [Console]::Error.WriteLine("vis sibling missing at $VisDir - cloning")
+    & git clone -- $VisRepo $VisDir
+    if ($LASTEXITCODE -ne 0) { Fail "clone failed - set VIS_REPO or clone manually" }
 }
+
+# No `git fetch` here, ever, in either mode, against an existing sibling.
+# `git fetch --tags` writes FETCH_HEAD, fast-forwards refs/remotes/origin/*,
+# can add new tags, and can trigger background maintenance -- all real
+# mutations of a checkout other repos/sessions may share. This script only
+# ever reads: refs/tags/* resolution (rev-list) and blob content (show),
+# both plumbing, neither one writes anything. If a needed tag is not present
+# in the sibling's LOCAL refs, that is reported as an explicit failure
+# telling the operator to fetch it themselves or wait for the vis owner to
+# cut it -- this script will not do it silently on their behalf.
 
 # --- parse .vis-versions --------------------------------------------
 $pkgs = @()
@@ -148,7 +155,7 @@ if ($pkgs.Count -eq 0) {
     Fail "no packages parsed from $VersionsFile"
 }
 
-# --- resolve per-package pin (pinned mode only) ------------------------------
+# --- resolve per-package pin (pinned mode only; read-only, local refs only) --
 $tagNames = @()
 $tagCommits = @()
 if ($Mode -eq "pinned") {
@@ -156,7 +163,12 @@ if ($Mode -eq "pinned") {
         $tag = "enchanter-$($pkgs[$i])--v$($vers[$i])"
         $sha = & git -C $VisDir rev-list -n 1 "refs/tags/$tag" -- 2>$null
         if (-not $sha) {
-            Fail "tag missing in vis: $tag"
+            [Console]::Error.WriteLine("vis tag $tag not found locally.")
+            [Console]::Error.WriteLine("  This script never fetches automatically (to avoid mutating the shared vis sibling).")
+            [Console]::Error.WriteLine("  Either fetch it yourself:  git -C $VisDir fetch --tags")
+            [Console]::Error.WriteLine("  or the vis owner has not cut this release yet - wait for it.")
+            [Console]::Error.WriteLine("  Only bump .vis-versions if you intend to pin a different, already-released version.")
+            exit 1
         }
         $tagNames += $tag
         $tagCommits += $sha.Trim()
@@ -170,10 +182,34 @@ function Get-PkgIndex([string]$name) {
     return -1
 }
 
-# --- walk CLAUDE.md for @-imports under the cache prefix ---------------------
-$claudeText = Get-Content $ClaudeMd -Raw
-$importMatches = [regex]::Matches($claudeText, '@\.vis-cache/vis/packages/[a-z]+/[A-Za-z0-9._/-]+\.[a-zA-Z]+')
-$importPaths = $importMatches | ForEach-Object { $_.Value -replace '^@\.vis-cache/vis/', '' } | Sort-Object -Unique
+# --- enumerate every @.vis-cache/vis/... import across the WHOLE repo -------
+# Not just CLAUDE.md: plugin agents/skills reference vis conduct directly
+# too, and every one of them must resolve to the same materialized content.
+# Byte-order (ordinal) unique + sort -- NOT Sort-Object's default culture
+# comparison -- so entry order is identical to bash's `LC_ALL=C sort -u`
+# for the same inputs (every path here is ASCII, so ordinal == C-locale).
+$excludeDirs = @('\.vis-cache\', '\.git\', '\state\', '\node_modules\')
+$mdFiles = Get-ChildItem -Path $PluginDir -Recurse -Filter '*.md' -File -ErrorAction SilentlyContinue |
+    Where-Object {
+        $full = $_.FullName
+        -not ($excludeDirs | Where-Object { $full -like "*$_*" })
+    }
+$importSet = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+foreach ($f in $mdFiles) {
+    $text = Get-Content $f.FullName -Raw -ErrorAction SilentlyContinue
+    if (-not $text) { continue }
+    $ms = [regex]::Matches($text, '@\.vis-cache/vis/packages/[a-z]+/[A-Za-z0-9._/-]+\.[a-zA-Z]+')
+    foreach ($m in $ms) {
+        [void]$importSet.Add(($m.Value -replace '^@\.vis-cache/vis/', ''))
+    }
+}
+$importPaths = New-Object string[] ($importSet.Count)
+$importSet.CopyTo($importPaths)
+[Array]::Sort($importPaths, [System.StringComparer]::Ordinal)
+
+if ($importPaths.Count -eq 0) {
+    [Console]::Error.WriteLine("warning: no @.vis-cache/vis/... imports found anywhere in $PluginDir")
+}
 
 # --- materialize into a staging dir, never touching the sibling's checkout ---
 $stageDir = Join-Path $CacheRoot (".stage-{0}" -f $PID)
@@ -208,24 +244,22 @@ if (-not $Verify) {
                 # pipeline splits into lines and rejoins with the platform
                 # newline, which would silently rewrite LF to CRLF and change
                 # the file's bytes (and therefore its hash) relative to what
-                # bash's `git show ... > file` writes. Read git's stdout as a
-                # byte stream instead, so pinned/floating cache content and
-                # its sha1 are byte-identical to the bash entry point.
+                # bash's `git show ... > file` writes.
                 $psi = New-Object System.Diagnostics.ProcessStartInfo
                 $psi.FileName = "git"
                 $psi.Arguments = "-C `"$VisDir`" show $($sha):$($rel) --"
                 $psi.RedirectStandardOutput = $true
                 $psi.UseShellExecute = $false
                 $gitProc = [System.Diagnostics.Process]::Start($psi)
-                $ms = New-Object System.IO.MemoryStream
-                $gitProc.StandardOutput.BaseStream.CopyTo($ms)
+                $ms2 = New-Object System.IO.MemoryStream
+                $gitProc.StandardOutput.BaseStream.CopyTo($ms2)
                 $gitProc.WaitForExit()
                 if ($gitProc.ExitCode -ne 0) {
                     [Console]::Error.WriteLine("import resolves to missing file at pin: @.vis-cache/vis/$rel (package $pkg @ $($tagNames[$idx]) = $sha)")
                     $missing = $true
                     continue
                 }
-                [System.IO.File]::WriteAllBytes($dest, $ms.ToArray())
+                [System.IO.File]::WriteAllBytes($dest, $ms2.ToArray())
             } else {
                 $src = Join-Path $VisDir ($rel -replace '/', '\')
                 if (-not (Test-Path $src)) {
@@ -251,31 +285,17 @@ if (-not $Verify) {
     } finally {
         if (Test-Path $stageDir) { Remove-Item -Recurse -Force $stageDir -ErrorAction SilentlyContinue }
     }
-} else {
-    if (-not (Test-Path $CacheDir) -or -not (Test-Path $LockFile)) {
-        Fail "vis not bootstrapped - run ./scripts/bootstrap.sh"
-    }
-    foreach ($rel in $importPaths) {
-        $full = Join-Path $CacheDir ($rel -replace '/', '\')
-        if (-not (Test-Path $full)) {
-            [Console]::Error.WriteLine("import resolves to missing file in cache: @.vis-cache/vis/$rel - run ./scripts/bootstrap.sh")
-            $missing = $true
-            continue
-        }
-        $h = (Get-FileHash $full -Algorithm SHA1).Hash.ToLower()
-        $hashPaths += $rel
-        $hashValues += $h
-    }
-    if ($missing) { exit 1 }
-}
 
-# --- write or verify .vis-lock ------------------------------------------------
-function Write-Lock {
+    # --- write .vis-lock: MUST be byte-identical to bash's output for the
+    # same inputs (modulo resolved_at). ASCII, LF-only, no BOM -- WriteAllText
+    # with an explicit "`n"-joined string bypasses Set-Content/Out-File's
+    # platform-newline and BOM behavior entirely, which is what caused the
+    # original CRLF/culture-sort drift between the two entry points.
     $iso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add("# .vis-lock - auto-generated by scripts/bootstrap.sh")
     $lines.Add("# Do not edit by hand. Run ./scripts/bootstrap.sh to refresh.")
-    $lines.Add("lock_version: 2")
+    $lines.Add("lock_version: $LockSchemaVersion")
     $lines.Add("mode: $Mode")
     $lines.Add("resolved_at: $iso")
     if ($Mode -eq "pinned") {
@@ -295,59 +315,187 @@ function Write-Lock {
         $lines.Add("  - path: $($hashPaths[$i])")
         $lines.Add("    sha1: $($hashValues[$i])")
     }
-    Set-Content -Path $LockFile -Value $lines -Encoding ASCII
-}
+    $content = ($lines -join "`n") + "`n"
+    [System.IO.File]::WriteAllText($LockFile, $content, (New-Object System.Text.ASCIIEncoding))
 
-if (-not $Verify) {
-    Write-Lock
     Write-Output "bootstrapped ($Mode): $($pkgs.Count) packages, $($hashPaths.Count) conduct files"
     Write-Output "materialized: $CacheDir"
     Write-Output "wrote $LockFile"
     exit 0
 }
 
-# -Verify path (both modes)
-$lockText = Get-Content $LockFile -Raw
+# ============================================================================
+# -Verify: re-derive everything from the pin; never trust the cache alone.
+# ============================================================================
 
-$lockMode = ([regex]::Match($lockText, '(?m)^mode:\s*(\S+)').Groups[1].Value)
-if (-not $lockMode) {
-    Fail "lock is stale or wrong-schema (missing 'mode:') - run ./scripts/bootstrap.sh"
+if (-not (Test-Path $LockFile)) {
+    Fail "vis not bootstrapped - run ./scripts/bootstrap.sh"
+}
+
+$lockText = [System.IO.File]::ReadAllText($LockFile)
+
+$lockVersionField = ([regex]::Match($lockText, '(?m)^lock_version:\s*(\S+)')).Groups[1].Value
+$lockMode = ([regex]::Match($lockText, '(?m)^mode:\s*(\S+)')).Groups[1].Value
+if (-not $lockMode -or -not $lockVersionField) {
+    Fail "lock is stale or wrong-schema (missing 'mode:' or 'lock_version:') - run ./scripts/bootstrap.sh"
+}
+if ($lockVersionField -ne $LockSchemaVersion) {
+    Fail "lock_version mismatch: lock says $lockVersionField, this bootstrap understands $LockSchemaVersion - run ./scripts/bootstrap.sh to rewrite it, or you are looking at a lock from an incompatible bootstrap version"
 }
 if ($lockMode -ne $Mode) {
     Fail "lock mode mismatch: lock says $lockMode, verify requested $Mode - re-run bootstrap in that mode first"
 }
 
+if (-not (Test-Path $CacheDir)) {
+    Fail "vis not bootstrapped - run ./scripts/bootstrap.sh"
+}
+
+function Get-SortedUnique([string[]]$arr) {
+    $s = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($x in $arr) { [void]$s.Add($x) }
+    $out = New-Object string[] ($s.Count)
+    $s.CopyTo($out)
+    [Array]::Sort($out, [System.StringComparer]::Ordinal)
+    return $out
+}
+
 if ($Mode -eq "pinned") {
+    # --- exact package-block set: no extra, none missing -----------------------
+    $pkgBlockMatches = [regex]::Matches($lockText, '(?m)^packages:\r?\n((?:  [a-z][a-zA-Z0-9_]*:\r?\n(?:    .+\r?\n)*)*)')
+    $lockPkgNames = @()
+    if ($pkgBlockMatches.Count -gt 0) {
+        $blockText = $pkgBlockMatches[0].Groups[1].Value
+        $nameMatches = [regex]::Matches($blockText, '(?m)^  ([a-z][a-zA-Z0-9_]*):\r?\n')
+        foreach ($nm in $nameMatches) { $lockPkgNames += $nm.Groups[1].Value }
+    }
+    $observedPkgSet = Get-SortedUnique $lockPkgNames
+    $expectedPkgSet = Get-SortedUnique $pkgs
+    if (-not (@(Compare-Object $observedPkgSet $expectedPkgSet -SyncWindow 0).Count -eq 0)) {
+        [Console]::Error.WriteLine("package block set in lock does not match .vis-versions exactly:")
+        [Console]::Error.WriteLine("  lock has: $($observedPkgSet -join ' ')")
+        [Console]::Error.WriteLine("  expected: $($expectedPkgSet -join ' ')")
+        Fail "  (an extra or unexpected package block is refused just like a missing one)"
+    }
+
+    # --- per-package: version, tag, tag_commit ALL re-derived and compared -----
     for ($i = 0; $i -lt $pkgs.Count; $i++) {
         $pkg = $pkgs[$i]
-        $expected = $tagCommits[$i]
-        $rx = "(?ms)^  $([regex]::Escape($pkg)):\s*$.*?^    tag_commit:\s*(\S+)"
+        $expectedVersion = "v$($vers[$i])"
+        $expectedTag = $tagNames[$i]
+        $expectedCommit = $tagCommits[$i]
+
+        $rx = "(?ms)^  $([regex]::Escape($pkg)):[ `t]*\r?\n(.*?)(?=^  [a-z]|^[A-Za-z_]|\z)"
         $m = [regex]::Match($lockText, $rx)
-        if (-not $m.Success) { Fail "package $pkg missing from lock - run ./scripts/bootstrap.sh" }
-        $observed = $m.Groups[1].Value
-        if ($observed -ne $expected) {
-            Fail "package ${pkg}: recorded tag/version no longer resolves to the same content (lock $observed, tag now resolves to $expected) - a moved/retagged pin, or .vis-versions changed without re-bootstrapping. Run ./scripts/bootstrap.sh"
+        if (-not $m.Success) { Fail "package ${pkg}: lock block incomplete (missing version/tag/tag_commit) - run ./scripts/bootstrap.sh" }
+        $block = $m.Groups[1].Value
+
+        $observedVersion = ([regex]::Match($block, '(?m)^\s*version:\s*(\S+)')).Groups[1].Value
+        $observedTag = ([regex]::Match($block, '(?m)^\s*tag:\s*(\S+)')).Groups[1].Value
+        $observedCommit = ([regex]::Match($block, '(?m)^\s*tag_commit:\s*(\S+)')).Groups[1].Value
+
+        if (-not $observedVersion -or -not $observedTag -or -not $observedCommit) {
+            Fail "package ${pkg}: lock block incomplete (missing version/tag/tag_commit) - run ./scripts/bootstrap.sh"
+        }
+        if ($observedVersion -ne $expectedVersion) {
+            Fail "package ${pkg}: lock 'version:' is $observedVersion, .vis-versions currently declares $expectedVersion - forged field or stale lock. Run ./scripts/bootstrap.sh"
+        }
+        if ($observedTag -ne $expectedTag) {
+            Fail "package ${pkg}: lock 'tag:' is $observedTag, expected $expectedTag - forged field or stale lock. Run ./scripts/bootstrap.sh"
+        }
+        if ($observedCommit -ne $expectedCommit) {
+            Fail "package ${pkg}: recorded tag/version no longer resolves to the same content (lock $observedCommit, tag now resolves to $expectedCommit) - a moved/retagged pin, or .vis-versions changed without re-bootstrapping. Run ./scripts/bootstrap.sh"
+        }
+    }
+
+    # --- exact conduct_files entry set: no extra, none missing -----------------
+    $pathMatches = [regex]::Matches($lockText, '(?m)^  - path:\s*(\S+)')
+    $lockFilePaths = @()
+    foreach ($pm in $pathMatches) { $lockFilePaths += $pm.Groups[1].Value }
+    $observedFileSet = Get-SortedUnique $lockFilePaths
+    $expectedFileSet = Get-SortedUnique $importPaths
+    if (-not (@(Compare-Object $observedFileSet $expectedFileSet -SyncWindow 0).Count -eq 0)) {
+        [Console]::Error.WriteLine("conduct_files entry set in lock does not match what this repo currently imports:")
+        foreach ($p in $observedFileSet) { if ($expectedFileSet -notcontains $p) { [Console]::Error.WriteLine("  unexpected entry in lock (no longer imported): $p") } }
+        foreach ($p in $expectedFileSet) { if ($observedFileSet -notcontains $p) { [Console]::Error.WriteLine("  missing from lock (imported but not covered): $p") } }
+        Fail "Run ./scripts/bootstrap.sh"
+    }
+
+    # --- per-file: re-derive from the pin, compare against lock AND cache ------
+    foreach ($rel in $importPaths) {
+        if ($rel -notmatch '^packages/([^/]+)/') {
+            Fail "import path does not belong to a package/: @.vis-cache/vis/$rel"
+        }
+        $pkg = $matches[1]
+        $idx = Get-PkgIndex $pkg
+        if ($idx -lt 0) {
+            Fail "import references package '$pkg' not declared in $VersionsFile`: @.vis-cache/vis/$rel"
+        }
+        $sha = $tagCommits[$idx]
+
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "git"
+        $psi.Arguments = "-C `"$VisDir`" show $($sha):$($rel) --"
+        $psi.RedirectStandardOutput = $true
+        $psi.UseShellExecute = $false
+        $gitProc = [System.Diagnostics.Process]::Start($psi)
+        $ms3 = New-Object System.IO.MemoryStream
+        $gitProc.StandardOutput.BaseStream.CopyTo($ms3)
+        $gitProc.WaitForExit()
+        if ($gitProc.ExitCode -ne 0) {
+            Fail "import resolves to missing file at pin: @.vis-cache/vis/$rel (package $pkg @ $($tagNames[$idx]) = $sha) - run ./scripts/bootstrap.sh"
+        }
+        $sha1alg = [System.Security.Cryptography.SHA1]::Create()
+        $pinHash = [System.BitConverter]::ToString($sha1alg.ComputeHash($ms3.ToArray())).Replace("-", "").ToLower()
+
+        $rxp = "(?m)^  - path:\s*$([regex]::Escape($rel))\s*\r?\n\s*sha1:\s*(\S+)"
+        $mm = [regex]::Match($lockText, $rxp)
+        if (-not $mm.Success) { Fail "conduct file not in lock: $rel - run ./scripts/bootstrap.sh" }
+        $lockHash = $mm.Groups[1].Value
+
+        $cacheFile = Join-Path $CacheDir ($rel -replace '/', '\')
+        if (-not (Test-Path $cacheFile)) {
+            Fail "import resolves to missing file in cache: @.vis-cache/vis/$rel - run ./scripts/bootstrap.sh"
+        }
+        $cacheHash = (Get-FileHash $cacheFile -Algorithm SHA1).Hash.ToLower()
+
+        if ($pinHash -ne $lockHash) {
+            Fail "conduct file ${rel}: lock sha1 ($lockHash) does not match content freshly re-derived from the pinned commit ($pinHash) - forged lock, or the lock (and possibly the cache) came from a different commit. Run ./scripts/bootstrap.sh"
+        }
+        if ($cacheHash -ne $lockHash) {
+            Fail "conduct file $rel modified in the materialized cache since bootstrap ($cacheHash != $lockHash) - re-bootstrap or revert .vis-cache/"
         }
     }
 } else {
-    $lockHead = ([regex]::Match($lockText, '(?m)^vis_head:\s*(\S+)').Groups[1].Value)
+    # --- floating mode: unchanged from the previous design ---------------------
+    $pathMatches = [regex]::Matches($lockText, '(?m)^  - path:\s*(\S+)')
+    $lockFilePaths = @()
+    foreach ($pm in $pathMatches) { $lockFilePaths += $pm.Groups[1].Value }
+    $observedFileSet = Get-SortedUnique $lockFilePaths
+    $expectedFileSet = Get-SortedUnique $importPaths
+    if (-not (@(Compare-Object $observedFileSet $expectedFileSet -SyncWindow 0).Count -eq 0)) {
+        Fail "conduct_files entry set in lock does not match what this repo currently imports - run ./scripts/bootstrap.sh -Floating"
+    }
+
+    $lockHead = ([regex]::Match($lockText, '(?m)^vis_head:\s*(\S+)')).Groups[1].Value
     $liveHead = (& git -C $VisDir rev-parse HEAD).Trim()
     if ($lockHead -ne $liveHead) {
         Fail "vis drift (floating mode): lock says $lockHead, checkout is $liveHead - run ./scripts/bootstrap.ps1 -Floating to re-resolve"
     }
-}
 
-for ($i = 0; $i -lt $hashPaths.Count; $i++) {
-    $rel = $hashPaths[$i]
-    $expected = $hashValues[$i]
-    $rx = "(?ms)^  - path:\s*$([regex]::Escape($rel))\s*$.*?^    sha1:\s*(\S+)"
-    $m = [regex]::Match($lockText, $rx)
-    if (-not $m.Success) { Fail "conduct file not in lock: $rel - run ./scripts/bootstrap.sh" }
-    $observed = $m.Groups[1].Value
-    if ($observed -ne $expected) {
-        Fail "conduct file $rel modified in the materialized cache since bootstrap - re-bootstrap or revert .vis-cache/"
+    foreach ($rel in $importPaths) {
+        $full = Join-Path $CacheDir ($rel -replace '/', '\')
+        if (-not (Test-Path $full)) {
+            Fail "import resolves to missing file in cache: @.vis-cache/vis/$rel - run ./scripts/bootstrap.sh -Floating"
+        }
+        $observed = (Get-FileHash $full -Algorithm SHA1).Hash.ToLower()
+        $rxp = "(?m)^  - path:\s*$([regex]::Escape($rel))\s*\r?\n\s*sha1:\s*(\S+)"
+        $mm = [regex]::Match($lockText, $rxp)
+        $expected = $mm.Groups[1].Value
+        if ($observed -ne $expected) {
+            Fail "conduct file $rel modified in the materialized cache since bootstrap - re-bootstrap or revert .vis-cache/"
+        }
     }
 }
 
-Write-Output "verified ($Mode): $($hashPaths.Count) conduct files, $($pkgs.Count) packages"
+Write-Output "verified ($Mode): $($importPaths.Count) conduct files, $($pkgs.Count) packages, re-derived from the pin"
 exit 0

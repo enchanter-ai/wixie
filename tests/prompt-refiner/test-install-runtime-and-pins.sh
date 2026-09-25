@@ -161,7 +161,8 @@ OUT3="$(cd "$WIXIE" && VIS_REPO="$VIS" ./scripts/bootstrap.sh 2>&1)"
 RC=$?
 set -e
 check "bootstrap fails explicitly when the pinned tag is missing" "$RC" 1
-printf '%s\n' "$OUT3" | grep -q "tag missing in vis" || { fail=$((fail + 1)); echo "  FAIL: missing explicit 'tag missing in vis' message" >&2; }
+printf '%s\n' "$OUT3" | grep -q "not found locally" || { fail=$((fail + 1)); echo "  FAIL: missing explicit 'not found locally' message" >&2; }
+printf '%s\n' "$OUT3" | grep -qi "bump .vis-versions if you intend" || { fail=$((fail + 1)); echo "  FAIL: missing conditional (not primary) 'bump .vis-versions' advice" >&2; }
 AFTER3="$(snapshot_vis)"
 if [[ "$BEFORE3" == "$AFTER3" ]]; then pass=$((pass + 1)); else
   fail=$((fail + 1)); echo "  FAIL: failed bootstrap mutated the fixture vis sibling" >&2
@@ -195,6 +196,53 @@ grep -q -- '-Floating' "$REPO_ROOT/scripts/bootstrap.ps1" || { fail=$((fail + 1)
 #     test-sec-clone-vis-repo.sh for the dynamic exploit-attempt regression).
 grep -qE 'git clone -- ' "$REPO_ROOT/scripts/bootstrap.sh" || { fail=$((fail + 1)); echo "  FAIL: bootstrap.sh clone call lacks --" >&2; }
 grep -qE 'git clone -- ' "$REPO_ROOT/scripts/bootstrap.ps1" || { fail=$((fail + 1)); echo "  FAIL: bootstrap.ps1 clone call lacks --" >&2; }
+
+# 11. Never fetches into an existing sibling (static: no `git ... fetch`
+#     INVOCATION anywhere in either script -- clone is allowed, fetch is
+#     not; comments and the operator-advice error strings legitimately
+#     mention "fetch" and must not trip this, so strip both before checking).
+strip_noise() {
+  grep -vE '^\s*#' "$1" | grep -vE 'err "|err '"'"'|Console\]::Error'
+}
+if strip_noise "$REPO_ROOT/scripts/bootstrap.sh" | grep -qE '(^|[^-])\bgit(\.exe)?\b[^#]*\bfetch\b'; then
+  fail=$((fail + 1)); echo "  FAIL: bootstrap.sh still invokes 'git ... fetch' (must never mutate an existing sibling)" >&2
+fi
+if strip_noise "$REPO_ROOT/scripts/bootstrap.ps1" | grep -qE '&\s*git\b[^#]*\bfetch\b'; then
+  fail=$((fail + 1)); echo "  FAIL: bootstrap.ps1 still invokes 'git ... fetch' (must never mutate an existing sibling)" >&2
+fi
+
+# 12. Import enumeration covers the WHOLE repo, not just CLAUDE.md: a
+#     plugin agent/skill file importing a vis path CLAUDE.md never mentions
+#     must still be materialized.
+FIRST_PKG="${PKGS[0]}"
+EXTRA_REL="packages/${FIRST_PKG}/conduct/_fixture-only-agent-import.md"
+printf 'fixture content for %s (agent-only import)\n' "$EXTRA_REL" > "$VIS/$EXTRA_REL"
+(
+  cd "$VIS"
+  git add -A
+  git -c user.email="fixture@test.local" -c user.name="fixture" commit --quiet -m "fixture: add an agent-only import"
+)
+NEW_SHA="$(git -C "$VIS" rev-parse HEAD)"
+for i in "${!PKGS[@]}"; do
+  git -C "$VIS" tag -f "enchanter-${PKGS[$i]}--v${VERS[$i]}" "$NEW_SHA" >/dev/null
+done
+EXTRA_AGENT="$WIXIE/plugins/_fixture-agent"
+mkdir -p "$EXTRA_AGENT"
+cat > "$EXTRA_AGENT/probe.md" <<EOF
+Probe agent file referencing a vis import that CLAUDE.md never mentions:
+@.vis-cache/vis/$EXTRA_REL
+EOF
+set +e
+OUT4="$(cd "$WIXIE" && VIS_REPO="$VIS" ./scripts/bootstrap.sh 2>&1)"
+RC4=$?
+set -e
+check "bootstrap succeeds and picks up an agent-only (non-CLAUDE.md) import" "$RC4" 0
+if [[ -f "$WIXIE/.vis-cache/vis/$EXTRA_REL" ]]; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1)); echo "  FAIL: agent-only import $EXTRA_REL was not materialized -- enumeration is still CLAUDE.md-only" >&2
+fi
+rm -rf "$EXTRA_AGENT"
 
 echo "install-runtime-and-pins: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]

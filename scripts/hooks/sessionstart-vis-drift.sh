@@ -2,16 +2,32 @@
 # sessionstart-vis-drift.sh — Claude Code SessionStart hook.
 #
 # Per s2.0 recommendation Layer 2: at session start, compare .vis-versions
-# (manifest intent) and .vis-lock (resolved state) against the actual
-# ../vis checkout. Fail loud on mismatch with a one-line
-# remediation — never auto-heal.
+# (manifest intent) and .vis-lock (resolved state) against the sibling vis
+# checkout via bootstrap.sh --verify (pinned by default since WIX-INSTALL-002
+# / D8 — see that script's header for the full pinned/floating contract).
+# Fail loud on mismatch with a one-line remediation — never auto-heal.
+#
+# NOT CURRENTLY REGISTERED: this repo has no .claude/settings.json, so this
+# hook does not fire today (verified independently — see
+# tranche3/patches/IMPLEMENTATION_NOTES.md "Fix round 1"). That is
+# intentional for this remediation branch: registering hooks / editing
+# .claude/settings.json is out of this fix's scope. This script is kept
+# correct and ready for whoever does register it.
+#
+# MERGE PRECONDITION this hook depends on: the vis owner must cut the real
+# enchanter-<pkg>--v<version> tags declared in .vis-versions, and this repo's
+# .vis-lock must be regenerated with bootstrap.sh against a sibling that has
+# them, before this branch merges. Before that, every checkout — hook
+# registered or not — gets bootstrap's explicit "vis tag ... not found
+# locally" refusal, not a silent pass.
 #
 # Hook is advisory per conduct/hooks.md § Injection over denial: stdout is
 # surfaced as injected context; exit code is informational. We exit 0 on
 # drift too (advisory mode) so the hook never blocks; the message in stdout
 # is the signal.
 #
-# Register in .claude/settings.json under SessionStart:
+# Register in .claude/settings.json under SessionStart (not done by this
+# remediation — see above):
 #   { "hooks": { "SessionStart": [ { "matcher": "",
 #       "hooks": [ { "type": "command",
 #         "command": "./scripts/hooks/sessionstart-vis-drift.sh" } ] } ] } }
@@ -24,8 +40,6 @@ if [[ -n "${CLAUDE_SUBAGENT:-}" ]]; then
 fi
 
 PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-VIS_DIR="$(cd "$PLUGIN_DIR/.." && pwd)/vis"
-LOCK_FILE="$PLUGIN_DIR/.vis-lock"
 
 # Use the bootstrap script's --verify mode as the single source of truth.
 # It already emits the canonical one-line remediation messages.

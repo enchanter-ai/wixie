@@ -1,9 +1,15 @@
 # .vis-versions — vis packages this sibling consumes
 # Update via: bump version + pull from canonical at ../vis
 # WIX-INSTALL-002: pinned mode requires enchanter-<pkg>--v<version> to exist
-# in vis and to contain every packages/<pkg>/... file this repo's CLAUDE.md
-# imports. v0.7.0 = the candidate cut at vis commit ab0d5b4 (t3/vis-candidate)
-# — see tranche3/patches/IMPLEMENTATION_NOTES.md for the version decision.
+# in vis and to contain every packages/<pkg>/... file this repo actually
+# imports (CLAUDE.md and every plugin agent/skill that references vis
+# directly). v0.7.0 = the candidate cut at vis commit de21d78 on
+# remediation/wixie-install-candidate. Merge precondition: the vis owner
+# must cut the real enchanter-<pkg>--v0.7.0 tags on that commit (or a
+# fast-forward of it) and this repo's .vis-lock must be regenerated against
+# a sibling that has them before this branch merges — see scripts/bootstrap.sh
+# header and the vis-side CHANGELOG entry for that release's open decisions
+# (0.7.0 vs 1.0.0, annotated vs lightweight tags, meta-package bump rule).
 core: "~0.7.0"
 skills: "~0.7.0"
 web: "~0.7.0"
