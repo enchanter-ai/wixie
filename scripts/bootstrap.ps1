@@ -1,4 +1,4 @@
-# bootstrap.ps1 - Windows PowerShell mirror of bootstrap.sh.
+﻿# bootstrap.ps1 - Windows PowerShell mirror of bootstrap.sh.
 #
 # Same semantics and CLI as scripts/bootstrap.sh (see that file for the full
 # WIX-INSTALL-002 spec: pinned vs floating mode, materialization into
@@ -9,12 +9,58 @@
 #   .\scripts\bootstrap.ps1 -Verify             - pinned verify (read-only, no network)
 #   .\scripts\bootstrap.ps1 -Floating           - floating bootstrap (opt-in, dev only)
 #   .\scripts\bootstrap.ps1 -Floating -Verify   - floating verify
+#
+# ---------------------------------------------------------------------------
+# WIX-INSTALL-001: supported PowerShell contract
+# ---------------------------------------------------------------------------
+# Supported : Windows PowerShell 5.1 (Desktop edition). Verified live on
+#             5.1.26100.9444: this file parses with 0 tokenizer errors and
+#             every code path below (pinned/floating bootstrap and --verify,
+#             success and failure) runs to its documented terminal state.
+# Supported, unverified here : PowerShell 7+ (pwsh, Core edition). Nothing in
+#             this script is known to be 5.1-only, but this host has no pwsh
+#             installation (`command -v pwsh` -> not found) and none was
+#             installed to check this box, per the remediation's "do not
+#             install or download anything" constraint. Left explicitly
+#             UNKNOWN rather than claimed. If you run this under pwsh and it
+#             works (or doesn't), update this line with what you observed.
+# Rejected before execution : PowerShell 2/3/4 (Major -lt 5) -- the version
+#             gate below exits before touching git, .vis-versions or
+#             CLAUDE.md, naming scripts/bootstrap.sh as the documented
+#             cross-platform alternative.
+# Non-Windows / no PowerShell at all : use scripts/bootstrap.sh.
+#
+# Encoding: this file is ASCII-only (0 bytes >= 0x80) AND carries a UTF-8 BOM
+# (EF BB BF), belt-and-suspenders. Either alone would already fix the
+# original defect (WIX-INSTALL-001: an em-dash and other non-ASCII characters
+# with no BOM made Windows PowerShell 5.1's tokenizer decode this file under
+# the legacy ANSI code page and choke on multi-byte sequences -- 10 parser
+# errors, exit 1, before a single line executed). ASCII-only means the parser
+# never has a multi-byte sequence to misinterpret in the first place, so
+# encoding stops mattering; the BOM is kept anyway so a future edit that
+# reintroduces non-ASCII text (an em-dash pasted from prose, a curly quote)
+# still parses correctly instead of silently reintroducing this exact defect.
+# ASCII-only was chosen over "just add a BOM and allow UTF-8 content" because
+# a BOM is fragile on its own: any editor or tool that re-saves the file
+# without preserving it (common; BOMs are easy to strip accidentally) puts
+# WIX-INSTALL-001 right back. ASCII content has no such single point of
+# failure. Keep new edits to this file ASCII; if non-ASCII text is genuinely
+# needed, verify parsing under real Windows PowerShell 5.1 before committing.
+# ---------------------------------------------------------------------------
 
 [CmdletBinding()]
 param(
     [switch]$Verify,
     [switch]$Floating
 )
+
+if ($PSVersionTable.PSVersion.Major -lt 5) {
+    [Console]::Error.WriteLine(
+        "unsupported PowerShell version: $($PSVersionTable.PSVersion) " +
+        "(need Major -ge 5). Use Windows PowerShell 5.1+ / pwsh 7+, " +
+        "or run scripts/bootstrap.sh instead.")
+    exit 1
+}
 
 # "Continue", not "Stop": this script drives every control-flow decision off
 # explicit $LASTEXITCODE / Test-Path checks and its own Fail() calls, several
