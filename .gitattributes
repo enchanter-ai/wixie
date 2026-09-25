@@ -11,3 +11,8 @@
 *.jpeg binary
 *.pdf binary
 *.ico binary
+
+# Generated plugin-local shared conduct (scripts/vendor-conduct.py). Stored and
+# checked out byte-for-byte: it must stay byte-identical to the pinned vis blob,
+# so no end-of-line normalization in either direction.
+plugins/*/vendor/** -text

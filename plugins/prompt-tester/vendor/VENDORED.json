@@ -1,0 +1,29 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "package": "core",
+      "path": "vis/packages/core/conduct/tier-sizing.md",
+      "sha1": "744ac38129969e7e2399a9271f271a37a1aecd5d",
+      "sha256": "e5e6a4e1eb0adc78b06902317f82e870483a3128f01c49c6fcc28e099eea9591",
+      "source": "vis",
+      "source_path": "packages/core/conduct/tier-sizing.md",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
+      "version": "v0.7.0"
+    },
+    {
+      "package": "skills",
+      "path": "vis/packages/skills/conduct/formatting.md",
+      "sha1": "cbbb98a69153f74dc8fb733eb7f6b2741a9c2b2d",
+      "sha256": "bdd5433467e794ca42c2dfbd0915d6dbea216d2342048690fdb5f279f7f22b82",
+      "source": "vis",
+      "source_path": "packages/skills/conduct/formatting.md",
+      "tag": "enchanter-skills--v0.7.0",
+      "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
+      "version": "v0.7.0"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-conduct/v1"
+}

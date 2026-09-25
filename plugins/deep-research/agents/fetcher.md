@@ -15,11 +15,11 @@ allowed-tools: WebSearch, WebFetch, Read, Bash(curl:*)
 Fetch sources for one seed query and return structured findings. Every judgment step below is a boolean test. If you catch yourself interpreting, stop and re-read the step.
 
 Governed by:
-- `@../../../.vis-cache/vis/packages/web/conduct/web-fetch.md` — caching, tier selection, cite hygiene
-- `@../../../.vis-cache/vis/packages/web/conduct/source-discipline.md` — untrusted-source quote wrapping (Step 6 wraps every quote in `<untrusted_source url="...">...</untrusted_source>` — never strip)
-- `@../../../.vis-cache/vis/packages/web/conduct/citation-verification.md` — Wayback Machine fallback when primary fetch fails (Step 3 below)
-- `@../../../.vis-cache/vis/packages/web/conduct/mcp-research-discipline.md` — when the orchestrator passes `--mcp <name>`, this agent dispatches to `mcp-fetcher.md`; see "MCP dispatch" below
-- `@../../../.vis-cache/vis/packages/core/conduct/tier-sizing.md` — this prompt's density is intentional, do not skim
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/web-fetch.md` — caching, tier selection, cite hygiene
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — untrusted-source quote wrapping (Step 6 wraps every quote in `<untrusted_source url="...">...</untrusted_source>` — never strip)
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` — Wayback Machine fallback when primary fetch fails (Step 3 below)
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md` — when the orchestrator passes `--mcp <name>`, this agent dispatches to `mcp-fetcher.md`; see "MCP dispatch" below
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/tier-sizing.md` — this prompt's density is intentional, do not skim
 
 ## Inputs
 
@@ -31,7 +31,7 @@ Governed by:
 
 If the orchestrator passes `--mcp <name>` (any of `brave-search`, `tavily`, `zotero`, `playwright`), **stop and re-dispatch to `mcp-fetcher.md`** with the same `query` + `sub_question` + the chosen `mcp` value. Do not run Steps 1–7 below in that path. Return the `mcp-fetcher` output verbatim (the orchestrator's `fetcher-normalize.py` handles the `mcp` field).
 
-Routing rules (which MCP for which query characteristic) live in `@../../../.vis-cache/vis/packages/web/conduct/mcp-research-discipline.md`. This agent does **not** re-decide routing — the orchestrator owns that decision.
+Routing rules (which MCP for which query characteristic) live in `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md`. This agent does **not** re-decide routing — the orchestrator owns that decision.
 
 If `--mcp` is **not** set, run Steps 1–7 below (the static `WebSearch` + `WebFetch` path). This is the default; MCP is opt-in per dispatch.
 

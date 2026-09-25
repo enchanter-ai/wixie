@@ -95,11 +95,11 @@ folded into the log at the start of every reconcile.
 `state/artifacts.jsonl`'s pre-identity historical records (committed before this engine version)
 have no persisted `_identity`; reconcile still accounts for them correctly today via a per-file
 content+ordinal identity, but they lack the copy/concatenation-safe guarantee newly written
-records get automatically (see `shared/conduct/inference-substrate.md` § "Known limits of the
+records get automatically (see `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md` § "Known limits of the
 identity rule"). An optional, one-time, explicitly operator-run migration closes that gap by
 re-emitting the legacy records through `backfill` into a fresh log, unchanged except for added
 identity metadata. Full procedure, pre/post hashing, backup, idempotency proof and rollback:
-`shared/conduct/inference-substrate.md` § "Legacy log migration". Never run this automatically
+`${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md` § "Legacy log migration". Never run this automatically
 from this skill or the reconciler agent; it changes no engine code and is never a substitute for
 a normal reconcile.
 

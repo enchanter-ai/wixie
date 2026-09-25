@@ -1,0 +1,25 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "package": "core",
+      "path": "vis/packages/core/conduct/context.md",
+      "sha1": "a4aa5663f85ed4af31e8c794ba27582aaf9906b8",
+      "sha256": "fb6f46e9139eaaaef33d3d38244819d074e8679b5bdd1b8bd24cc2bbca2476cd",
+      "source": "vis",
+      "source_path": "packages/core/conduct/context.md",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
+      "version": "v0.7.0"
+    },
+    {
+      "path": "wixie/shared/conduct/inference-substrate.md",
+      "sha1": "79790fd43290c5adf8180a39a1f38d1487e39ac3",
+      "sha256": "b3552747a671cbdcc88c374bc4bade6d6d2fbd46b65a2efab2f1958daf55d628",
+      "source": "wixie",
+      "source_path": "shared/conduct/inference-substrate.md"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-conduct/v1"
+}
