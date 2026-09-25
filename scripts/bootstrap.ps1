@@ -87,6 +87,25 @@ function Fail([string]$msg) {
     exit 1
 }
 
+# WIX-SEC-CLONE-001: VIS_REPO allowlist, mirroring bootstrap.sh exactly. See
+# that file for the full rationale (two independent layers: this allowlist,
+# plus `--` immediately before $VisRepo at every git invocation that takes
+# it, so an option-shaped value can never be parsed as an option by git even
+# if this allowlist were somehow bypassed).
+function Test-VisRepo([string]$v) {
+    if ($v.StartsWith("-")) {
+        [Console]::Error.WriteLine("VIS_REPO looks like a command-line option, not a repository: $v")
+        return $false
+    }
+    if ($v -match '^(https?|ssh)://') { return $true }
+    if ($v -match '^git@[^:]+:') { return $true }
+    if ($v.StartsWith("/")) { return $true }               # absolute POSIX path
+    if ($v -match '^[A-Za-z]:[\\/]') { return $true }       # absolute Windows path
+    [Console]::Error.WriteLine("VIS_REPO is not a supported source form: $v")
+    [Console]::Error.WriteLine("  supported: https://..., http://..., ssh://..., git@host:path, or an absolute local path")
+    return $false
+}
+
 if (-not (Test-Path $VersionsFile)) {
     Fail "missing $VersionsFile - every sibling plugin must pin vis packages"
 }
@@ -100,6 +119,7 @@ if ($Verify) {
     }
 } else {
     if (-not (Test-Path (Join-Path $VisDir ".git"))) {
+        if (-not (Test-VisRepo $VisRepo)) { exit 1 }
         [Console]::Error.WriteLine("vis sibling missing at $VisDir - cloning")
         & git clone -- $VisRepo $VisDir
         if ($LASTEXITCODE -ne 0) { Fail "clone failed - set VIS_REPO or clone manually" }

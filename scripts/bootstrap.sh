@@ -53,6 +53,39 @@ CACHE_DIR="$CACHE_ROOT/vis"
 
 err() { printf '%s\n' "$*" >&2; }
 
+# --- WIX-SEC-CLONE-001: VIS_REPO allowlist ------------------------------------
+# VIS_REPO is an environment variable — operator- or CI-config-controlled, not
+# a hardcoded constant — and is passed to `git clone`. A value beginning with
+# "-" (e.g. "--upload-pack=touch pwned") would otherwise be parsed by git as
+# an option, and an option like --upload-pack runs an arbitrary command on
+# this host: real argument-injection, not hypothetical. Two independent
+# layers close this:
+#   1. This allowlist rejects anything that is not a plausible git source
+#      (https/http/ssh/git@ URL or an absolute path) BEFORE any git call.
+#   2. Every git invocation that takes VIS_REPO places `--` immediately
+#      before it, so even a value this allowlist would (wrongly) accept can
+#      never be parsed as an option by git itself.
+# A value starting with "-" is refused first, with its own explicit message,
+# so the reason is never buried inside a generic "not a recognized form" line.
+validate_vis_repo() {
+  local v="$1"
+  if [[ "$v" == -* ]]; then
+    err "VIS_REPO looks like a command-line option, not a repository: $v"
+    return 1
+  fi
+  case "$v" in
+    https://*|http://*|ssh://*) return 0 ;;
+    git@*:*) return 0 ;;
+    /*) return 0 ;;                                    # absolute POSIX path
+  esac
+  if [[ "$v" =~ ^[A-Za-z]:[\\/] ]]; then
+    return 0                                            # absolute Windows path (C:\... or C:/...)
+  fi
+  err "VIS_REPO is not a supported source form: $v"
+  err "  supported: https://..., http://..., ssh://..., git@host:path, or an absolute local path"
+  return 1
+}
+
 # --- argument parsing (order-independent) ------------------------------------
 
 VERIFY=0
@@ -97,6 +130,7 @@ else
   # (never fatal — a disposable/offline sibling that already holds the
   # needed objects must still work with no network).
   if [[ ! -d "$VIS_DIR/.git" ]]; then
+    validate_vis_repo "$VIS_REPO" || exit 1
     err "vis sibling missing at $VIS_DIR — cloning"
     git clone -- "$VIS_REPO" "$VIS_DIR" || {
       err "clone failed — set VIS_REPO or clone manually"
