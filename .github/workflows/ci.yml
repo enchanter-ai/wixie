@@ -40,12 +40,32 @@ jobs:
     needs: syntax-checks
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
-      - name: Run tests/run-all.sh if present
+      # WIX-CI-001: the suite is invoked explicitly through bash -- never gated on the executable
+      # bit (every tracked file is 100644 and core.filemode=false, so an `-x` check was always
+      # false on the runner and silently skipped the whole suite while reporting green). The step
+      # fails if run-all.sh is missing, cannot start, or exits non-zero, and requires positive
+      # evidence that tests ran: the WIXIE_SUITE_SUMMARY line with total > 0.
+      - name: Run shell suite (bash tests/run-all.sh)
+        env:
+          WIXIE_TEST_ROOT: ${{ runner.temp }}/wixie-test-root
+          WIXIE_SUITE_SUMMARY_FILE: ${{ runner.temp }}/wixie-suite-summary.txt
+          WIXIE_EFFICACY_CLAUDE_BIN: /nonexistent/claude
         run: |
-          if [ -x tests/run-all.sh ]; then
-            bash tests/run-all.sh
-          else
-            echo "No tests/run-all.sh — skipping."
-          fi
+          set -euo pipefail
+          test -f tests/run-all.sh || { echo "::error::tests/run-all.sh is missing"; exit 1; }
+          mkdir -p "$WIXIE_TEST_ROOT"
+          rm -f "$WIXIE_SUITE_SUMMARY_FILE"
+          bash tests/run-all.sh 2>&1 | tee "$RUNNER_TEMP/wixie-suite.log"
+          summary="$(grep -E '^WIXIE_SUITE_SUMMARY total=[0-9]+ passed=[0-9]+ failed=[0-9]+$' "$RUNNER_TEMP/wixie-suite.log" | tail -n 1 || true)"
+          [ -n "$summary" ] || { echo "::error::run-all.sh printed no WIXIE_SUITE_SUMMARY line"; exit 1; }
+          [ "$summary" = "$(cat "$WIXIE_SUITE_SUMMARY_FILE")" ] || { echo "::error::summary file does not match the printed summary"; exit 1; }
+          total="$(printf '%s\n' "$summary" | sed -E 's/.* total=([0-9]+) .*/\1/')"
+          failed="$(printf '%s\n' "$summary" | sed -E 's/.* failed=([0-9]+)$/\1/')"
+          [ "$total" -gt 0 ] || { echo "::error::suite executed 0 tests"; exit 1; }
+          [ "$failed" -eq 0 ] || { echo "::error::$failed test(s) failed"; exit 1; }
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"

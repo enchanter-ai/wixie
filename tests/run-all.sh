@@ -63,6 +63,16 @@ done
 TOTAL=$((PASS + FAIL))
 echo "================================================"
 echo "  $PASS/$TOTAL passed"
+# Machine-checkable evidence that the suite actually executed (CI asserts it; WIX-CI-001).
+SUMMARY="WIXIE_SUITE_SUMMARY total=$TOTAL passed=$PASS failed=$FAIL"
+echo "$SUMMARY"
+if [[ -n "${WIXIE_SUITE_SUMMARY_FILE:-}" ]]; then
+  printf '%s\n' "$SUMMARY" > "$WIXIE_SUITE_SUMMARY_FILE"
+fi
+if [[ $TOTAL -eq 0 ]]; then
+  echo "  NO TESTS RAN"
+  exit 1
+fi
 if [[ $FAIL -gt 0 ]]; then
   echo "  $FAIL FAILED"
   exit 1
