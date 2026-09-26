@@ -17,5 +17,7 @@
     "./skills/prompt-reviewer/"
   ],
   "hooks": "./hooks/hooks.json",
-  "dependencies": []
+  "dependencies": [
+    "deep-research"
+  ]
 }

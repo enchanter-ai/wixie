@@ -6,7 +6,7 @@ Load a saved prompt or paste one in. It diagnoses weaknesses, checks model fit, 
 
 ## Install
 
-Part of the [Wixie](../..) bundle. The simplest install is the `full` meta-plugin, which pulls in all 6 Wixie plugins via dependency resolution:
+Part of the [Wixie](../..) bundle. The simplest install is the `full` meta-plugin, which pulls in the six core Wixie plugins plus `deep-research` (required by `/create`) via dependency resolution:
 
 ```
 /plugin marketplace add enchanter-ai/wixie

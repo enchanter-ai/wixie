@@ -11,7 +11,7 @@
     {
       "name": "full",
       "source": "./plugins/full",
-      "description": "Meta-plugin. One install pulls in all 6 Wixie plugins via dependency resolution.",
+      "description": "Meta-plugin. One install pulls in the 6 core Wixie plugins plus deep-research (required by /create) via dependency resolution.",
       "category": "meta"
     },
     {
