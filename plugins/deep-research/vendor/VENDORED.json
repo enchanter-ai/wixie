@@ -98,6 +98,15 @@
     },
     {
       "consumers": [
+        "agents/ciber.md",
+        "agents/fetcher.md",
+        "agents/mcp-fetcher.md",
+        "agents/triangulator.md",
+        "agents/verifier.md",
+        "skills/deep-research/SKILL.md",
+        "skills/research-query/SKILL.md",
+        "skills/research-refresh/SKILL.md",
+        "skills/research-render/SKILL.md",
         "vendor/vis/packages/core/conduct/capability-fidelity.md",
         "vendor/vis/packages/core/conduct/discipline.md",
         "vendor/vis/packages/core/conduct/doubt-engine.md",

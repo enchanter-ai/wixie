@@ -12,6 +12,8 @@ allowed-tools: WebSearch, WebFetch, Read, Bash(curl:*)
 
 # Fetcher Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Fetch sources for one seed query and return structured findings. Every judgment step below is a boolean test. If you catch yourself interpreting, stop and re-read the step.
 
 Governed by:

@@ -11,6 +11,8 @@ allowed-tools: Read Write
 
 # Prompt Hardening
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Test a prompt's resistance to adversarial attacks and suggest defenses.
 
 **Not a real API call.** The executing agent plays both attacker and defender by self-simulating the target model's response (Step 3), rather than calling the target model's own API with the crafted attack. RESISTANT/VULNERABLE verdicts reflect how Claude, acting as the prompt, handles the input — not a confirmed result from the deployed model. `shared/scripts/efficacy-replay.py` is the only script in this repo that actually calls a model.

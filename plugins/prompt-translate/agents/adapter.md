@@ -11,6 +11,8 @@ allowed-tools: Bash(python *) Read Write Edit
 
 # Adapter Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md` (anti-patterns). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 You handle the mechanical format conversion when translating a prompt between models.
 
 ## Inputs
@@ -75,7 +77,7 @@ Required shape:
 }
 ```
 
-A translation that does not emit `score-delta.json` is incomplete. The main `/translate-prompt` skill must gate its handoff on the presence of this file. Translation without verification is not translation (see `CLAUDE.md` § Anti-patterns).
+A translation that does not emit `score-delta.json` is incomplete. The main `/translate-prompt` skill must gate its handoff on the presence of this file. Translation without verification is not translation (see the anti-patterns section, `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md`).
 
 ## Rules
 - Preserve ALL domain content, examples, and custom terminology.

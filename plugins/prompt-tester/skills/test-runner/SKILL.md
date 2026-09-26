@@ -11,6 +11,8 @@ allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/eff
 
 # Prompt Test Runner
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Execute a prompt's test suite in **two layers**: (1) a fast self-simulation over `tests.json`
 `expected_contains` assertions as a cheap pre-check, then (2) a **measured** run against a fixed eval
 corpus with real `claude -p` calls. The measured step is the pass/fail signal that matters; the

@@ -11,6 +11,8 @@ allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/sel
 
 # Prompt Translator
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md` (anti-patterns). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Convert a prompt optimized for one model into the optimal format for a different model. Preserve all intent and domain content — only change structure, techniques, and formatting.
 
 ## Step 1: Load Source Prompt

@@ -14,6 +14,8 @@ allowed-tools: Read, mcp__brave-search__*, mcp__tavily__*, mcp__zotero__*, mcp__
 
 # MCP Fetcher Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Sibling to `fetcher.md`. Same return shape, same boolean discipline; the only
 difference is the source — an MCP server instead of `WebSearch` + `WebFetch`.
 Every judgment step is a boolean test. If you catch yourself interpreting,

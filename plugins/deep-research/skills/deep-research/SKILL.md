@@ -18,6 +18,8 @@ allowed-tools: Read, Write, Grep, Glob, Agent, Bash(mkdir *)
 
 # Deep Research (E0)
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Produces the factual ground truth that E1–E6 score against. Every load-bearing claim in `claims.json` has at least two independent sources, or is explicitly flagged.
 
 ## Inputs

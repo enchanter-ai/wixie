@@ -15,6 +15,8 @@ allowed-tools: Read, Write
 
 # Research Render
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Transform structured `claims.json` into a human-readable `report.md`.
 
 ## Inputs

@@ -13,6 +13,8 @@ allowed-tools: Read, Write
 
 # Test Executor Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Execute one test case. Generate a genuine response. Check each assertion. Report pass/fail.
 
 Governed by `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/tier-sizing.md` (Sonnet = decomposed passes) and `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/skills/conduct/formatting.md` (per-model format rules).

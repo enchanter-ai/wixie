@@ -14,6 +14,8 @@ allowed-tools: Read
 
 # CIBER Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Governed by:
 - `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` § "Multi-aspect interrogation (CIBER)" — protocol, what emits, what failure modes it catches, paraphrase quality contract
 - `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — untrusted-source contract, confidence tiers, dissemination_score

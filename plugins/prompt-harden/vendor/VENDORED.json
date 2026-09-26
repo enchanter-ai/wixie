@@ -1,0 +1,60 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "consumers": [
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.artifacts-per-prompt.md",
+      "path": "wixie/claude-md.artifacts-per-prompt.md",
+      "sha1": "7587c9582b725b0b2112711c9773bce9633d9a20",
+      "sha256": "7aeb1db34957a033ab859fecec0ed57c2cb2bbd465b4b04ed80a42a7e6964f05",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## Artifacts per prompt"
+    },
+    {
+      "consumers": [
+        "agents/red-team.md",
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.behavioral-contracts.md",
+      "path": "wixie/claude-md.behavioral-contracts.md",
+      "sha1": "afb728036d8026dda49d83b98df8ec0f6e184d56",
+      "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## Behavioral contracts"
+    },
+    {
+      "consumers": [
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.deploy-bar.md",
+      "path": "wixie/claude-md.deploy-bar.md",
+      "sha1": "1f8794f65109dd9333dab0e1b083e54646604048",
+      "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## DEPLOY bar"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/claude-md.behavioral-contracts.md"
+      ],
+      "destination": "vendor/wixie/shared/references/direction-lock.md",
+      "path": "wixie/shared/references/direction-lock.md",
+      "sha1": "7087e69b013bcb4d05872ab2522670b088af2623",
+      "sha256": "5c4148efe30b0e8f5f9876634ca7184d716b6373f4e7a72e2b894a7efe8c0147",
+      "source": "wixie",
+      "source_path": "shared/references/direction-lock.md",
+      "source_revision": "git-blob:020bfb0b6c89bc84deeb8e7b523f7a45169a2861"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": []
+}

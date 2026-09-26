@@ -11,6 +11,8 @@ allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/con
 
 # Convergence Engine
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.agent-tiers.md` (agent tiers); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md` (anti-patterns). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Autonomous prompt optimization. Like gradient descent for prompts — each iteration reduces deviation from perfection.
 
 **Scoring provenance — two layers.** `shared/scripts/self-eval.py` and `convergence.py` are stdlib regex/structure heuristics with zero model API calls; they run as a **fast pre-check** (Step 2) that catches gross problems cheaply. They are NO LONGER the DEPLOY-relevant signal. The DEPLOY decision now comes from a **measured** step (Step 2.5): `shared/scripts/efficacy-replay.py corpus` runs the converged prompt against the fixed `shared/eval-corpus/deploy-bar` corpus with real `claude -p` calls and accepts/rejects on a Wilson 95% CI lower bound. Heuristic PASS is necessary but not sufficient; the measured ACCEPT is what clears DEPLOY.

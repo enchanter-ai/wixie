@@ -26,6 +26,11 @@ The closure is computed, never listed by hand:
           resolve next to it or one level up (e.g. SCRIPT_DIR/../models-registry.json,
           SCRIPT_DIR/self-eval.py). Markdown: relative links `](target)`.
           Followed transitively.
+A plugin that relies on part of the repo-level contract references one `## `
+section of CLAUDE.md as ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.<slug>.md
+(slug of the heading, e.g. claude-md.deploy-bar.md): that section, byte for byte,
+is the vendored file (never the whole CLAUDE.md); links in it resolve from the
+repo root, which vendor/wixie/ mirrors.
 The vendored tree mirrors the source layout (vendor/wixie/shared/scripts/x.py,
 vendor/wixie/shared/models-registry.json, ...) so a script's own
 repo-relative lookups (SCRIPT_DIR/.., parents[2]) resolve inside the plugin
@@ -81,13 +86,16 @@ VENDOR_DIRNAME = "vendor"
 MANIFEST_NAME = "VENDORED.json"
 LOCK_SCHEMA_VERSION = "2"
 WIXIE_SOURCE_ROOTS = ("shared/",)
+# One `## <Heading>` section of the repo CLAUDE.md, delivered as its own file
+# (vendor/wixie/claude-md.<slug>.md): the applicable contract, never the whole file.
+CLAUDE_SECTION_RE = re.compile(r"^claude-md\.([a-z0-9-]+)\.md$")
 
 _PATH = rb"[A-Za-z0-9._/-]*[A-Za-z0-9_-]\.[A-Za-z0-9]+"
 # Canonical root reference: ${CLAUDE_PLUGIN_ROOT}/vendor/<source>/<path>, or the
 # same "vendor/<source>/<path>" as a quoted literal in a plugin-owned script.
 REF_RE = re.compile(
     rb"(?:\$\{CLAUDE_PLUGIN_ROOT\}/|(?<=[\"']))vendor/"
-    rb"(vis/packages/[a-z][a-z0-9_-]*/" + _PATH + rb"|wixie/shared/" + _PATH + rb")"
+    rb"(vis/packages/[a-z][a-z0-9_-]*/" + _PATH + rb"|wixie/shared/" + _PATH + rb"|wixie/claude-md\.[a-z0-9-]+\.md)"
 )
 # A script whose data file is chosen by a command-line argument in the consumer.
 ARG_DEPS = [
@@ -266,6 +274,39 @@ def _exact_file(root: Path, rel: str) -> bool:
     return cur.is_file()
 
 
+def _slug(heading: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
+
+
+def claude_sections(repo: Path) -> dict[str, tuple[str, bytes]]:
+    """{slug: (heading line, exact bytes)} for every `## ` section of the repo CLAUDE.md.
+
+    A section runs from its `## ` heading line up to the next `## ` heading or EOF,
+    byte for byte (no normalization), so it is re-derivable and hash-checkable.
+    """
+    f = repo / "CLAUDE.md"
+    if not f.is_file():
+        return {}
+    lines = f.read_bytes().splitlines(keepends=True)
+    out: dict = {}
+    cur = None
+    for line in lines:
+        if line.startswith(b"## "):
+            head = line.decode("utf-8").rstrip("\r\n")
+            cur = _slug(head[3:])
+            if cur in out:
+                raise Drift(f"CLAUDE.md: two sections slug to {cur!r}")
+            out[cur] = (head, [line])
+        elif cur is not None:
+            out[cur][1].append(line)
+    return {k: (h, b"".join(ls)) for k, (h, ls) in out.items()}
+
+
+def claude_section(repo: Path, slug: str) -> bytes | None:
+    got = claude_sections(repo).get(slug)
+    return got[1] if got else None
+
+
 def _norm(path: str) -> str | None:
     n = posixpath.normpath(path)
     return None if n.startswith("../") or n == ".." or n.startswith("/") else n
@@ -299,6 +340,8 @@ class Sources:
                 data = self.blobs.get(pin["tag_commit"], path) if self.blobs is not None else self.pool.get(path)
         elif any(path.startswith(r) for r in WIXIE_SOURCE_ROOTS) and _exact_file(self.repo, path):
             data = (self.repo / path).read_bytes()
+        elif CLAUDE_SECTION_RE.match(path):
+            data = claude_section(self.repo, CLAUDE_SECTION_RE.match(path).group(1))
         self.cache[key] = data
         return data
 
@@ -501,7 +544,13 @@ def expected_for(consumers: dict, src: Sources) -> tuple[dict, list[str]]:
             entry.update({"package": path.split("/")[1], "version": pin["version"], "tag": pin["tag"],
                           "tag_commit": pin["tag_commit"], "source_revision": pin["tag_commit"]})
         else:
-            entry["source_revision"] = "git-blob:" + git_blob_id(data)
+            m = CLAUDE_SECTION_RE.match(path)
+            if m:
+                whole = (src.repo / "CLAUDE.md").read_bytes()
+                entry.update({"source_path": "CLAUDE.md", "source_section": claude_sections(src.repo)[m.group(1)][0],
+                              "source_revision": "git-blob:" + git_blob_id(whole)})
+            else:
+                entry["source_revision"] = "git-blob:" + git_blob_id(data)
         out[rel] = {"entry": entry, "bytes": data}
     return out, problems
 
@@ -593,8 +642,8 @@ def _offline_entry(name, lock, rel, e, me):
     b = f.read_bytes()
     if sha256(b) != me.get("sha256") or sha1(b) != me.get("sha1"):
         problems.append(f"{name}: vendor/{rel} does not match its {MANIFEST_NAME} hash")
-    for k in ("destination", "source", "source_path", "package", "version", "tag", "tag_commit", "consumers",
-              "source_revision"):
+    for k in ("destination", "source", "source_path", "source_section", "package", "version", "tag", "tag_commit",
+              "consumers"):
         if e["entry"].get(k) != me.get(k):
             problems.append(f"{name}: {MANIFEST_NAME} {rel} field {k}={me.get(k)!r}, expected {e['entry'].get(k)!r}")
     if e["entry"]["source"] == "vis":
@@ -605,6 +654,10 @@ def _offline_entry(name, lock, rel, e, me):
             problems.append(f"{name}: vendor/{rel} sha1 {sha1(b)} != .vis-lock sha1 {locked}")
     elif b != e["bytes"]:
         problems.append(f"{name}: vendor/{rel} is not byte-identical to {e['entry']['source_path']}")
+    if me.get("source_revision") != e["entry"]["source_revision"]:
+        why = "pin moved; regenerate" if e["entry"]["source"] == "vis" else "source changed; regenerate"
+        problems.append(f"{name}: {MANIFEST_NAME} {rel} source_revision {me.get('source_revision')!r} "
+                        f"!= {e['entry']['source_revision']!r} ({why})")
     return problems
 
 

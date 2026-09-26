@@ -26,32 +26,42 @@ You should see each sub-plugin listed with its version. If a sub-plugin is missi
 
 ## What an installed plugin carries
 
-Claude Code installs a plugin by copying only its own `plugins/<name>/` directory. Nothing from the repository root (`CLAUDE.md`, `.vis-lock`, `.vis-cache/`, `scripts/`, `shared/`) is part of an install, so every shared-conduct module a plugin's own files reference is shipped **inside the plugin**:
+Claude Code installs a plugin by copying only its own `plugins/<name>/` directory. Nothing from the repository root (`CLAUDE.md`, `.vis-lock`, `.vis-cache/`, `scripts/`, `shared/`) is part of an install, so each plugin ships the **transitive runtime dependency closure** of its skills, agents, hooks and scripts **inside the plugin**, under `vendor/`:
 
-- Location: `plugins/<name>/vendor/vis/packages/<pkg>/conduct/<module>.md` for vis conduct, and `plugins/<name>/vendor/wixie/shared/conduct/<module>.md` for Wixie's own shared conduct.
-- References: plugin files point at them as `${CLAUDE_PLUGIN_ROOT}/vendor/...`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the installed plugin root in plugin skill content and plugin agent bodies, so the path resolves wherever the plugin is installed. No sibling vis checkout, no `../vis`, and no post-install bootstrap is involved.
-- Provenance: each plugin's `vendor/VENDORED.json` lists every vendored file with its source path, vis package, version, tag, tag commit, sha256 and sha1. The content is copied from the pinned vis commit recorded in `.vis-lock` (currently `enchanter-<pkg>--v0.7.0` at `904873d`), never hand-edited.
+- Scripts, the model registry, reference docs and eval corpora: `plugins/<name>/vendor/wixie/shared/...`, mirroring the repo layout, so each script's own lookups (for example `token-count.py` reading `../models-registry.json`, `convergence.py` loading `self-eval.py`, `report-gen.py` running `html-to-pdf.py`) resolve inside the plugin.
+- Shared conduct: `plugins/<name>/vendor/vis/packages/<pkg>/conduct/<module>.md` (pinned vis release) and `plugins/<name>/vendor/wixie/shared/conduct/<module>.md` (Wixie's own).
+- The parts of the repo-level contract a plugin relies on: exact `## ` sections of `CLAUDE.md` as `plugins/<name>/vendor/wixie/claude-md.<section>.md` (for example `claude-md.deploy-bar.md`, `claude-md.behavioral-contracts.md`), never the whole file.
+- References: skills and agents point at these as `${CLAUDE_PLUGIN_ROOT}/vendor/...`. Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}` with the installed plugin root in plugin skill content and agent bodies. Prompt folders are user workspace and go to `${CLAUDE_PROJECT_DIR}/prompts/` (your project), not into the plugin; plugin state (inference-engine catalog and briefings, deep-research briefs) lives in the plugin's own `state/`.
+- Provenance: each plugin's `vendor/VENDORED.json` lists every vendored file with its destination, source, source path, source revision (vis tag commit, or the git blob id of the Wixie source), sha256, sha1 and consumers (the plugin files or vendored files that need it), plus any relative link inside a pinned upstream file that has no target in its source (recorded, not dropped).
 
-| Plugin | Vendored shared conduct |
-|---|---|
-| deep-research | vis `core`: capability-fidelity, precedent, tier-sizing; vis `web`: citation-verification, mcp-research-discipline, research-pipeline, source-discipline, web-fetch |
-| inference-engine | vis `core`: context; Wixie `shared/conduct/inference-substrate.md` |
-| prompt-tester | vis `core`: tier-sizing; vis `skills`: formatting |
-| convergence-engine, prompt-crafter, prompt-refiner, prompt-harden, prompt-translate, full | none (their files reference no shared-conduct module) |
+| Plugin | Files | Vendored runtime closure |
+|---|---|---|
+| convergence-engine | 14 | CLAUDE.md sections: agent-tiers, anti-patterns, artifacts-per-prompt, behavioral-contracts, deploy-bar; data: eval-corpus/deploy-bar/corpus.json, models-registry.json; references: direction-lock; scripts: convergence.py, efficacy-replay.py, html-to-pdf.py, report-gen.py, self-eval.py, token-count.py |
+| deep-research | 23 | scripts: dossier-cite-validator.py, fetcher-normalize.py; vis conduct: capability-fidelity, context, delegation, discipline, doubt-engine, failure-modes, precedent-freshness, precedent, prior-art-discovery, reversibility-foresight, substrate-consumption, sunk-cost-iteration, tier-sizing, tool-use, verdict-calibration, verification, citation-verification, mcp-research-discipline, research-pipeline, source-discipline, web-fetch |
+| inference-engine | 19 | data: conduct/inference-substrate.md, models-registry.json; scripts: inference-engine.py; vis conduct: capability-fidelity, context, delegation, discipline, doubt-engine, failure-modes, precedent-freshness, precedent, prior-art-discovery, reversibility-foresight, substrate-consumption, sunk-cost-iteration, tier-sizing, tool-use, verdict-calibration, verification |
+| prompt-crafter | 16 | CLAUDE.md sections: agent-tiers, anti-patterns, artifacts-per-prompt, behavioral-contracts, deploy-bar; data: models-registry.json; references: direction-lock, model-profiles, output-formats, prompt-anatomy, technique-engine; scripts: convergence.py, html-to-pdf.py, report-gen.py, self-eval.py, token-count.py |
+| prompt-harden | 4 | CLAUDE.md sections: artifacts-per-prompt, behavioral-contracts, deploy-bar; references: direction-lock |
+| prompt-refiner | 16 | CLAUDE.md sections: agent-tiers, anti-patterns, artifacts-per-prompt, behavioral-contracts, deploy-bar; data: models-registry.json; references: direction-lock, model-profiles, output-formats, prompt-anatomy, technique-engine; scripts: convergence.py, html-to-pdf.py, report-gen.py, self-eval.py, token-count.py |
+| prompt-tester | 23 | CLAUDE.md sections: artifacts-per-prompt, behavioral-contracts, deploy-bar; data: eval-corpus/deploy-bar/corpus.json; references: direction-lock; scripts: efficacy-replay.py; vis conduct: capability-fidelity, context, delegation, discipline, doubt-engine, failure-modes, precedent-freshness, precedent, prior-art-discovery, reversibility-foresight, substrate-consumption, sunk-cost-iteration, tier-sizing, tool-use, verdict-calibration, verification, formatting |
+| prompt-translate | 8 | CLAUDE.md sections: anti-patterns, behavioral-contracts, deploy-bar; data: models-registry.json; references: direction-lock, model-profiles, technique-engine; scripts: self-eval.py |
+| full | 0 | none (meta-plugin) |
 
-The repo-level `CLAUDE.md` contract (its imported conduct modules, DEPLOY bar and behavioral contracts) is loaded by Claude Code only when you work inside a full checkout of this repository, where `./scripts/bootstrap.sh` materializes the pinned vis modules into `.vis-cache/vis/`. It is not delivered by a plugin install.
+Not delivered by an install, by design or by limitation:
 
-### Maintainers: regenerating vendored conduct
+- The rest of the repo-level `CLAUDE.md` (its section on shared behavioral modules that "apply to every skill", the lifecycle and engine overviews) is loaded by Claude Code only when you work inside a full checkout, where `./scripts/bootstrap.sh` materializes the pinned vis modules into `.vis-cache/vis/`. Claude Code (2.1.280) has no plugin-level always-loaded context file; a plugin can only reach the model through the skills and agents it ships, so an install carries the sections its skills and agents cite, not the whole file.
+- Two cross-plugin optional reads cannot resolve in an install because they are another plugin's mutable state: `/converge` step 0 (inference-engine's `state/briefings/wixie.md`) and `/create`'s reuse of a deep-research brief. Both skills treat a missing file as a normal branch (proceed without the briefing; run `/deep-research`).
 
-The vendored files are generated; vis stays the source of truth. After changing a pin (`.vis-versions`) or adding/removing a `${CLAUDE_PLUGIN_ROOT}/vendor/...` reference in a plugin:
+### Maintainers: regenerating vendored files
+
+The vendored files are generated; vis and this repository stay the source of truth. After changing a pin (`.vis-versions`), a vendored source (anything under `shared/` that a plugin uses, or a cited `CLAUDE.md` section), or a `${CLAUDE_PLUGIN_ROOT}/vendor/...` reference in a plugin:
 
 ```bash
-./scripts/bootstrap.sh                   # re-resolve the pin, rewrite .vis-lock
-python scripts/vendor-conduct.py         # regenerate plugins/*/vendor/ from the pinned commit
-python scripts/vendor-conduct.py --check # byte-identity against the pin (needs the ../vis sibling)
+./scripts/bootstrap.sh                   # re-resolve the pin, rewrite .vis-lock (pin changes only)
+python scripts/vendor-conduct.py         # regenerate plugins/*/vendor/ (one command)
+python scripts/vendor-conduct.py --check # byte-identity against the pin and this repo (needs the ../vis sibling)
 ```
 
-Commit `.vis-lock` and `plugins/*/vendor/` together (a marketplace install clones the repository, so the vendored files must be committed). `--check` fails on a missing, extra or non-identical vendored file, a manifest mismatch, a moved tag, or a plugin reference that still points outside the plugin (for example `.vis-cache/` or `../vis/`). CI runs it in `vis-verify.yml`; `tests/distribution/` runs the offline form (`--check --offline`, anchored to the `.vis-lock` hashes) plus drift cases against a synthetic vis release.
+Commit `.vis-lock`, the changed sources and `plugins/*/vendor/` together (a marketplace install clones the repository, so the vendored files must be committed). `--check` fails on a missing dependency, an unexpected file in `vendor/`, hash drift against the pin, this repo or `VENDORED.json` (including a source edited without regenerating), an external unresolved path (a skill, agent, hook or plugin script reference that leaves the plugin: `${CLAUDE_PLUGIN_ROOT}/..`, a cwd-relative `wixie/...` path, `.vis-cache/`, `../vis/`), and a duplicate conflicting destination. CI runs it in `vis-verify.yml`; `tests/distribution/` runs the offline form (`--check --offline`, anchored to the `.vis-lock` hashes and this repo), install-layout runtime checks, and drift cases against a synthetic vis release.
 
 ## Cherry-pick a single sub-plugin
 

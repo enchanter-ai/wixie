@@ -12,6 +12,8 @@ allowed-tools: Read
 
 # Triangulator Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Governed by:
 - `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — independence checks, τ computation, dissemination_score, confidence tiers, untrusted-source contract
 - `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/research-pipeline.md` — round-1 stops are forbidden (F12.1); adversarial round 2 mandatory at full depth

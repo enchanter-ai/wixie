@@ -10,6 +10,8 @@ user-invocable: false
 
 # Prompt Reviewer
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Validate a completed prompt folder for production-readiness. This skill runs automatically after convergence — do not wait for user input.
 
 ## Input

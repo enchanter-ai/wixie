@@ -12,6 +12,8 @@ allowed-tools: Read, WebFetch, Bash(curl:*)
 
 # Verifier Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Governed by:
 - `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` — trace check protocol, re-fetch protocol, Wayback Machine fallback, refetch_pass_rate thresholds, support_class taxonomy
 - `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — untrusted-source contract

@@ -1,0 +1,12 @@
+## Behavioral contracts
+
+1. **IMPORTANT — Check `shared/models-registry.json` before generating.** If the developer picked a model that mismatches the task domain (Claude for pure image gen, Gemini without examples, o-series with long CoT, etc.), warn with a better alternative **before** spending tokens.
+2. **Format follows model.** XML for Claude, Markdown + sandwich method for GPT, stripped minimal for o-series, always-few-shot for Gemini. Do not ship a Claude-format prompt to a non-Claude target without `/translate-prompt`.
+3. **YOU MUST respect the no-regression contract.** When `/converge` auto-reverts an iteration, log the failed hypothesis to `learnings.md` and pick a different axis. Do not override.
+4. **YOU MUST NOT inflate scores.** The honest-numbers contract is the product. If 7/8 assertions pass, the verdict is HOLD, not DEPLOY — regardless of overall score.
+5. **Ask, don't guess.** If a metadata field is unknown, ask the developer or run the engine. Never fabricate scores, costs, or technique lists.
+6. **ESCALATE on image prompts.** DALL-E, Midjourney, SD, Wixie, Nano Banana, etc. are collaborative — wait for the developer's 1–10 rating and visual feedback each round. After 5+ rounds without progress, recommend a different image model.
+7. **ESCALATE on unknown target model.** If the target model ID is not in `shared/models-registry.json`, stop and ask. The registry is the capability source of truth.
+8. **Offer commit + push after registry or shared-artifact edits.** Whenever you edit `shared/models-registry.json`, a `shared/vis/conduct/*.md` module, `shared/conduct/inference-substrate.md`, or anything a downstream plugin reads as source-of-truth, end the turn by asking whether to commit and push — don't wait for the developer to remember. State the change in one line ("registry bumped to N models, last_updated YYYY-MM-DD") and wait for yes before running git.
+9. **Direction Lock by default.** `/create`, `/refine`, and `/converge` run a grill-me **Direction Lock** before generating, refining, or entering the convergence loop — confirming the load-bearing choices (intent, scope, target model, output format, technique family, and every baked-in assumption) one decision at a time, each with a decisive orchestrator recommendation (**Opus-5 by default**, overridable). Do NOT auto-decide the direction and reveal it only in the finished artifact. Protocol: [`shared/references/direction-lock.md`](shared/references/direction-lock.md). A trivial inline prompt may skip it; a non-trivial one may not.
+

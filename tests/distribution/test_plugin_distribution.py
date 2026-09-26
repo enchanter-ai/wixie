@@ -111,7 +111,7 @@ class DriftDetection(unittest.TestCase):
         self.repo = self.tmp / "wixie"
         self.vis = self.tmp / "vis"
         self.repo.mkdir()
-        for name in (".vis-lock", ".vis-versions"):
+        for name in (".vis-lock", ".vis-versions", "CLAUDE.md"):  # CLAUDE.md: contract sections (WIX-DIST-002)
             shutil.copy2(REPO / name, self.repo / name)
         shutil.copytree(REPO / "scripts", self.repo / "scripts")
         # WIX-DIST-002: the vendored closure also draws on shared/ scripts, references,
@@ -202,7 +202,7 @@ class DriftDetection(unittest.TestCase):
         self.assert_both_fail("extra file in vendor/")
 
     def test_unreferenced_vendor_dir(self):
-        d = self.repo / "plugins/prompt-harden/vendor"
+        d = self.repo / "plugins/full/vendor"  # a plugin with no vendored files (WIX-DIST-002 gave prompt-harden some)
         d.mkdir()
         (d / "VENDORED.json").write_text("{}\n")
         self.assert_both_fail("extra file in vendor/")

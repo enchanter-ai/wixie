@@ -12,6 +12,8 @@ allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/tok
 
 # Wixie — Prompt Refiner
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.agent-tiers.md` (agent tiers); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md` (anti-patterns). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Improve an existing prompt by diagnosing weaknesses, re-selecting techniques, and adapting format to the target model.
 
 **Core rule:** Preserve the user's intent and domain knowledge. Only restructure, re-technique, and re-format — never rewrite their content.

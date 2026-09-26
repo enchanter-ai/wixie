@@ -3,6 +3,73 @@
   "files": [
     {
       "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.agent-tiers.md",
+      "path": "wixie/claude-md.agent-tiers.md",
+      "sha1": "7c7e6cca906d4c68c7567e77bc75d6f89fcbced7",
+      "sha256": "63ea59ea212ab238e131be933690897c26d75b614a9e4fe662cc0b4bf4a99eb2",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## Agent tiers"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.anti-patterns.md",
+      "path": "wixie/claude-md.anti-patterns.md",
+      "sha1": "13cb4dbe745993b78a7ce47d992bd71361aecd76",
+      "sha256": "14e42da3b50d7c3566c6328559fbbaba48a4bf26f03ec74f10c9f76d71c4db9b",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## Anti-patterns"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.artifacts-per-prompt.md",
+      "path": "wixie/claude-md.artifacts-per-prompt.md",
+      "sha1": "7587c9582b725b0b2112711c9773bce9633d9a20",
+      "sha256": "7aeb1db34957a033ab859fecec0ed57c2cb2bbd465b4b04ed80a42a7e6964f05",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## Artifacts per prompt"
+    },
+    {
+      "consumers": [
+        "agents/reviewer.md",
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.behavioral-contracts.md",
+      "path": "wixie/claude-md.behavioral-contracts.md",
+      "sha1": "afb728036d8026dda49d83b98df8ec0f6e184d56",
+      "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## Behavioral contracts"
+    },
+    {
+      "consumers": [
+        "agents/reviewer.md",
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.deploy-bar.md",
+      "path": "wixie/claude-md.deploy-bar.md",
+      "sha1": "1f8794f65109dd9333dab0e1b083e54646604048",
+      "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_section": "## DEPLOY bar"
+    },
+    {
+      "consumers": [
         "skills/prompt-improver/SKILL.md",
         "vendor/wixie/shared/references/model-profiles.md",
         "vendor/wixie/shared/references/technique-engine.md",
@@ -19,7 +86,8 @@
     },
     {
       "consumers": [
-        "skills/prompt-improver/SKILL.md"
+        "skills/prompt-improver/SKILL.md",
+        "vendor/wixie/claude-md.behavioral-contracts.md"
       ],
       "destination": "vendor/wixie/shared/references/direction-lock.md",
       "path": "wixie/shared/references/direction-lock.md",
