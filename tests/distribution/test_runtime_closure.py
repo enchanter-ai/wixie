@@ -12,6 +12,7 @@ without model calls, that:
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -21,6 +22,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+# Private temp root (WIX-TEST-ENV-001, tests/_test_root.py): scratch never lands in shared temp.
+_root_spec = importlib.util.spec_from_file_location(
+    "wixie_test_root", Path(__file__).resolve().parents[1] / "_test_root.py")
+_root_mod = importlib.util.module_from_spec(_root_spec)
+_root_spec.loader.exec_module(_root_mod)
+_root_mod.ensure_test_root()
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_plugin_distribution as _dist  # noqa: E402  (module import: do not re-collect its TestCases)

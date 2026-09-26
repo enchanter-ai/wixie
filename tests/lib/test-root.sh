@@ -16,7 +16,7 @@
 #   WIXIE_TEST_TMP             $WIXIE_TEST_ROOT/tmp, exported as TMPDIR, TMP and TEMP, so mktemp,
 #                              Python's tempfile, PowerShell and other native Windows children all
 #                              resolve inside the root.
-#   GIT_CONFIG_GLOBAL          $WIXIE_TEST_ROOT/gitconfig (empty): fixture git commands never read
+#   GIT_CONFIG_GLOBAL          $WIXIE_TEST_ROOT/gitconfig (test identity only): fixture git commands never read
 #                              or write the user's ~/.gitconfig.
 #   wixie_mktemp_d NAME        private scratch dir under WIXIE_TEST_TMP (the only sanctioned mktemp).
 #   wixie_wsl_available        true when wsl.exe exists and starts.
@@ -74,7 +74,9 @@ wixie__root_native="$(wixie__native "$WIXIE_TEST_ROOT")"
 WIXIE_TEST_TMP="$WIXIE_TEST_ROOT/tmp"
 export WIXIE_TEST_ROOT WIXIE_TEST_TMP
 export TMPDIR="$WIXIE_TEST_TMP" TMP="$WIXIE_TEST_TMP" TEMP="$WIXIE_TEST_TMP"
-[[ -f "$WIXIE_TEST_ROOT/gitconfig" ]] || : > "$WIXIE_TEST_ROOT/gitconfig"
+# Fixture repos commit inside the root, so the private gitconfig carries a throwaway test identity
+# (never used for real commits: GIT_CONFIG_GLOBAL points here only inside the test run).
+[[ -f "$WIXIE_TEST_ROOT/gitconfig" ]] || printf '[user]\n\tname = wixie-test\n\temail = wixie-test@example.invalid\n' > "$WIXIE_TEST_ROOT/gitconfig"
 export GIT_CONFIG_GLOBAL="$WIXIE_TEST_ROOT/gitconfig"
 
 wixie_mktemp_d() {

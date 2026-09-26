@@ -6,7 +6,7 @@ to <repo>/.test-root/standalone (gitignored). Set, it must be absolute and outsi
 temp dirs (/tmp, /var/tmp, the real Windows %TEMP%), or ensure_test_root() raises. There is no
 fallback to a global temp dir: after the call, TMPDIR/TMP/TEMP and tempfile.tempdir all point to
 <root>/tmp and tempfile.gettempdir() is checked to resolve inside the root; GIT_CONFIG_GLOBAL
-points to an empty <root>/gitconfig.
+points to <root>/gitconfig, which holds only a throwaway test identity.
 """
 from __future__ import annotations
 
@@ -50,7 +50,10 @@ def ensure_test_root() -> Path:
         os.environ[var] = str(tmp)
     tempfile.tempdir = str(tmp)
     gitconfig = root / "gitconfig"
-    gitconfig.touch(exist_ok=True)
+    if not gitconfig.exists():
+        # Throwaway identity for fixture repos inside the root (same content as tests/lib/test-root.sh).
+        gitconfig.write_text("[user]\n\tname = wixie-test\n\temail = wixie-test@example.invalid\n",
+                             encoding="utf-8", newline="\n")
     os.environ["GIT_CONFIG_GLOBAL"] = str(gitconfig)
     if not _inside(Path(os.path.abspath(tempfile.gettempdir())), root):
         raise TestRootError(f"tempfile.gettempdir() {tempfile.gettempdir()} is outside {root}")
