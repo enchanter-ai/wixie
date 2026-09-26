@@ -23,7 +23,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_plugin_distribution import DriftDetection, PLUGINS, REPO, git, run  # noqa: E402
+import test_plugin_distribution as _dist  # noqa: E402  (module import: do not re-collect its TestCases)
+
+PLUGINS, REPO, git, run = _dist.PLUGINS, _dist.REPO, _dist.git, _dist.run
 
 ESCAPE = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/\.\.[^\s)`\"'\]|,;]*")
 CWD_WIXIE = re.compile(r"(?<![A-Za-z0-9_./-])wixie/(?:shared|plugins)/")
@@ -154,7 +156,7 @@ class InstallLayoutRuntime(unittest.TestCase):
 def _fixture(cls):
     """Reuse the WIX-DIST-001 synthetic-vis fixture (repo copy + tagged vis) for mutation cases."""
     for name in ("setUp", "check", "assert_both_fail"):
-        setattr(cls, name, getattr(DriftDetection, name))
+        setattr(cls, name, getattr(_dist.DriftDetection, name))
     return cls
 
 
