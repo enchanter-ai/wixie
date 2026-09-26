@@ -17,6 +17,16 @@ Usage:
                                                                   # verdict line to stdout
     python convergence.py <prompt-file> --json-out <path>        # also write the machine-readable
                                                                   # verdict as JSON to <path>
+    python convergence.py <prompt-file> --proposal-out <path>    # unannotated prompts: write the
+                                                                  # fixers' proposals (never applied)
+    python convergence.py <prompt-file> --no-shipped             # annotated file with no shipped pair
+
+Editability (WIX-CONV-001, D15; shared/scripts/prompt_regions.py): fixers edit ONLY the bodies of
+regions the prompt explicitly marks with "@wixie-editable/1" marker lines. A master lives at
+<prompt folder>/editable/<shipped filename>; every write goes through prompt_regions.commit(),
+which writes the master and the shipped file (= strip(master)) as a pair. A prompt with no
+editable region (unannotated legacy prompt, header-only master) is scored and critiqued but never
+written; a malformed annotation is never scored or written (HOLD / exit 1).
 
 Exit codes (WIX-EVAL-004 — the printed VERDICT line, the exit code, and the --json/--json-out
 payload always agree; none of them can be read as a full DEPLOY when another disagrees):
@@ -29,15 +39,17 @@ payload always agree; none of them can be read as a full DEPLOY when another dis
     1  HOLD — the full bar above was not met (score, an axis, sigma, or an assertion failed).
        A run that never reaches a final report is also treated as HOLD: absence of a stamped
        verdict never means success.
-    2  Usage / bad input — no prompt-file argument, the file does not exist, or the file is
-       empty. Nothing was scored.
+    2  Usage / bad input — no prompt-file argument, the file does not exist, the file is
+       empty, an annotated file outside editable/ (without --no-shipped), a file under editable/
+       with no header, a master without its shipped file or disagreeing with it, or a bad
+       --proposal-out. Nothing was scored or written.
     3  Internal error — an unexpected exception was raised while scoring, fixing, or saving.
        Distinct from HOLD: HOLD means the prompt WAS scored and fell short; 3 means scoring
        did not complete at all, so a consumer must not read it as either DEPLOY or HOLD.
 
 Stdlib only. No pip installs.
 """
-import sys, os, re, json, copy, statistics, bisect, functools
+import sys, os, re, json, copy, statistics, hashlib
 from datetime import datetime
 from collections import Counter
 
@@ -125,595 +137,123 @@ def run_assertions(text):
     return results
 
 
-# ─── Editable-prose allow-list (WIX-CONV-001) ──────────────────────────────────
-# Text-rewriting fixers may modify ONLY "editable prose". Everything else is frozen,
-# and the gate compares a structural fingerprint of the frozen content. The design is
-# a POSITIVE allow-list: nothing is editable unless it is positively known to be prose.
-#
-# Editable prose is:
-#   * top-level prose lines (outside every XML/HTML-like element), and
-#   * prose lines inside a PAIRED XML element whose tag name (case-insensitive) is in
-#     EDITABLE_XML_SECTIONS below -- the instruction sections Wixie's Claude-format
-#     prompts are built from.
-#
-# Non-editable (frozen) content is:
-#   * fenced code blocks (``` or ~~~, any language, any indentation; an unterminated
-#     fence runs to end of document),
-#   * top-level indented code blocks (4 spaces / tab after a blank line),
-#   * Markdown/GFM tables and blockquotes,
-#   * a bracket block: a line whose first character is '{' or '[' and whose bracket
-#     closes on a later line or ends the line (multi-line or stand-alone JSON/arrays),
-#   * the entire content of any PAIRED element whose tag name is NOT in
-#     EDITABLE_XML_SECTIONS (unknown tags default to frozen -- this is how XML/JSON data
-#     examples such as <sample_json>, <output>, <data> stay content-equal), and always
-#     the paired <example>/<examples> blocks (ALWAYS_FROZEN_XML_ELEMENTS) however their
-#     tags are placed (alone on a line, sharing a line, or both on one line),
-#   * every tag token itself (so tag names/attributes can never change).
-#   An UNPAIRED tag (e.g. the word "<example>" mentioned in prose) freezes only its own
-#   characters, never the text after it.
-#
-# Within an editable line, an edit may not land inside an inline span: a (), [], {}
-# bracket span, a "..." / curly-quote span, or a `backtick` code span (an unclosed
-# opener runs to end of line). A line whose only candidate edit position is inside
-# such a span is simply skipped; it is not frozen for other safe edits.
-#
-# Every parser below is iterative and linear in the input (explicit stacks, no
-# recursion, no per-bracket JSON decoding), so deeply nested or adversarial input
-# cannot overflow the stack or go quadratic.
-EDITABLE_XML_SECTIONS = frozenset({
-    "role", "persona", "task", "objective", "goal", "goals", "purpose",
-    "instructions", "instruction", "context", "background", "constraints", "rules",
-    "guidelines", "requirements", "steps", "process", "approach", "edge_cases",
-    "failure_modes", "preconditions", "success_criteria", "tone", "style", "audience",
-})
-ALWAYS_FROZEN_XML_ELEMENTS = frozenset({"example", "examples"})
+# ─── Explicit editability contract (WIX-CONV-001, D15) ─────────────────────────
+# Fixers may change ONLY the bodies of regions the prompt file explicitly marks as editable
+# (prompt_regions.py: exact "@wixie-editable/1" marker lines with a per-file nonce). No
+# Markdown/XML syntax is inferred. A fixer receives a FixContext -- the stripped view (for
+# decisions only) and the region bodies ('\n'-normalised) -- and returns one new body text or
+# None per region. It has no way to address anything outside a body. fix_document() rebuilds
+# the file byte-exactly outside the bodies (prompt_regions.apply) and re-checks it with the
+# single invariant (prompt_regions.verify); a candidate that fails is dropped.
 
-_FENCE_RE = re.compile(r'^[ \t]*(`{3,}|~{3,})(.*)$')
-_TABLE_DELIM_RE = re.compile(r'^\s{0,3}\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$')
-_BLOCKQUOTE_RE = re.compile(r'^[ \t]*>')
-_INDENT_CODE_RE = re.compile(r'^(?: {4}|\t)')
-_TAG_RE = re.compile(  # attribute values may be quoted and then contain '<' / '>'
-    r'<(/?)([A-Za-z_][\w.:-]*)((?:\s(?:[^<>"\'\n]|"[^"\n]*"|\'[^\'\n]*\')*?)?)(/?)>')
-_BACKTICK_RUN_RE = re.compile(r'`+')
-_JSON_CHARS_RE = re.compile(r'[\[\]{}"\\]')
-_LOCAL_CHARS_RE = re.compile('[\\[\\](){}"\\\\“”]')
-_CLOSER_OF = {']': '[', '}': '{', ')': '('}
+def _load_prompt_regions():
+    mod = sys.modules.get("prompt_regions")
+    if mod is not None:
+        return mod
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "prompt_regions", os.path.join(SCRIPT_DIR, "prompt_regions.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["prompt_regions"] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def _normalize_newlines(text):
+PR = _load_prompt_regions()
+
+
+class FixContext(object):
+    """What a fixer sees: `view` (the stripped document; decisions only) and `bodies`
+    (prompt_regions.RegionView per region, in order)."""
+
+    def __init__(self, view, bodies):
+        self.view = view
+        self.bodies = list(bodies)
+
+
+def _norm_nl(text):
     return text.replace('\r\n', '\n').replace('\r', '\n')
 
 
-def _merge_intervals(items):
-    """Sort (start, end, kind) intervals and merge overlapping ones; the merged interval
-    keeps the kind of its outermost (earliest-starting, longest) member."""
-    items = sorted(items, key=lambda r: (r[0], -r[1]))
+def _editable_indices(ctx):
+    return [i for i, b in enumerate(ctx.bodies) if b.editable]
+
+
+def _prepend(ctx, new, addition):
+    idx = _editable_indices(ctx)
+    if not idx:
+        return new
+    i = idx[0]
+    cur = new[i] if new[i] is not None else ctx.bodies[i].text
+    new[i] = addition + cur
+    return new
+
+
+def _append(ctx, new, addition):
+    """Append to the end of the LAST editable region (bodies are '' or end with '\\n')."""
+    idx = _editable_indices(ctx)
+    if not idx:
+        return new
+    i = idx[-1]
+    cur = new[i] if new[i] is not None else ctx.bodies[i].text
+    add = addition.lstrip('\n') if not cur else addition
+    if not add.endswith('\n'):
+        add += '\n'
+    new[i] = cur + add
+    return new
+
+
+def _map_bodies(ctx, fn):
     out = []
-    for s, e, k in items:
-        if out and s < out[-1][1]:
-            if e > out[-1][1]:
-                out[-1] = (out[-1][0], e, out[-1][2])
-        else:
-            out.append((s, e, k))
+    for b in ctx.bodies:
+        if not b.editable:
+            out.append(None)
+            continue
+        t = fn(b.text)
+        out.append(t if t != b.text else None)
     return out
 
 
-def _backtick_spans(seg):
-    """Inline code spans in one line: a run of N backticks closed by the next run of
-    exactly N backticks. Linear (next-same-length index precomputed)."""
-    runs = [(m.start(), m.end()) for m in _BACKTICK_RUN_RE.finditer(seg)]
-    if len(runs) < 2:
-        return []
-    nxt = [None] * len(runs)
-    last = {}
-    for k in range(len(runs) - 1, -1, -1):
-        length = runs[k][1] - runs[k][0]
-        nxt[k] = last.get(length)
-        last[length] = k
-    out = []
-    k = 0
-    while k < len(runs):
-        j = nxt[k]
-        if j is not None:
-            out.append((runs[k][0], runs[j][1]))
-            k = j + 1
-        else:
-            k += 1
-    return out
-
-
-def _local_spans(text, s, e):
-    """No-edit inline spans inside text[s:e] (one editable line segment): backtick code
-    spans, "..." / curly-quote spans, and (), [], {} bracket spans. Iterative, linear;
-    an unclosed opener runs to the end of the segment. Returns absolute (start, end)."""
-    seg = text[s:e]
-    bts = _backtick_spans(seg)
-    spans = list(bts)
-    stack = []
-    counts = {'(': 0, '[': 0, '{': 0}
-    in_q = None
-    start = None
-    skip_to = -1
-    bi = 0
-    for m in _LOCAL_CHARS_RE.finditer(seg):
-        p = m.start()
-        if p < skip_to:
-            continue
-        while bi < len(bts) and bts[bi][1] <= p:
-            bi += 1
-        if bi < len(bts) and bts[bi][0] <= p:
-            continue
-        ch = m.group()
-        if in_q is not None:
-            if ch == '\\':
-                skip_to = p + 2
-            elif (in_q == '"' and ch == '"') or (in_q == '“' and ch == '”'):
-                in_q = None
-                if not stack:
-                    spans.append((start, p + 1))
-                    start = None
-            continue
-        if ch == '"' or ch == '“':
-            if not stack:
-                start = p
-            in_q = ch
-        elif ch in '([{':
-            if not stack:
-                start = p
-            stack.append(ch)
-            counts[ch] += 1
-        elif ch in ')]}':
-            want = _CLOSER_OF[ch]
-            if not counts[want]:
-                continue
-            while stack:
-                top = stack.pop()
-                counts[top] -= 1
-                if top == want:
-                    break
-            if not stack:
-                spans.append((start, p + 1))
-                start = None
-    if start is not None:
-        spans.append((start, len(seg)))
-    return [(s + a, s + b) for a, b in spans]
-
-
-class _Structure(object):
-    """Result of analyze_structure(): frozen block intervals, inline no-edit spans,
-    XML elements, tag tokens, and the structural fingerprint. Treat as immutable."""
-    __slots__ = ("text", "frozen", "_frozen_starts", "inline", "no_edit", "_no_edit_starts",
-                 "elements", "tags", "fingerprint")
-
-    def touches_frozen(self, s, e):
-        """True if [s, e) overlaps a frozen block region (inline spans ignored)."""
-        k = bisect.bisect_left(self._frozen_starts, e) - 1
-        return k >= 0 and self.frozen[k][1] > s
-
-    def blocked(self, s, e):
-        """True if the edit range [s, e) touches any frozen or inline no-edit span."""
-        spans = self.no_edit
-        k = bisect.bisect_left(self._no_edit_starts, e) - 1
-        return k >= 0 and spans[k][1] > s
-
-    def live_close_tag(self, name):
-        """Start offset of the closing tag of the first PAIRED `name` element that is
-        not itself inside frozen content, or None."""
-        for o_s, o_e, c_s, c_e, nm in self.elements:
-            if nm.lower() != name:
-                continue
-            k = bisect.bisect_right(self._no_edit_starts, c_s) - 1
-            if k >= 0 and self.no_edit[k][0] < c_s < self.no_edit[k][1]:
-                continue  # inside a larger frozen interval (e.g. inside an <example>)
-            if k >= 0 and self.no_edit[k][0] == c_s and self.no_edit[k][1] > c_e:
-                continue
-            return c_s
-        return None
-
-
-def _free_segments(lines, starts, intervals):
-    """Yield (line_index, [(s, e), ...]) -- the parts of each line not covered by the
-    sorted, disjoint `intervals`. One pointer sweep: linear."""
-    p = 0
-    m = len(intervals)
-    for i, line in enumerate(lines):
-        ls = starts[i]
-        le = ls + len(line)
-        while p < m and intervals[p][1] <= ls:
-            p += 1
-        if le == ls:
-            covered = p < m and intervals[p][0] <= ls
-            yield i, ([] if covered else [(ls, ls)])
-            continue
-        segs = []
-        cur = ls
-        q = p
-        while q < m and intervals[q][0] < le:
-            a, b = intervals[q][0], intervals[q][1]
-            if a > cur:
-                segs.append((cur, a))
-            cur = max(cur, b)
-            if b > le:
-                break
-            q += 1
-        if cur < le:
-            segs.append((cur, le))
-        yield i, segs
-
-
-@functools.lru_cache(maxsize=32)
-def analyze_structure(text):
-    """Classify `text` ('\\n'-normalized) into editable prose vs frozen content (see
-    the EDITABLE_XML_SECTIONS comment block). Linear time, no recursion."""
-    lines = text.split('\n')
-    n = len(lines)
-    starts = [0] * n
-    pos = 0
-    for i, line in enumerate(lines):
-        starts[i] = pos
-        pos += len(line) + 1
-
-    def line_end(i):
-        return starts[i] + len(lines[i])
-
-    def line_of(offset):
-        return bisect.bisect_right(starts, offset) - 1
-
-    raw = []  # (start, end, kind) frozen intervals, merged at the end
-
-    # 1) Fenced code blocks (highest priority; one forward pass).
-    fence_line = bytearray(n)
-    i = 0
-    while i < n:
-        m = _FENCE_RE.match(lines[i])
-        if m and not (m.group(1)[0] == '`' and '`' in m.group(2)):
-            ch, length = m.group(1)[0], len(m.group(1))
-            j = i + 1
-            close = None
-            while j < n:
-                cm = _FENCE_RE.match(lines[j])
-                if cm and cm.group(1)[0] == ch and len(cm.group(1)) >= length and not cm.group(2).strip():
-                    close = j
-                    break
-                j += 1
-            last = close if close is not None else n - 1
-            for k in range(i, last + 1):
-                fence_line[k] = 1
-            raw.append((starts[i], line_end(last), "fenced_code"))
-            i = last + 1
-            continue
-        i += 1
-
-    # 2) Tag tokens on non-fence lines, outside inline backtick code.
-    tokens = []  # (start, end, name, kind) kind: 'open' | 'close' | 'self'
-    bt_by_line = {}
-    for i, line in enumerate(lines):
-        if fence_line[i] or '<' not in line and '`' not in line:
-            continue
-        bts = _backtick_spans(line) if '`' in line else []
-        if bts:
-            bt_by_line[i] = bts
-        if '<' not in line:
-            continue
-        bi = 0
-        for m in _TAG_RE.finditer(line):
-            a, b = m.span()
-            while bi < len(bts) and bts[bi][1] <= a:
-                bi += 1
-            if bi < len(bts) and bts[bi][0] < b:
-                continue
-            kind = 'close' if m.group(1) else ('self' if m.group(4) else 'open')
-            if kind == 'close' and m.group(4):
-                kind = 'self'
-            tokens.append((starts[i] + a, starts[i] + b, m.group(2), kind))
-
-    # 3) Pair tags with an explicit stack (linear, amortized): a close tag pairs with
-    #    the nearest open tag of the same name; opens skipped over stay unpaired.
-    elements = []
-    stack = []
-    open_count = {}
-    for t in tokens:
-        name = t[2]
-        if t[3] == 'open':
-            stack.append(t)
-            open_count[name] = open_count.get(name, 0) + 1
-        elif t[3] == 'close' and open_count.get(name):
-            while stack:
-                top = stack.pop()
-                open_count[top[2]] -= 1
-                if top[2] == name:
-                    elements.append((top[0], top[1], t[0], t[1], name))
-                    break
-    elements.sort()
-
-    for o_s, o_e, c_s, c_e, name in elements:
-        lname = name.lower()
-        if lname in ALWAYS_FROZEN_XML_ELEMENTS:
-            raw.append((o_s, c_e, "example"))
-        elif lname not in EDITABLE_XML_SECTIONS:
-            raw.append((o_s, c_e, "xml_element"))
-    for t in tokens:
-        raw.append((t[0], t[1], "tag"))
-
-    hard = _merge_intervals(raw)
-
-    # Lines in an allow-listed section (for the top-level-only indented-code rule).
-    diff = [0] * (n + 1)
-    for o_s, o_e, c_s, c_e, name in elements:
-        if name.lower() in EDITABLE_XML_SECTIONS and name.lower() not in ALWAYS_FROZEN_XML_ELEMENTS:
-            diff[line_of(o_s)] += 1
-            diff[line_of(c_s) + 1] -= 1
-    in_section = bytearray(n)
-    run = 0
-    for i in range(n):
-        run += diff[i]
-        in_section[i] = 1 if run > 0 else 0
-
-    # Lines touching any hard-frozen interval, and bracket matching for bracket blocks.
-    touched = bytearray(n)
-    free_by_line = {}
-    for i, segs in _free_segments(lines, starts, hard):
-        if segs != [(starts[i], line_end(i))]:
-            touched[i] = 1
-        free_by_line[i] = segs
-    for i in range(n):
-        if fence_line[i]:
-            touched[i] = 1
-
-    match = {}
-    need_match = any(
-        not touched[i] and lines[i].lstrip()[:1] in ('{', '[') for i in range(n))
-    if need_match:
-        bstack = []
-        bcount = {'{': 0, '[': 0}
-        for i in range(n):
-            if fence_line[i]:
-                continue
-            bts = bt_by_line.get(i, ())
-            in_str = False
-            skip_to = -1
-            for s, e in free_by_line.get(i, ()):
-                bi = 0
-                for m in _JSON_CHARS_RE.finditer(text, s, e):
-                    p = m.start()
-                    if p < skip_to:
-                        continue
-                    rel = p - starts[i]
-                    while bi < len(bts) and bts[bi][1] <= rel:
-                        bi += 1
-                    if bi < len(bts) and bts[bi][0] <= rel:
-                        continue
-                    ch = m.group()
-                    if in_str:
-                        if ch == '\\':
-                            skip_to = p + 2
-                        elif ch == '"':
-                            in_str = False
-                        continue
-                    if ch == '"':
-                        in_str = True
-                    elif ch in '{[':
-                        bstack.append((p, ch))
-                        bcount[ch] += 1
-                    elif ch in '}]':
-                        want = _CLOSER_OF[ch]
-                        if not bcount[want]:
-                            continue
-                        while bstack:
-                            op, oc = bstack.pop()
-                            bcount[oc] -= 1
-                            if oc == want:
-                                match[op] = p
-                                break
-
-    # 4) Block constructs on lines untouched by fences/elements/tags.
-    blocks = []
-    i = 0
-    while i < n:
-        line = lines[i]
-        if touched[i] or not line.strip():
-            i += 1
-            continue
-        if ('|' in line and i + 1 < n and not touched[i + 1] and '|' in lines[i + 1]
-                and _TABLE_DELIM_RE.match(lines[i + 1].strip())):
-            j = i + 2
-            while j < n and not touched[j] and lines[j].strip() and '|' in lines[j]:
-                j += 1
-            blocks.append((starts[i], line_end(j - 1), "table"))
-            i = j
-            continue
-        if _BLOCKQUOTE_RE.match(line):
-            # A '>' run plus its lazy-continuation lines (non-blank lines directly after
-            # it without a '>' -- Markdown renders them inside the same quote).
-            j = i + 1
-            while j < n and not touched[j] and lines[j].strip():
-                j += 1
-            blocks.append((starts[i], line_end(j - 1), "blockquote"))
-            i = j
-            continue
-        if (not in_section[i] and _INDENT_CODE_RE.match(line)
-                and (i == 0 or not lines[i - 1].strip())):
-            j = i + 1
-            last = i
-            while (j < n and not touched[j] and not in_section[j]
-                   and (not lines[j].strip() or _INDENT_CODE_RE.match(lines[j]))):
-                if lines[j].strip():
-                    last = j
-                j += 1
-            blocks.append((starts[i], line_end(last), "indented_code"))
-            i = last + 1
-            continue
-        stripped = line.lstrip()
-        if stripped[:1] in ('{', '['):
-            p = starts[i] + len(line) - len(stripped)
-            c = match.get(p)
-            if c is not None:
-                j = line_of(c)
-                if j > i or text[c + 1:line_end(i)].strip() in ('', ',', ';'):
-                    blocks.append((starts[i], line_end(j), "json"))
-                    i = j + 1
-                    continue
-        i += 1
-
-    frozen = _merge_intervals(hard + blocks)
-
-    # 5) Inline no-edit spans on the editable remainder of every line.
-    inline = []
-    for i, segs in _free_segments(lines, starts, frozen):
-        if fence_line[i]:
-            continue
-        for s, e in segs:
-            if e > s:
-                inline.extend(_local_spans(text, s, e))
-    inline = _merge_intervals([(s, e, "inline") for s, e in inline])
-
-    st = _Structure()
-    st.text = text
-    st.frozen = frozen
-    st._frozen_starts = [r[0] for r in frozen]
-    st.inline = inline
-    st.no_edit = [(s, e) for s, e, _k in _merge_intervals(frozen + inline)]
-    st._no_edit_starts = [s for s, _e in st.no_edit]
-    st.elements = elements
-    st.tags = tuple(re.sub(r'\s+', ' ', text[t[0]:t[1]]) for t in tokens)
-    st.fingerprint = (tuple(text[s:e] for s, e in st.no_edit), st.tags)
-    return st
-
-
-def structure_fingerprint(text):
-    """Structural fingerprint (WIX-CONV-001): the ordered contents of every non-editable
-    region (frozen blocks + inline no-edit spans) plus the ordered tag sequence. Two
-    versions of a document with equal fingerprints differ only in editable prose."""
-    return analyze_structure(_normalize_newlines(text)).fingerprint
-
-
-def find_protected_regions(text):
-    """Sorted, disjoint (start, end, kind) frozen block regions of `text`
-    ('\\n'-normalized offsets). Inline no-edit spans are not included."""
-    return list(analyze_structure(_normalize_newlines(text)).frozen)
-
-
-def protected_regions_equal(before_text, after_text):
-    """The structural gate (WIX-CONV-001): True iff both texts have the same structural
-    fingerprint (line endings normalized). A candidate failing it must be reverted
-    regardless of its heuristic score."""
-    return structure_fingerprint(before_text) == structure_fingerprint(after_text)
-
-
-def _keep_if_structure_same(before, after):
-    """Per-step guard used inside every fixer: an edit step whose result changes the
-    structural fingerprint is dropped (the fixer continues from `before`)."""
-    if after == before:
-        return before
-    return after if protected_regions_equal(before, after) else before
-
-
-def _safe_sub(pattern, repl, text, count=0, allow_newline=False):
-    """re.sub restricted to editable prose: a match touching any frozen region or inline
-    no-edit span is skipped, and (unless allow_newline) so is a match containing a line
-    break. The whole step is then checked with _keep_if_structure_same."""
-    if not pattern.search(text):
-        return text
-    st = analyze_structure(text)
-    out = []
-    last = 0
-    done = 0
-    for m in pattern.finditer(text):
-        if count and done >= count:
-            break
-        s, e = m.span()
-        if e == s or (not allow_newline and '\n' in m.group(0)) or st.blocked(s, e):
-            continue
-        out.append(text[last:s])
-        out.append(m.expand(repl))
-        last = e
-        done += 1
-    if not done:
-        return text
-    out.append(text[last:])
-    return _keep_if_structure_same(text, ''.join(out))
-
-
-def _append_safely(text, addition):
-    """Additive fixers append a new section at the end -- only if doing so leaves every
-    existing non-editable region unchanged (e.g. not inside an unterminated fence). If
-    appending directly would change a region (e.g. become a blockquote's lazy
-    continuation), a blank-line-separated append is tried before giving up."""
-    for candidate in (text + addition, text + "\n" + addition):
-        if protected_regions_equal(text, candidate):
-            return candidate
-    return text
-
-
-def _insert_before_close(text, name, insertion):
-    """Insert `insertion` right before the closing tag of the first live, paired
-    `name` element. Returns (new_text, inserted_bool)."""
-    c = analyze_structure(text).live_close_tag(name)
-    if c is None:
-        return text, False
-    new = _keep_if_structure_same(text, text[:c] + insertion + text[c:])
-    return new, new != text
-
-
-# ─── Fix functions ─────────────────────────────────────────────────────────────
-# Every text-rewriting edit goes through the editable-prose allow-list above
-# (_safe_sub / analyze_structure().blocked) and every step is fingerprint-checked.
-# The hard guarantee is still the gate in run() plus the exit-path backstop.
+# ─── Fix functions (body level) ────────────────────────────────────────────────
 
 _HEDGE_RE = re.compile(
     r'\b(?:maybe|perhaps|possibly|somewhat|try to|might want to)(?:[ \t]+|(?=\n)|\Z)'
     r'|\bif possible,?[ \t]*', re.I)
-_SPLIT_RE = re.compile(r';\s+')
+_SPLIT_RE = re.compile(r';[ \t]+')
 _BLOCK_START_CHARS = ('>', '|', '{', '[', '```', '~~~')
 
 
-def fix_clarity(text):
-    text = _safe_sub(_HEDGE_RE, '', text)
-    st = analyze_structure(text)
+def _clarity_body(text):
+    text = _HEDGE_RE.sub('', text)
     lines = text.split('\n')
-    pos = 0
-    new = []
-    changed = False
-    for line in lines:
-        start = pos
-        pos += len(line) + 1
+    for k, line in enumerate(lines):
         if len(line.split()) > 50 and ('; ' in line or ', and ' in line):
             for m in _SPLIT_RE.finditer(line):
                 rest = line[m.end():]
-                if (not rest.strip() or rest.lstrip().startswith(_BLOCK_START_CHARS)
-                        or st.blocked(start + m.start(), start + m.end())):
+                if not rest.strip() or rest.lstrip().startswith(_BLOCK_START_CHARS):
                     continue
-                line = line[:m.start()] + '.\n' + rest
-                changed = True
+                lines[k] = line[:m.start()] + '.\n' + rest
                 break
-        new.append(line)
-    if not changed:
-        return text
-    return _keep_if_structure_same(text, '\n'.join(new))
+    return '\n'.join(lines)
 
 
-def fix_completeness(text):
-    tl = text.lower()
+def fix_clarity(ctx):
+    return _map_bodies(ctx, _clarity_body)
+
+
+def fix_completeness(ctx):
+    tl = ctx.view.lower()
+    new = [None] * len(ctx.bodies)
     if not re.search(r'\b(you are|act as|role:|your role)\b', tl):
-        st = analyze_structure(text)
-        pos = 0
-        for idx, line in enumerate(text.split('\n')):
-            start = pos
-            pos += len(line) + 1
-            if (line.strip() and not line.strip().startswith(('<', '#', '---'))
-                    and not st.touches_frozen(start, start + len(line))):
-                text = _keep_if_structure_same(
-                    text, text[:start] + "You are a domain expert.\n\n" + text[start:])
-                break
-    if not re.search(r'\b(task:|objective:|goal:|your job|you will|you should)\b', tl):
-        text = _safe_sub(re.compile(re.escape("You are a domain expert.\n")),
-                         "You are a domain expert. Your job is to complete the following task.\n",
-                         text, count=1, allow_newline=True)
+        role = "You are a domain expert.\n"
+        if not re.search(r'\b(task:|objective:|goal:|your job|you will|you should)\b', tl):
+            role = "You are a domain expert. Your job is to complete the following task.\n"
+        new = _prepend(ctx, new, role + "\n")
     if not re.search(r'\b(output format|respond in|format:|json|xml|markdown|<output|<format)\b', tl):
-        text = _append_safely(text, "\n\nOutput format: structure your response clearly with headers and sections.\n")
+        new = _append(ctx, new, "\nOutput format: structure your response clearly with headers and sections.\n")
     if not re.search(r"\b(do not|don't|never|must not|avoid)\b", tl):
-        text = _append_safely(text, "\nDo not include information you are unsure about.\n")
-    return text
+        new = _append(ctx, new, "Do not include information you are unsure about.\n")
+    return new
 
 
 _FILLER_RE = re.compile(
@@ -722,49 +262,46 @@ _FILLER_RE = re.compile(
     r"|keep in mind that[ \t]*|I would like you to[ \t]*|please ensure that[ \t]*"
     r"|in order to(?:[ \t]+|(?=\n))", re.I)
 _BLANK_RUN_RE = re.compile(r'\n{3,}')
-_TRAILING_WS_RE = re.compile(r'[ \t]+$')
+_TRAILING_WS_RE = re.compile(r'[ \t]+$', re.M)
 
 
-def fix_efficiency(text):
-    text = _safe_sub(_FILLER_RE, '', text)
-    text = _safe_sub(_BLANK_RUN_RE, '\n\n', text, allow_newline=True)
-    st = analyze_structure(text)
-    pos = 0
-    new = []
-    changed = False
-    for line in text.split('\n'):
-        start = pos
-        pos += len(line) + 1
-        m = _TRAILING_WS_RE.search(line)
-        if m and not st.blocked(start + m.start(), start + m.end()):
-            line = line[:m.start()]
-            changed = True
-        new.append(line)
-    if not changed:
-        return text
-    return _keep_if_structure_same(text, '\n'.join(new))
+def _efficiency_body(text):
+    text = _FILLER_RE.sub('', text)
+    text = _BLANK_RUN_RE.sub('\n\n', text)
+    return _TRAILING_WS_RE.sub('', text)
 
 
-def fix_model_fit(text):
-    tl = text.lower()
+def fix_efficiency(ctx):
+    return _map_bodies(ctx, _efficiency_body)
+
+
+def fix_model_fit(ctx):
+    tl = ctx.view.lower()
     claude = bool(re.search(r'\b(claude|anthropic)\b|<(instructions|context|example)>', tl))
     gpt = bool(re.search(r'\b(gpt-4|gpt-5|openai|chatgpt)\b', tl))
     oseries = bool(re.search(r'\b(o1|o3|o4-mini|o-series)\b', tl))
+    new = [None] * len(ctx.bodies)
     if claude and 'think thoroughly' not in tl:
-        text, inserted = _insert_before_close(
-            text, "instructions", "\nThink thoroughly before responding.\n")
-        if not inserted:
-            text = _append_safely(text, "\n\nThink thoroughly before responding.\n")
-        text = _safe_sub(re.compile(r'\bthink step by step\b', re.I), 'think thoroughly', text)
+        sub = re.compile(r'\bthink step by step\b', re.I)
+        for i in _editable_indices(ctx):
+            t = sub.sub('think thoroughly', ctx.bodies[i].text)
+            if t != ctx.bodies[i].text:
+                new[i] = t
+        new = _append(ctx, new, "\nThink thoroughly before responding.\n")
     if gpt and not re.search(r'\b(step by step|think through)\b', tl):
-        text = _append_safely(text, "\n\nThink step by step through your analysis before providing the final answer.\n")
+        new = _append(ctx, new, "\nThink step by step through your analysis before providing the final answer.\n")
     if oseries:
-        text = _safe_sub(re.compile(r'\n.*think step by step.*\n', re.I), '\n', text, allow_newline=True)
-    return text
+        for i in _editable_indices(ctx):
+            cur = new[i] if new[i] is not None else ctx.bodies[i].text
+            kept = [ln for ln in cur.split('\n') if not re.search(r'think step by step', ln, re.I)]
+            t = '\n'.join(kept)
+            if t != cur:
+                new[i] = t
+    return new
 
 
-def fix_failure_resilience(text):
-    tl = text.lower()
+def fix_failure_resilience(ctx):
+    tl = ctx.view.lower()
     additions = []
     if not re.search(r'\bif\b.{0,30}\b(error|fail|cannot|unable|unclear|missing|invalid|empty)\b', tl):
         additions.append("If the input is empty or invalid, report the error clearly and explain what input is expected.")
@@ -774,14 +311,10 @@ def fix_failure_resilience(text):
         additions.append("If unsure about any information, state your uncertainty explicitly rather than guessing.")
     if not re.search(r'\b(validate|verify|check that|ensure that|confirm|if unclear)\b', tl):
         additions.append("Verify your output against the requirements before delivering the final response.")
+    new = [None] * len(ctx.bodies)
     if additions:
-        inserted = False
-        if '<edge_cases>' in text:
-            text, inserted = _insert_before_close(
-                text, "edge_cases", '\n' + '\n'.join(additions) + '\n')
-        if not inserted:
-            text = _append_safely(text, '\n\n' + '\n'.join(additions) + '\n')
-    return text
+        new = _append(ctx, new, '\n' + '\n'.join(additions) + '\n')
+    return new
 
 
 FIXERS = {
@@ -792,6 +325,33 @@ FIXERS = {
     "Failure Resilience": fix_failure_resilience,
 }
 
+
+def fix_document(raw, axis, orig_doc=None, fixer=None):
+    """THE one entry point for applying a fixer (convergence loop, output-test try_offline_fix).
+    `raw` is the working master bytes; returns new bytes, or `raw` unchanged when the file has
+    no editable region, the fixer changes nothing, or the result breaks the contract (checked
+    against `orig_doc`, the run's baseline, when given)."""
+    doc = PR.parse(raw)
+    if doc.status is not PR.Status.ANNOTATED or not doc.editable_regions:
+        return raw
+    fn = fixer or FIXERS.get(axis)
+    if fn is None:
+        return raw
+    ctx = FixContext(_norm_nl(PR.view(raw)), PR.bodies(doc))
+    try:
+        cand = PR.apply(doc, fn(ctx))
+        PR.verify(orig_doc or doc, cand)
+    except PR.RegionViolation:
+        return raw
+    return cand
+
+
+def propose_whole_text(text, axis):
+    """Unannotated prompts: what the fixer WOULD do to the whole text, in memory only
+    (proposal artifact; never written to the prompt, never verified against structure)."""
+    ctx = FixContext(text, [PR.RegionView("__whole__", _norm_nl(text), True)])
+    new = FIXERS[axis](ctx)[0]
+    return text if new is None else new
 
 # ─── Learnings Persistence ─────────────────────────────────────────────────────
 
@@ -1162,63 +722,201 @@ def _render_learnings_md(data):
 
 # ─── Main Loop ─────────────────────────────────────────────────────────────────
 
-def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_out=None):
+def _sha(data):
+    return hashlib.sha256(data).hexdigest() if data is not None else None
+
+
+def _scoring_text(raw):
+    """What the scorers see: the stripped view with line endings normalised (the scorers have
+    always seen '\\n'-joined text)."""
+    return _norm_nl(PR.view(raw))
+
+
+def _check_proposal_out(proposal_out, prompt_path, shipped_path, prompt_folder, want_json, json_out):
+    """--proposal-out may never alias the prompt: refuse any path inside the prompt folder
+    (which contains the master and the shipped file) and any existing file (RC-14)."""
+    real = os.path.realpath(proposal_out)
+    folder = os.path.realpath(prompt_folder)
+    if os.path.normcase(real).startswith(os.path.normcase(folder.rstrip("\\/") + os.sep)) \
+            or os.path.normcase(real) == os.path.normcase(folder):
+        _usage_error(f"--proposal-out {proposal_out} is inside the prompt folder {prompt_folder}; "
+                     f"proposals belong in state/", want_json, json_out)
+    if os.path.exists(proposal_out):
+        for other in (prompt_path, shipped_path):
+            if other and os.path.exists(other) and os.path.samefile(proposal_out, other):
+                _usage_error(f"--proposal-out {proposal_out} is the prompt file", want_json, json_out)
+        _usage_error(f"--proposal-out {proposal_out} already exists (never overwritten)", want_json, json_out)
+
+
+def _write_proposal(proposal_out, raw, status, scores, assertions):
+    import difflib
+    text = _scoring_text(raw)
+    per_axis = []
+    for axis in sorted(AXES, key=lambda a: scores[a]):
+        proposed = propose_whole_text(text, axis)
+        diff = "".join(difflib.unified_diff(
+            text.splitlines(True), proposed.splitlines(True), "current", f"proposed-{axis}"))
+        per_axis.append({"axis": axis, "score": scores[axis], "diff": diff})
+    doc = {
+        "schema": "wixie-converge-proposal/1",
+        "input_sha256": _sha(raw),
+        "editability_status": status,
+        "scores": {a: scores[a] for a in AXES + ["overall"]},
+        "assertions": [{"name": n, "pass": bool(ok), "desc": d} for n, ok, d in assertions],
+        "per_axis": per_axis,
+        "note": ("unverified: may touch data; apply manually. The prompt has no explicit "
+                 "editable region, so convergence does not write it (WIX-CONV-001 / D15)."),
+    }
+    os.makedirs(os.path.dirname(os.path.abspath(proposal_out)), exist_ok=True)
+    with open(proposal_out, "x", encoding="utf-8", newline="\n") as f:
+        json.dump(doc, f, indent=2, sort_keys=True)
+    print(f"  Proposal written (not applied): {proposal_out}")
+
+
+def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_out=None,
+        proposal_out=None, no_shipped=False):
     if not os.path.isfile(prompt_path):
         _usage_error(f"{prompt_path} not found", want_json, json_out)
 
-    text, original_lines, original_terms, bom = _read_text_preserving(prompt_path)
     with open(prompt_path, "rb") as f:
-        original_raw = f.read()  # restored verbatim if any exit-path check trips
-    io_state = (original_lines, original_terms, bom, original_raw)
+        orig_raw = f.read()
+    doc = PR.parse(orig_raw)
+    is_master = PR.is_master(prompt_path)
 
-    if not text.strip():
+    if doc.status is not PR.Status.MALFORMED and not PR.view(orig_raw).strip():
         _usage_error("Empty prompt file.", want_json, json_out)
 
-    # WIX-CONV-001: the structural baseline every exit path is checked against.
-    # Never reassigned -- it is the file's content the moment run() started.
-    original_text = text
-    original_fp = structure_fingerprint(original_text)
+    warnings = list(doc.warnings)
+    shipped_path = None
+    exp_shipped = None
+    annotated_like = doc.status in (PR.Status.ANNOTATED, PR.Status.NO_REGIONS)
+    if is_master:
+        if doc.status is PR.Status.UNANNOTATED:
+            _usage_error(f"{prompt_path} is under editable/ but carries no wixie-editable header: "
+                         f"not a valid master", want_json, json_out)
+        if annotated_like and not no_shipped:
+            try:
+                shipped_path = PR.shipped_for(prompt_path)
+            except PR.RegionError as e:
+                _usage_error(str(e), want_json, json_out)
+            if not os.path.isfile(shipped_path):
+                _usage_error(f"master {prompt_path} has no shipped file {shipped_path} "
+                             f"(pass --no-shipped to write the master only)", want_json, json_out)
+            with open(shipped_path, "rb") as f:
+                exp_shipped = f.read()
+            if exp_shipped != PR.strip(orig_raw):
+                _usage_error(f"{shipped_path} != strip({prompt_path}): the shipped file and the master "
+                             f"disagree; decide which one wins before converging", want_json, json_out)
+    else:
+        if annotated_like and not no_shipped:
+            _usage_error(f"{prompt_path} is annotated but not under editable/; put the master at "
+                         f"<prompt folder>/editable/<name> or pass --no-shipped", want_json, json_out)
+        if doc.status is PR.Status.UNANNOTATED:
+            m = PR.master_for(prompt_path)
+            if m:
+                warnings.append(f"master exists at {m}; run convergence on it (this file is read-only here)")
+    for p in (prompt_path, shipped_path):
+        if p:
+            for stale in PR.stale_temp_files(p):
+                warnings.append(f"stale temp file (from an interrupted commit): {stale}")
 
-    prompt_dir = os.path.dirname(os.path.abspath(prompt_path))
+    prompt_folder = PR.prompt_folder_of(prompt_path)
+    if proposal_out:
+        _check_proposal_out(proposal_out, prompt_path, shipped_path, prompt_folder, want_json, json_out)
+
+    owns_master = is_master or (no_shipped and annotated_like)
+    editability = {
+        "scheme": PR.SCHEME,
+        "status": doc.status.value,
+        "is_master": is_master,
+        "regions": [r.id for r in doc.regions],
+        "editable_regions": len(doc.editable_regions),
+        "frozen_regions": {r.id: r.frozen_reason for r in doc.regions if not r.editable},
+        "warnings": warnings,
+        "code": doc.error.code if doc.error else None,
+        "line": doc.error.line if doc.error else None,
+    }
+    extra = {
+        "editability": editability,
+        "mutation": "none",
+        "structural_trip": False,
+        "master_sha256": _sha(orig_raw) if owns_master else None,
+        "shipped_sha256": _sha(exp_shipped) if owns_master else _sha(orig_raw),
+    }
+
+    print(f"\n{'=' * 60}")
+    print(f"  WIXIE CONVERGENCE ENGINE (Gauss Method)")
+    print(f"  Target: DEPLOY (heuristic bar — overall >= 9.0, all axes >= 7.0, sigma <= floor, 8/8 assertions)")
+    print(f"  Editability: {doc.status.value}"
+          + (f" — {len(doc.editable_regions)} editable region(s): {', '.join(r.id for r in doc.editable_regions)}"
+             if doc.regions else ""))
+    for w in warnings:
+        print(f"  Warning: {w}")
+
+    if doc.status is PR.Status.MALFORMED:
+        print(f"  MALFORMED annotation: {doc.error} -- nothing was scored or written (WIX-CONV-001).")
+        print(f"{'=' * 60}\n")
+        print(f"\n  VERDICT: HOLD")
+        return {"_deploy": False, "_scored": False, "_extra": extra}
+
+    if doc.status is not PR.Status.ANNOTATED or not doc.editable_regions:
+        return _run_readonly(prompt_path, prompt_folder, orig_raw, doc, proposal_out, extra, max_iterations)
+    return _run_loop(prompt_path, prompt_folder, orig_raw, doc, shipped_path, exp_shipped,
+                     max_iterations, verbose, extra)
+
+
+def _run_readonly(prompt_path, prompt_folder, raw, doc, proposal_out, extra, max_iterations):
+    """UNANNOTATED / NO_REGIONS (D15): score, critique, optionally propose -- never write the
+    prompt. DEPLOY is possible only when the unmodified input already meets the bar
+    (mutation "none": nothing was written, the verdict is score-only on the exact input)."""
+    print(f"  Mode: read-only (no explicit editable region) -- critique and proposals only")
+    print(f"{'=' * 60}\n")
+    prev_learnings = load_learnings(prompt_folder)
+    text = _scoring_text(raw)
+    scores = score_prompt(text)
+    assertions = run_assertions(text)
+    failed = [a for a in assertions if not a[1]]
+    weakest = sorted(AXES, key=lambda a: scores[a])
+    print(f"  Critique: weakest axes {', '.join(f'{a} {scores[a]}' for a in weakest[:3])}; "
+          f"failed assertions: {', '.join(a[0] for a in failed) if failed else 'none'}")
+    if proposal_out:
+        _write_proposal(proposal_out, raw, doc.status.value, scores, assertions)
+    _print_final(scores, assertions, 1, text)
+    save_learnings(prompt_folder, [], prev_learnings, text)
+    scores["_extra"] = extra
+    return scores
+
+
+def _run_loop(prompt_path, prompt_folder, orig_raw, doc, shipped_path, exp_shipped,
+              max_iterations, verbose, extra):
     history = []
     plateau_count = 0
     best_score = 0
-    best_text = text
+    cur = orig_raw
+    best_raw = orig_raw
     learnings = []
-    prev_learnings = load_learnings(prompt_dir)
+    prev_learnings = load_learnings(prompt_folder)
 
-    # Use prior learnings for intelligent strategy selection
     skip_axes = set()
     prioritize_axes = []
     neg_examples = prev_learnings.get("negative_examples", [])
     confidence = prev_learnings.get("confidence_scores", {})
-
     for p in prev_learnings.get("patterns", []):
         if p.get("type") == "unreliable":
             skip_axes.add(p.get("axis", ""))
         if p.get("type") == "reliable":
             prioritize_axes.append(p.get("axis", ""))
-
-    # Negative examples: don't repeat strategies that failed at similar scores
     for neg in neg_examples:
         neg_axis = neg.get("axis", "")
         neg_score = neg.get("score_at_attempt", 0)
-        # If we failed fixing this axis at a similar score range before, skip it
         if neg_axis and neg_score > 0:
             skip_axes.add(neg_axis)  # conservative — skip any previously-failed axis
 
     num_sessions = len(prev_learnings.get("sessions", []))
-    num_negs = len(neg_examples)
     recs = prev_learnings.get("recommendations", [])
-
-    print(f"\n{'=' * 60}")
-    print(f"  WIXIE CONVERGENCE ENGINE (Gauss Method)")
-    # N3: "(heuristic bar)" — this target is self-eval's regex/structure scorer, never a
-    # measured DEPLOY. See converge SKILL.md Step 2.5 / shared/scripts/efficacy-replay.py.
-    print(f"  Target: DEPLOY (heuristic bar — overall >= 9.0, all axes >= 7.0, sigma <= floor, 8/8 assertions)")
     print(f"  Max iterations: {max_iterations}")
     if num_sessions:
-        print(f"  Prior knowledge: {num_sessions} sessions, {num_negs} negative examples, {len(confidence)} confidence scores")
+        print(f"  Prior knowledge: {num_sessions} sessions, {len(neg_examples)} negative examples, {len(confidence)} confidence scores")
     if skip_axes:
         print(f"  Skipping (learned): {', '.join(skip_axes)}")
     if prioritize_axes:
@@ -1227,330 +925,163 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
         print(f"  Top recommendation: {recs[0][:70]}...")
     print(f"{'=' * 60}\n")
 
+    def finish(candidate, stage, iteration, scores=None, assertions=None):
+        """Every exit writes through prompt_regions.commit (verify -> atomic write of master
+        and shipped -> re-read -> CAS restore on failure). A failure forces HOLD."""
+        res = None
+        ok = True
+        try:
+            res = PR.commit(doc, prompt_path, shipped_path, candidate, (orig_raw, exp_shipped))
+        except (PR.RegionViolation, PR.RegionError, PR.ConcurrentModification, OSError) as e:
+            ok = False
+            print(f"  STRUCTURAL SAFETY TRIP at {stage} save ({type(e).__name__}: {e}) -- the files "
+                  f"on disk were left as they were / restored; verdict forced to HOLD (WIX-CONV-001).")
+            learnings.append(_structural_trip_entry(stage, iteration, best_score, str(e)))
+            extra["structural_trip"] = True
+        on_disk = candidate if ok else orig_raw
+        if ok:
+            extra["mutation"] = "applied" if res["written"] else "none"
+            extra["master_sha256"] = res["master_sha256"]
+            extra["shipped_sha256"] = res["shipped_sha256"]
+        try:
+            text = _scoring_text(on_disk)
+            if not (ok and stage == "DEPLOY" and scores is not None):
+                scores = score_prompt(text)
+                assertions = run_assertions(text)
+            _print_final(scores, assertions, iteration, text, force_hold=not ok)
+            save_learnings(prompt_folder, learnings, prev_learnings, text)
+        except BaseException:
+            # Crash after a verified write (exit 3): restore the originals, but only where the
+            # disk still holds this run's bytes (compare-then-replace, single writer; RC-08).
+            if res is not None and res["written"]:
+                PR.cas_restore(prompt_path, candidate, orig_raw)
+                if shipped_path is not None:
+                    PR.cas_restore(shipped_path, res["shipped"], exp_shipped)
+            raise
+        scores["_extra"] = extra
+        return scores
+
     for iteration in range(1, max_iterations + 1):
+        text = _scoring_text(cur)
         scores = score_prompt(text)
         overall = scores["overall"]
         history.append(overall)
-
-        # Binary assertions
         assertions = run_assertions(text)
         failed = [a for a in assertions if not a[1]]
         passed = [a for a in assertions if a[1]]
 
-        # Track best version
         if overall > best_score:
             best_score = overall
-            best_text = text
+            best_raw = cur
 
-        # DEPLOY only when the FULL bar is met: scores + sigma <= floor + 8/8 assertions.
-        # (Previously this deployed on scores alone, ignoring sigma and failed assertions —
-        # an honest-numbers violation: it shipped prompts the DEPLOY bar rejects.)
         deploy, sigma, floor = deploy_verdict(scores, assertions, text)
         if deploy:
-            # WIX-CONV-001: DEPLOY / exit 0 is impossible while the structural check fails.
-            # The write goes through _write_exit_file (fingerprint check before the write
-            # AND on the written file); on any mismatch the original bytes are restored and
-            # the verdict is forced to HOLD.
-            written, structurally_ok = _write_exit_file(prompt_path, text, original_text, io_state)
-            if not structurally_ok:
-                print(f"  Iteration {iteration}: STRUCTURAL SAFETY TRIP at DEPLOY save -- the "
-                      f"original, unmodified prompt was kept and the verdict forced to HOLD "
-                      f"(WIX-CONV-001).")
-                learnings.append(_structural_trip_entry("DEPLOY", iteration, overall))
-                safe_scores = score_prompt(written)
-                _print_final(safe_scores, run_assertions(written), iteration, written, force_hold=True)
-                save_learnings(prompt_dir, learnings, prev_learnings, written)
-                return safe_scores
-            print(f"  Iteration {iteration}: {overall}/10 — DEPLOY ({len(passed)}/{len(assertions)} assertions, sigma {sigma:.2f} <= {floor:.2f})")
-            _print_final(scores, assertions, iteration, text)
-            save_learnings(prompt_dir, learnings, prev_learnings, text)
-            return scores
+            print(f"  Iteration {iteration}: {overall}/10 — DEPLOY candidate ({len(passed)}/{len(assertions)} assertions, sigma {sigma:.2f} <= {floor:.2f})")
+            return finish(cur, "DEPLOY", iteration, scores, assertions)
 
-        # Plateau detection — stalled with the bar unmet: report HOLD honestly, don't fake DEPLOY.
         if len(history) >= 3 and history[-1] == history[-2] == history[-3]:
             plateau_count += 1
             if plateau_count >= 1:
                 print(f"  Iteration {iteration}: {overall}/10 — PLATEAU (HOLD — bar not met)")
-                written, structurally_ok = _write_exit_file(prompt_path, best_text, original_text, io_state)
-                if not structurally_ok:
-                    print("  STRUCTURAL SAFETY TRIP at PLATEAU save -- the original, unmodified "
-                          "prompt was kept (WIX-CONV-001).")
-                    learnings.append(_structural_trip_entry("PLATEAU", iteration, overall))
-                safe_scores = score_prompt(written)
-                _print_final(safe_scores, run_assertions(written), iteration, written,
-                             force_hold=not structurally_ok)
-                save_learnings(prompt_dir, learnings, prev_learnings, written)
-                return safe_scores
+                return finish(best_raw, "PLATEAU", iteration)
 
-        # Form hypothesis — Gauss Method: target weakest axis, weighted by confidence
         axes_by_score = sorted(AXES, key=lambda a: scores[a])
-        # Filter out axes that are known-unreliable (unless critically low)
         viable = [a for a in axes_by_score if a not in skip_axes or scores[a] < 5]
         if not viable:
             viable = axes_by_score
-        # Among viable, prefer axes with higher historical confidence
         if confidence:
             viable.sort(key=lambda a: (scores[a], -(confidence.get(a, 0.5))))
         weakest = viable[0]
         hypothesis = f"Fixing {weakest} (currently {scores[weakest]}/10) will improve overall from {overall}"
 
-        # Progress update
         if verbose or iteration <= 3 or iteration % 10 == 0:
             fail_names = ", ".join(a[0] for a in failed) if failed else "none"
             print(f"  Iteration {iteration}: {overall}/10 — hypothesis: fix {weakest} | failed assertions: {fail_names}")
 
-        # Save pre-fix state for auto-revert
-        pre_fix_text = text
-
-        # Apply fix
+        pre_fix = cur
         for axis in axes_by_score:
             if scores[axis] < 9.0 and axis in FIXERS:
-                text = FIXERS[axis](text)
-
-        # Also fix failed binary assertions directly
-        for name, passed_flag, desc in failed:
+                cur = fix_document(cur, axis, doc)
+        for name, _ok, _desc in failed:
             if name == "has_role" and "Completeness" not in [axes_by_score[0]]:
-                text = fix_completeness(text)
+                cur = fix_document(cur, "Completeness", doc)
             elif name == "has_edge_cases":
-                text = fix_failure_resilience(text)
+                cur = fix_document(cur, "Failure Resilience", doc)
             elif name == "no_hedge_words":
-                text = fix_clarity(text)
+                cur = fix_document(cur, "Clarity", doc)
             elif name == "no_filler":
-                text = fix_efficiency(text)
+                cur = fix_document(cur, "Efficiency", doc)
 
-        # Check for regression — Gauss revert: reject if deviation increased
-        new_scores = score_prompt(text)
-        new_assertions = run_assertions(text)
+        new_text = _scoring_text(cur)
+        new_scores = score_prompt(new_text)
+        new_assertions = run_assertions(new_text)
         new_failed = [a for a in new_assertions if not a[1]]
 
-        # Build reasoning chain — WHY did we choose this fix?
         reasoning = f"Targeted {weakest} ({scores[weakest]}/10) because it was the lowest axis."
         if weakest in skip_axes:
             reasoning += " (Historically unreliable but score was critically low.)"
         if failed:
             reasoning += f" Also had {len(failed)} failing assertion(s): {', '.join(a[0] for a in failed)}."
 
-        # Structural gate (WIX-CONV-001): a candidate whose structural fingerprint (all
-        # non-editable content + the tag sequence, see analyze_structure) differs from
-        # the input's is reverted regardless of score -- this check runs BEFORE
-        # and independently of the score-drop check below, so a candidate that raises
-        # `overall` (or leaves it flat) is not exempt.
-        structurally_ok = _candidate_is_structurally_safe(text, original_fp)
+        # Region-contract gate (WIX-CONV-001): independent re-parse of the candidate against the
+        # run's baseline, before and regardless of the score comparison.
+        try:
+            PR.verify(doc, cur)
+            contract_ok = True
+        except PR.RegionViolation as e:
+            contract_ok = False
+            contract_err = str(e)
 
-        if not structurally_ok:
-            text = pre_fix_text
-            delta = new_scores["overall"] - overall
-            outcome = ("REVERTED — structural gate: the fixer changed non-editable content "
-                       "(structural fingerprint mismatch)")
+        if not contract_ok:
+            cur = pre_fix
             learnings.append({
                 "iteration": iteration, "axis": weakest, "hypothesis": hypothesis,
-                "reasoning": reasoning,
-                "result": "reverted", "outcome": outcome, "delta": delta,
-                "start_score": overall, "end_score": overall,
-                "why_failed": f"Fixer for {weakest} changed non-editable content (fenced/indented "
-                               f"code, table, blockquote, bracket block, frozen XML element, "
-                               f"<example> block, inline span or tag sequence); reverted "
-                               f"regardless of score delta ({overall} -> {new_scores['overall']}) "
-                               f"per WIX-CONV-001.",
+                "reasoning": reasoning, "result": "reverted",
+                "outcome": "REVERTED — region contract: the candidate changed bytes outside the explicit editable regions",
+                "delta": new_scores["overall"] - overall, "start_score": overall, "end_score": overall,
+                "why_failed": f"prompt_regions.verify rejected the candidate ({contract_err}); reverted "
+                              f"regardless of score per WIX-CONV-001.",
             })
         elif new_scores["overall"] < overall - 0.5:
-            text = pre_fix_text
+            cur = pre_fix
             delta = new_scores["overall"] - overall
-            outcome = f"REVERTED — regression from {overall} to {new_scores['overall']}"
             learnings.append({
                 "iteration": iteration, "axis": weakest, "hypothesis": hypothesis,
-                "reasoning": reasoning,
-                "result": "reverted", "outcome": outcome, "delta": delta,
-                "start_score": overall, "end_score": overall,
+                "reasoning": reasoning, "result": "reverted",
+                "outcome": f"REVERTED — regression from {overall} to {new_scores['overall']}",
+                "delta": delta, "start_score": overall, "end_score": overall,
                 "why_failed": f"Fix caused {weakest} regression: {scores[weakest]}->{new_scores[weakest]}. Other axes affected: {', '.join(a for a in AXES if new_scores[a] < scores[a])}",
             })
         else:
             delta = new_scores["overall"] - overall
-            outcome = f"{'improved' if delta > 0 else 'unchanged'} ({overall} → {new_scores['overall']})"
-            # Track which specific axes improved/degraded
             axis_changes = {a: round(new_scores[a] - scores[a], 1) for a in AXES if new_scores[a] != scores[a]}
             learnings.append({
                 "iteration": iteration, "axis": weakest, "hypothesis": hypothesis,
-                "reasoning": reasoning,
-                "result": "applied", "outcome": outcome, "delta": delta,
-                "start_score": overall, "end_score": new_scores["overall"],
+                "reasoning": reasoning, "result": "applied",
+                "outcome": f"{'improved' if delta > 0 else 'unchanged'} ({overall} → {new_scores['overall']})",
+                "delta": delta, "start_score": overall, "end_score": new_scores["overall"],
                 "axis_changes": axis_changes,
                 "assertions_fixed": [a[0] for a in failed if a[0] not in [nf[0] for nf in new_failed]],
             })
 
-    # Max iterations
     print(f"\n  Max iterations ({max_iterations}) reached. Best: {best_score}/10")
-    written, structurally_ok = _write_exit_file(prompt_path, best_text, original_text, io_state)
-    if not structurally_ok:
-        print("  STRUCTURAL SAFETY TRIP at MAX-ITERATIONS save -- the original, unmodified "
-              "prompt was kept (WIX-CONV-001).")
-        learnings.append(_structural_trip_entry("MAX-ITERATIONS", max_iterations, best_score))
-    scores = score_prompt(written)
-    _print_final(scores, run_assertions(written), max_iterations, written,
-                 force_hold=not structurally_ok)
-    save_learnings(prompt_dir, learnings, prev_learnings, written)
-    return scores
+    return finish(best_raw, "MAX-ITERATIONS", max_iterations)
 
 
-_LINE_TERM_RE = re.compile(r'\r\n|\n|\r')
-
-
-def _split_keepends_and_strip(raw_text):
-    """Split `raw_text` (already str-decoded) into (lines, terminators): `lines[i]`
-    is physical line i with its terminator removed, `terminators[i]` is exactly
-    what followed it ("\\r\\n", "\\n", "\\r", or "" for a final line with no
-    trailing terminator at all). Only CR/LF are line terminators -- U+2028, form
-    feed, etc. stay inside their line. Round-trips any mix of line-ending styles."""
-    lines, terms = [], []
-    pos = 0
-    for m in _LINE_TERM_RE.finditer(raw_text):
-        lines.append(raw_text[pos:m.start()])
-        terms.append(m.group())
-        pos = m.end()
-    if pos < len(raw_text):
-        lines.append(raw_text[pos:])
-        terms.append("")
-    return lines, terms
-
-
-def _read_text_preserving(path):
-    """Read a prompt file preserving its original per-line line-ending convention
-    and any UTF-8 BOM, so `_save` can restore both exactly -- including a MIXED
-    file (some lines CRLF, some LF) -- instead of normalizing the whole file to
-    one style (WIX-CONV-001 item 5). Internal processing always works on
-    '\\n'-joined text; `original_lines`/`original_terms`/`bom` are threaded
-    through to `_save`, which reconstructs each line's original terminator for
-    every line that comes out unchanged and only falls back to a default for
-    genuinely new/modified lines."""
-    with open(path, "rb") as f:
-        raw = f.read()
-    bom = raw.startswith(b"\xef\xbb\xbf")
-    if bom:
-        raw = raw[3:]
-    raw_text = raw.decode("utf-8")
-    original_lines, original_terms = _split_keepends_and_strip(raw_text)
-    text = "\n".join(original_lines)
-    return text, original_lines, original_terms, bom
-
-
-def _safe_text_for_save(original_text, candidate_text):
-    """Defense-in-depth backstop for every exit path (WIX-CONV-001 item 3). The
-    per-iteration accept/revert gate should already guarantee `candidate_text`'s
-    protected regions match `original_text`'s; this re-checks right before a write
-    so that even a bug elsewhere can never persist structural damage -- it falls
-    back to the untouched original instead. Returns (text_to_save, structurally_ok)."""
-    if protected_regions_equal(original_text, candidate_text):
-        return candidate_text, True
-    return original_text, False
-
-
-def _candidate_is_structurally_safe(candidate_text, original_fp):
-    """Per-iteration accept/revert gate (WIX-CONV-001): the candidate's structural
-    fingerprint must equal the input's. Independent of the exit-path backstop
-    (_write_exit_file), which re-checks with protected_regions_equal."""
-    return structure_fingerprint(candidate_text) == original_fp
-
-
-def _structural_trip_entry(stage, iteration, score):
-    """learnings.json entry for an exit-path backstop trip (distinguishable from a
-    score regression and from a per-iteration structural revert)."""
+def _structural_trip_entry(stage, iteration, score, detail=""):
+    """learnings.json entry for an exit-path trip (distinguishable from a score regression and
+    from a per-iteration region-contract revert)."""
     return {
         "iteration": iteration, "axis": "n/a", "hypothesis": "n/a",
         "reasoning": f"structural safety trip before {stage} save",
-        "result": "reverted", "outcome": "REVERTED — structural gate tripped at save time",
+        "result": "reverted", "outcome": "REVERTED — region contract tripped at save time",
         "delta": 0, "start_score": score, "end_score": score,
-        "why_failed": (f"The structural fingerprint of the text to be written at the {stage} "
-                       f"exit (or of the file as written) differed from the input's; the "
-                       f"original file was kept and the verdict forced to HOLD (WIX-CONV-001)."),
+        "why_failed": (f"prompt_regions.commit refused or failed at the {stage} exit ({detail}); the "
+                       f"files on disk were kept or restored and the verdict forced to HOLD (WIX-CONV-001)."),
     }
 
-
-def _written_file_matches(path, original_text):
-    """Re-read the file just written and compare its structural fingerprint with the
-    input's -- the check runs on the WRITTEN FILE, not only on the in-memory text."""
-    try:
-        written_text = _read_text_preserving(path)[0]
-    except (OSError, UnicodeDecodeError):
-        return False
-    return protected_regions_equal(original_text, written_text)
-
-
-def _write_exit_file(path, candidate, original_text, io_state):
-    """Every exit path writes through here (WIX-CONV-001). The candidate is written only
-    if its fingerprint matches the input's, and the written file is then re-read and
-    checked again; on any mismatch the ORIGINAL bytes are restored verbatim.
-    Returns (text_now_on_disk, structurally_ok)."""
-    original_lines, original_terms, bom, original_raw = io_state
-    safe, ok = _safe_text_for_save(original_text, candidate)
-    if ok:
-        _save(path, safe, original_lines=original_lines, original_terms=original_terms, bom=bom)
-        if _written_file_matches(path, original_text):
-            return safe, True
-    _atomic_write_bytes(path, original_raw)
-    return original_text, False
-
-
-def _atomic_write_bytes(path, data):
-    """Write via a temp file + os.replace so a crash mid-write never leaves a
-    partially written prompt on disk."""
-    tmp = f"{path}.convergence-tmp"
-    with open(tmp, "wb") as f:
-        f.write(data)
-    os.replace(tmp, path)
-
-
-def _save(path, text, original_lines=None, original_terms=None, bom=False):
-    """Write `text` ('\\n'-joined working text) back to `path`. Every output line
-    that is unchanged from the original file (by position, or by exact content if
-    its position shifted -- e.g. an inserted line pushed it down) keeps EXACTLY
-    the terminator it originally had; a MIXED-line-ending input is therefore never
-    normalized to one style (WIX-CONV-001 item 5 / OBS-05). A genuinely new or
-    modified line gets the file's most common original terminator (or preserves
-    "no trailing newline" if that was true of the original's last line and this
-    is still the last line). `original_lines`/`original_terms` default to "no
-    prior file" (a brand new document, every line gets the default terminator)."""
-    original_lines = original_lines or []
-    original_terms = original_terms or []
-
-    term_by_content = {}
-    for ln, tm in zip(original_lines, original_terms):
-        if ln not in term_by_content:
-            term_by_content[ln] = tm
-
-    non_empty_terms = [t for t in original_terms if t]
-    if non_empty_terms:
-        default_term = Counter(non_empty_terms).most_common(1)[0][0]
-    else:
-        default_term = "\n"
-    orig_ends_without_newline = bool(original_terms) and original_terms[-1] == ""
-
-    out_lines = text.split('\n')
-    n = len(out_lines)
-    pieces = []
-    for i, ln in enumerate(out_lines):
-        is_last = (i == n - 1)
-        if is_last and ln == "" and n > 1:
-            # This trailing empty element just means the joined text ends with a
-            # '\n' -- the previous piece already carries its own terminator.
-            continue
-        if i < len(original_lines) and ln == original_lines[i]:
-            term = original_terms[i]
-        elif ln in term_by_content:
-            term = term_by_content[ln]
-        elif is_last:
-            term = "" if orig_ends_without_newline else default_term
-        else:
-            term = default_term
-        pieces.append(ln + term)
-
-    data = "".join(pieces).encode("utf-8")
-    if bom:
-        data = b"\xef\xbb\xbf" + data
-    _atomic_write_bytes(path, data)
-
-
 def _verdict_payload(scores=None, deploy=False, sigma=0.0, floor=0.0, passed=0, total=0,
-                      exit_code=EXIT_HOLD, error=None):
+                      exit_code=EXIT_HOLD, error=None, extra=None, scored=True):
     """Build the machine-readable verdict dict. Its fields are derived from the SAME
     (deploy, sigma, floor, passed, total) tuple that produced the printed VERDICT line and
     the process exit code, so a --json/--json-out consumer can never see a different
@@ -1564,7 +1095,10 @@ def _verdict_payload(scores=None, deploy=False, sigma=0.0, floor=0.0, passed=0, 
     }
     if error is not None:
         payload["error"] = error
+    elif not scored:
+        payload["scored"] = False
     else:
+        payload["scored"] = True
         payload["overall"] = scores.get("overall")
         payload["axes"] = {a: scores.get(a) for a in AXES}
         payload["sigma"] = round(sigma, 4)
@@ -1572,6 +1106,8 @@ def _verdict_payload(scores=None, deploy=False, sigma=0.0, floor=0.0, passed=0, 
         payload["sigma_pass"] = sigma <= floor
         payload["assertions_passed"] = passed
         payload["assertions_total"] = total
+    if error is None and extra:
+        payload.update(extra)
     return payload
 
 
@@ -1594,6 +1130,8 @@ def _verdict_payload_from_scores(scores, exit_code):
     the single emission point after run() returns (N1)."""
     return _verdict_payload(
         scores,
+        extra=scores.get("_extra"),
+        scored=scores.get("_scored", True),
         deploy=scores.get("_deploy", False),
         sigma=scores.get("_sigma", 0.0),
         floor=scores.get("_sigma_floor", 0.0),
@@ -1609,7 +1147,8 @@ def _usage_error(msg, want_json, json_out, show_usage=False):
     1, which the documented exit codes define as HOLD. This always exits EXIT_USAGE_ERROR (2)
     and, like every other exit path, emits the machine verdict once if requested."""
     if show_usage:
-        print("Usage: python convergence.py <prompt-file> [--max N] [--verbose] [--json] [--json-out PATH]",
+        print("Usage: python convergence.py <prompt-file> [--max N] [--verbose] [--json] [--json-out PATH] "
+              "[--proposal-out PATH] [--no-shipped]",
               file=sys.stderr)
     print(f"Error: {msg}", file=sys.stderr)
     _emit_machine_verdict(_verdict_payload(exit_code=EXIT_USAGE_ERROR, error=msg), want_json, json_out)
@@ -1673,6 +1212,8 @@ def main():
     want_json = "--json" in sys.argv
     max_iter = 100
     json_out = None
+    proposal_out = None
+    no_shipped = "--no-shipped" in sys.argv
     args = []
     skip_next = False
     argv_tail = sys.argv[1:]
@@ -1699,6 +1240,12 @@ def main():
             json_out = argv_tail[i + 1]
             skip_next = True
             continue
+        if a == "--proposal-out":
+            if i + 1 >= len(argv_tail):
+                _usage_error("--proposal-out requires a path value", want_json, json_out)
+            proposal_out = argv_tail[i + 1]
+            skip_next = True
+            continue
         if a.startswith("--") or a == "-v":
             continue
         args.append(a)
@@ -1710,7 +1257,8 @@ def main():
     # HOLD — the prompt was never fully scored, so it must not exit 1 and collide with a clean
     # HOLD (previously a crash and a HOLD were indistinguishable from the exit code alone).
     try:
-        scores = run(args[0], max_iterations=max_iter, verbose=verbose, want_json=want_json, json_out=json_out)
+        scores = run(args[0], max_iterations=max_iter, verbose=verbose, want_json=want_json, json_out=json_out,
+                     proposal_out=proposal_out, no_shipped=no_shipped)
     except SystemExit:
         raise
     except Exception as e:

@@ -60,7 +60,7 @@ reg_path = tmp / "registry.json"
 reg_path.write_text(json.dumps(REGISTRY), encoding="utf-8")
 ot.REGISTRY_PATH = str(reg_path)
 # Force Phase 4 onto the LLM evaluator + fixer path (the offline regex fixer is out of scope here).
-ot.try_offline_fix = lambda p, s, d: (p, False, None)
+ot.try_offline_fix = lambda p, s, d, **kw: (p, False, None)
 
 SECRET = "sk-test-NOT-A-REAL-KEY-7f3a9c"
 os.environ["ANTHROPIC_API_KEY"] = SECRET
@@ -163,7 +163,13 @@ check("1 per-call roles", [x["role"] for x in calls][:3] == ["target", "evaluato
 ev = calls[1]
 check("1 per-call observed None when absent", ev["observed"] is None and ev["requested"] == "zz-beta"
       and ev["resolved"] == "zz-beta-wire", ev)
-check("1 fix applied", res["iterations_detail"][0]["fix"]["applied"] is True, res["iterations_detail"][0].get("fix"))
+# WIX-CONV-001 / D15: this prompt has no explicit editable region, so the LLM fix is a proposal
+# only (never written); the region-scoped applied path is covered in
+# tests/convergence-engine/test_prompt_regions.py (output-test cases).
+check("1 fix is a proposal on an unannotated prompt",
+      res["iterations_detail"][0]["fix"]["applied"] is False
+      and res["iterations_detail"][0]["fix"].get("proposal", {}).get("target") == "Say hello to the user politely.",
+      res["iterations_detail"][0].get("fix"))
 # sampling capability
 gen_kw, ev_kw, fx_kw = c.sent[0][1], c.sent[1][1], c.sent[2][1]
 check("10 adjustable target gets metadata temperature", gen_kw.get("temperature") == 0.3, gen_kw)

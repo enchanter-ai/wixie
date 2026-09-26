@@ -94,15 +94,27 @@
     },
     {
       "consumers": [
+        "vendor/wixie/shared/scripts/self-eval.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
+      "path": "wixie/shared/scripts/prompt_regions.py",
+      "sha1": "856ce32144953beda606461baac2a1790a90642d",
+      "sha256": "99966acef49fe6020ba2656596bae301e4508f030268c84bdf2ea89505e38906",
+      "source": "wixie",
+      "source_path": "shared/scripts/prompt_regions.py",
+      "source_revision": "git-blob:a5e452779debad5ca42f879827f0627eea33fbb3"
+    },
+    {
+      "consumers": [
         "skills/translate/SKILL.md"
       ],
       "destination": "vendor/wixie/shared/scripts/self-eval.py",
       "path": "wixie/shared/scripts/self-eval.py",
-      "sha1": "916225a3e63186fddf61b5f85153352897b93d39",
-      "sha256": "5b9d0cead3498604dfdc340b6183b3772496e451db76517ae2008e3453f388a4",
+      "sha1": "4849cae25eae4398a044c685ba1c0be61756a502",
+      "sha256": "2197ec8c1610226a77180d4c293417a3098d25e27989446b92bc4922d12be86e",
       "source": "wixie",
       "source_path": "shared/scripts/self-eval.py",
-      "source_revision": "git-blob:9478bb2fa361041b62013f0aac3b2b763247d33a"
+      "source_revision": "git-blob:1091e99feb0b40c1594ee96a2dcd7e65a3d481bd"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",

@@ -88,6 +88,98 @@ _output_sim    = _try_import("output-sim.py", "output_sim")
 _output_schema = _try_import("output-schema.py", "output_schema")
 _self_check    = _try_import("self-check-inject.py", "self_check_inject")
 
+
+def _load_prompt_regions():
+    """The ONE editability implementation (WIX-CONV-001). Shared with convergence.py through
+    sys.modules so both see the same classes. None if missing: every write path fails closed."""
+    mod = sys.modules.get("prompt_regions")
+    if mod is not None:
+        return mod
+    path = os.path.join(SCRIPT_DIR, "prompt_regions.py")
+    if not os.path.isfile(path):
+        return None
+    spec = importlib.util.spec_from_file_location("prompt_regions", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["prompt_regions"] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        sys.modules.pop("prompt_regions", None)
+        return None
+    return mod
+
+
+_PR = _load_prompt_regions()
+
+
+class PromptWorking(object):
+    """The prompt this run may change (WIX-CONV-001 / D15).
+
+    The shipped file (prompts/<name>/prompt.<ext>) is what models see. If a master exists at
+    prompts/<name>/editable/<same name>, parses ANNOTATED with at least one editable region and
+    strip(master) == shipped, the run is WRITABLE: accepted fixes change region bodies of the
+    master and are committed immediately (master + shipped, prompt_regions.commit). In every
+    other case the run is read-only: fixes are recorded as proposals, nothing is written."""
+
+    def __init__(self, shipped_path):
+        if _PR is None:
+            raise RuntimeError("prompt_regions.py is missing; refusing to load the prompt")
+        self.shipped_path = shipped_path
+        self.master_path = _PR.master_for(shipped_path)
+        self.notes = []
+        with open(shipped_path, "rb") as f:
+            shipped_raw = f.read()
+        self.writable = False
+        mdoc = master_raw = None
+        if self.master_path:
+            with open(self.master_path, "rb") as f:
+                master_raw = f.read()
+            mdoc = _PR.parse(master_raw)
+            pair_ok = False
+            if mdoc.status in (_PR.Status.ANNOTATED, _PR.Status.NO_REGIONS):
+                try:
+                    pair_ok = _PR.strip(master_raw) == shipped_raw
+                except _PR.RegionError:
+                    pair_ok = False
+            if not pair_ok:
+                self.notes.append(f"master {self.master_path} is {mdoc.status.value} or disagrees with the "
+                                  f"shipped file; read-only run")
+                self.master_path = None
+        if self.master_path:
+            self.raw = master_raw
+            self.doc = mdoc
+            self.expected = (master_raw, shipped_raw)
+            self.writable = mdoc.status is _PR.Status.ANNOTATED and bool(mdoc.editable_regions)
+        else:
+            self.raw = shipped_raw
+            self.doc = _PR.parse(shipped_raw)
+            self.expected = None
+        self.orig_doc = self.doc
+
+    @property
+    def status(self):
+        return _PR.parse(self.raw).status.value
+
+    @property
+    def view(self):
+        return _PR.view(self.raw, normalize_newlines=True)
+
+    def editable_bodies(self):
+        doc = _PR.parse(self.raw)
+        return [(b.id, b.text) for b in _PR.bodies(doc) if b.editable]
+
+    def commit(self, new_raw):
+        if not self.writable:
+            raise _PR.RegionViolation("E_NOT_WRITABLE", None, "no explicit editable region")
+        res = _PR.commit(self.orig_doc, self.master_path, self.shipped_path, new_raw, self.expected)
+        self.raw = res["master"]
+        self.expected = (res["master"], res["shipped"])   # advance after every commit (RC2-05)
+        return res
+
+    def describe(self):
+        return {"status": self.status, "writable": self.writable,
+                "master": self.master_path, "shipped": self.shipped_path, "notes": list(self.notes)}
+
 # ─── Display helpers ──────────────────────────────────────────────────────────
 
 RESET = ""
@@ -458,8 +550,12 @@ def load_prompt_folder(folder):
         print(f"ERROR: No prompt file found in {folder}", file=sys.stderr)
         sys.exit(1)
 
-    with open(prompt_file, "r", encoding="utf-8") as f:
-        prompt_text = f.read()
+    # Bytes, never text mode (WIX-CONV-001): what models and scorers see is the stripped view.
+    try:
+        prompt_text = _PR.read_view(prompt_file, normalize_newlines=True)
+    except Exception as e:
+        print(f"ERROR: cannot read {prompt_file}: {e}", file=sys.stderr)
+        sys.exit(1)
 
     meta_path = os.path.join(folder, "metadata.json")
     meta = {}
@@ -874,7 +970,7 @@ Respond in this exact JSON format:
             "raw_response": response_text[:1000],
         }, call
 
-def generate_fix(client, prompt_text, eval_result, test_results, scores, prompt_file, fixer):
+def generate_fix(client, prompt_text, eval_result, test_results, scores, prompt_file, fixer, regions=None):
     """Use the resolved fixer model to generate a specific prompt fix based on failures.
     Returns (fix or None, call_record or None); no record means no call was made."""
     failures = []
@@ -890,11 +986,26 @@ def generate_fix(client, prompt_text, eval_result, test_results, scores, prompt_
 
     top_fix = eval_result.get("top_fix", "No suggestion")
 
+    if regions:
+        region_text = "\n\n".join(f"### region `{rid}`\n<<<\n{body}>>>" for rid, body in regions)
+        region_block = ("\n## Editable regions\nOnly the text inside these regions may change; everything "
+                        "else in the prompt is immutable data.\n\n" + region_text + "\n")
+        target_schema = ('  "region_id": "the id of ONE editable region above",\n'
+                         '  "target": "the exact, non-empty string inside that region to replace '
+                         '(must occur exactly once there)",')
+        target_rule = "- The target MUST be copied verbatim from inside the named region and occur exactly once there."
+    else:
+        region_block = ""
+        target_schema = ('  "target": "the exact string in the prompt to replace (20-200 chars, '
+                         'must exist in the prompt)",')
+        target_rule = "- The target string MUST exist verbatim in the prompt. Copy it exactly."
+
     fix_prompt = f"""You are a prompt engineer fixing a prompt based on test failures.
 
 ## Current Prompt (in {os.path.basename(prompt_file)})
 {prompt_text[:8000]}
 
+{region_block}
 ## Failures Found
 {chr(10).join(failures)}
 
@@ -905,14 +1016,14 @@ def generate_fix(client, prompt_text, eval_result, test_results, scores, prompt_
 Generate a SPECIFIC edit to fix the most impactful failure. Return JSON:
 ```json
 {{
-  "target": "the exact string in the prompt to replace (20-200 chars, must exist in the prompt)",
+{target_schema}
   "replacement": "the new string to replace it with",
   "reason": "1-sentence explanation of why this fix addresses the failure"
 }}
 ```
 
 Rules:
-- The target string MUST exist verbatim in the prompt. Copy it exactly.
+{target_rule}
 - Make the smallest change that fixes the most impactful failure.
 - Do not rewrite the entire prompt. Fix ONE thing.
 - If the failure is about missing content, add to an existing section rather than creating new sections."""
@@ -931,61 +1042,101 @@ Rules:
     except json.JSONDecodeError:
         return {"error": response_text[:500]}, call
 
-def apply_fix(prompt_text, fix):
-    """Apply a fix to the prompt text. Returns (new_text, applied_bool)."""
-    target = fix.get("target", "")
-    replacement = fix.get("replacement", "")
-    if not target or not replacement:
-        return prompt_text, False
-    if target not in prompt_text:
-        return prompt_text, False
-    new_text = prompt_text.replace(target, replacement, 1)
-    return new_text, True
+def try_offline_fix(prompt_text, scores, details, working=None):
+    """Attempt convergence.py's offline fixers for structural failures -- under the SAME
+    explicit editability boundary as convergence (WIX-CONV-001): the fixer runs through
+    convergence.fix_document (region bodies only, prompt_regions.verify), and nothing is
+    applied unless the prompt has an explicit editable region.
 
-def try_offline_fix(prompt_text, scores, details):
-    """Attempt convergence.py-style regex fixes for structural failures.
-    Returns (new_text, applied_bool, description) or (prompt_text, False, None)."""
-    # Import convergence fixers if available
+    With `working` (a PromptWorking) an applied fix is committed at once (master + shipped) and
+    the new view is returned. Without it, `prompt_text` is parsed as the annotated text itself
+    and the new annotated text is returned (nothing is written).
+    Returns (new_text, applied_bool, description)."""
+    if _PR is None:
+        return prompt_text, False, None
     try:
         convergence = _try_import("convergence.py", "convergence")
-        if not convergence:
-            return prompt_text, False, None
     except Exception:
-        return prompt_text, False, None
+        convergence = None
+    fix_document = getattr(convergence, "fix_document", None) if convergence else None
+    if fix_document is None or not hasattr(convergence, "FIXERS"):
+        return prompt_text, False, None   # fail closed: no shared boundary, no fix
 
-    # Identify what kind of failure we have
     test_results = details.get("test_results", [])
     failed_tests = [t for t in test_results if not t["passed"]]
+    if not failed_tests or not _self_eval:
+        return prompt_text, False, None
 
-    # If assertion tests failed with missing keywords, try to inject them
-    # (this is a structural fix — no API needed)
-    if failed_tests and hasattr(convergence, 'FIXERS'):
-        # Run convergence-style fixes on the prompt
-        pre_text = prompt_text
+    if working is not None:
+        if not working.writable:
+            return prompt_text, False, f"not applied: {working.status} (no explicit editable region)"
+        raw, base_doc = working.raw, working.orig_doc
+    else:
+        raw = prompt_text.encode("utf-8")
+        base_doc = _PR.parse(raw)
+    doc = _PR.parse(raw)
+    if doc.status is not _PR.Status.ANNOTATED or not doc.editable_regions:
+        return prompt_text, False, f"not applied: {doc.status.value} (no explicit editable region)"
 
-        # Score the prompt to find weakest axis
-        if _self_eval:
-            prompt_scores = {a: round(fn(prompt_text), 1)
-                           for a, fn in zip(_self_eval.AXES, _self_eval.SCORERS)}
-            weakest = min(_self_eval.AXES, key=lambda a: prompt_scores[a])
-            if weakest in convergence.FIXERS and prompt_scores[weakest] < 9.0:
-                candidate_text = convergence.FIXERS[weakest](prompt_text)
-                if candidate_text != pre_text:
-                    # WIX-CONV-001: this path applies convergence.py's fixers with no gate
-                    # of its own. Share the structural gate convergence.py's own
-                    # accept/revert loop uses (protected_regions_equal: fingerprint of all
-                    # non-editable content + tag sequence), so a candidate that changed any
-                    # of it is refused here too, regardless of score. Fail closed: a
-                    # convergence module without the gate never gets a fix applied.
-                    gate = getattr(convergence, "protected_regions_equal", None)
-                    if gate is None or not gate(pre_text, candidate_text):
-                        return prompt_text, False, None
-                    return candidate_text, True, f"Offline fix: improved {weakest} ({prompt_scores[weakest]}/10)"
+    view = _PR.view(raw, normalize_newlines=True)
+    prompt_scores = {a: round(fn(view), 1) for a, fn in zip(_self_eval.AXES, _self_eval.SCORERS)}
+    weakest = min(_self_eval.AXES, key=lambda a: prompt_scores[a])
+    if weakest not in convergence.FIXERS or prompt_scores[weakest] >= 9.0:
+        return prompt_text, False, None
+    candidate = fix_document(raw, weakest, base_doc)
+    if candidate == raw:
+        return prompt_text, False, None
+    try:
+        _PR.verify(base_doc, candidate)   # independent re-check (same invariant as convergence)
+    except _PR.RegionViolation:
+        return prompt_text, False, None
+    desc = f"Offline fix: improved {weakest} ({prompt_scores[weakest]}/10) inside explicit editable regions"
+    if working is not None:
+        try:
+            working.commit(candidate)
+        except (_PR.RegionViolation, _PR.RegionError, _PR.ConcurrentModification, OSError) as e:
+            return prompt_text, False, f"not applied: commit refused ({e})"
+        return working.view, True, desc
+    return candidate.decode("utf-8"), True, desc
 
-    return prompt_text, False, None
+
+def apply_region_fix(working, fix):
+    """Apply an LLM fix {region_id, target, replacement} to ONE explicit editable region of the
+    master (WIX-CONV-001). The target must be non-empty and occur exactly once in that body;
+    the result must pass prompt_regions.verify. Returns (new_master_bytes or None, reason)."""
+    if working is None or not working.writable:
+        return None, "no explicit editable region"
+    rid, target, repl = fix.get("region_id"), fix.get("target"), fix.get("replacement")
+    if not isinstance(rid, str) or not isinstance(target, str) or not isinstance(repl, str):
+        return None, "fix must carry string region_id, target and replacement"
+    if not target:
+        return None, "empty target"
+    doc = _PR.parse(working.raw)
+    views = _PR.bodies(doc)
+    idx = [i for i, b in enumerate(views) if b.id == rid]
+    if not idx:
+        return None, f"unknown region_id {rid!r}"
+    i = idx[0]
+    if not views[i].editable:
+        return None, f"region {rid!r} is read-only ({doc.regions[i].frozen_reason})"
+    body = views[i].text
+    t = target.replace("\r\n", "\n").replace("\r", "\n")
+    r = repl.replace("\r\n", "\n").replace("\r", "\n")
+    count = body.count(t)
+    if count != 1:
+        return None, f"target occurs {count} times in region {rid!r} (must be exactly once)"
+    new = [None] * len(views)
+    new[i] = body.replace(t, r, 1)
+    try:
+        cand = _PR.apply(doc, new)
+        _PR.verify(working.orig_doc, cand)
+    except _PR.RegionViolation as e:
+        return None, f"region contract: {e}"
+    return cand, "ok"
+
 
 def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_file,
-                     evaluator, fixer, verbose=False):
+                     evaluator, fixer, verbose=False, working=None):
     """Phase 4: Diagnose failures and apply fixes.
 
     Returns (new_prompt, fix_info, calls) where calls are the provider call records
@@ -995,7 +1146,7 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
     calls = []
 
     # Strategy 1: Try offline regex fix first (FREE)
-    new_text, applied, desc = try_offline_fix(prompt_text, scores, details)
+    new_text, applied, desc = try_offline_fix(prompt_text, scores, details, working=working)
     if applied:
         fix_info = {"method": "offline_regex", "applied": True, "description": desc}
         print(f"    {GREEN}Offline fix applied{RESET}: {desc}")
@@ -1041,8 +1192,9 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
     # Generate and apply a targeted fix with the resolved fixer model
     print(f"    {CYAN}Generating fix with {fixer['resolved']}...{RESET}", end="", flush=True)
     test_results = details.get("test_results", [])
+    regions = working.editable_bodies() if (working is not None and working.writable) else None
     fix, fix_call = generate_fix(client, prompt_text, eval_result, test_results, scores,
-                                 prompt_file, fixer)
+                                 prompt_file, fixer, regions=regions)
     if fix_call is not None:
         calls.append(fix_call)
 
@@ -1053,20 +1205,32 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
                     "description": "fixer provider call failed", "fix_failed": True,
                     "error": err, "llm_evaluation": llm_eval}
     elif fix and "error" not in fix:
-        new_text, applied = apply_fix(prompt_text, fix)
-        if applied:
-            reason = fix.get("reason", "no reason")
-            print(f" {GREEN}Applied{RESET}: {reason[:80]}")
-            fix_info = {"method": "llm_fix", "applied": True, "description": reason,
+        reason = fix.get("reason", "no reason")
+        proposal = {k: fix.get(k) for k in ("region_id", "target", "replacement", "reason")}
+        if working is None or not working.writable:
+            # WIX-CONV-001 / D15: no explicit editable region -> proposal only, never written.
+            print(f" {YELLOW}Proposal only{RESET} (no explicit editable region; not applied)")
+            fix_info = {"method": "llm_fix", "applied": False, "proposal": proposal,
+                        "description": "proposal only: the prompt has no explicit editable region "
+                                       "(WIX-CONV-001); apply manually",
                         "llm_evaluation": llm_eval}
-            # Save fixed prompt
-            with open(prompt_file, "w", encoding="utf-8") as f:
-                f.write(new_text)
-            return new_text, fix_info, calls
         else:
-            print(f" {YELLOW}Could not apply{RESET} (target string not found)")
-            fix_info = {"method": "llm_fix", "applied": False, "description": "target not found",
-                        "llm_evaluation": llm_eval}
+            cand, why = apply_region_fix(working, fix)
+            committed = False
+            if cand is not None:
+                try:
+                    working.commit(cand)
+                    committed = True
+                except (_PR.RegionViolation, _PR.RegionError, _PR.ConcurrentModification, OSError) as e:
+                    why = f"commit refused: {e}"
+            if committed:
+                print(f" {GREEN}Applied{RESET} in region {fix.get('region_id')}: {reason[:80]}")
+                fix_info = {"method": "llm_fix", "applied": True, "description": reason,
+                            "region_id": fix.get("region_id"), "llm_evaluation": llm_eval}
+                return working.view, fix_info, calls
+            print(f" {YELLOW}Could not apply{RESET} ({why})")
+            fix_info = {"method": "llm_fix", "applied": False, "description": why,
+                        "proposal": proposal, "llm_evaluation": llm_eval}
     else:
         err = fix.get("error", "unknown") if fix else "no fix generated"
         print(f" {RED}Fix failed{RESET}: {str(err)[:80]}")
@@ -1146,6 +1310,8 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         no_fix=False, verbose=False, evaluator_model=None, fixer_model=None, client=None):
     _init_colors()
     prompt_text, meta, tests, prompt_file, folder = load_prompt_folder(folder)
+    working = PromptWorking(prompt_file)
+    prompt_text = working.view
 
     # Resolve every role up front, through the registry, before any call.
     identity, model_errors = resolve_run_models(meta, evaluator_model, fixer_model)
@@ -1206,6 +1372,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             "preflight": preflight_results,
             "iterations_detail": [],
             "available_engines": available,
+            "editability": working.describe(),
         }
         data.update(kw)
         return data
@@ -1323,7 +1490,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             print_phase("Phase 4: Learn & Fix")
             new_prompt, fix_info, fix_calls = diagnose_and_fix(
                 client, prompt_text, output, scores, details, meta, prompt_file,
-                identity["evaluator"], identity["fixer"], verbose=verbose
+                identity["evaluator"], identity["fixer"], verbose=verbose, working=working
             )
             calls.extend(fix_calls)
             all_calls.extend(fix_calls)

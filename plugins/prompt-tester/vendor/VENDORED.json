@@ -384,11 +384,23 @@
       ],
       "destination": "vendor/wixie/shared/scripts/efficacy-replay.py",
       "path": "wixie/shared/scripts/efficacy-replay.py",
-      "sha1": "94fb6d46f5f759171ffd80d1422e56f8a1ae1902",
-      "sha256": "944bd223c3dadb1b332c46cec85ec887b327761bc07553409edcae1bcfb2826a",
+      "sha1": "3fb700d3219d582339a101284d727f90aff55b4a",
+      "sha256": "844a689c2f07113ba0b7c40b93bce0347d8ae16211e8c392276561f654cc1acc",
       "source": "wixie",
       "source_path": "shared/scripts/efficacy-replay.py",
-      "source_revision": "git-blob:82ab21007d09c5658d60a2eb630834d102337317"
+      "source_revision": "git-blob:517cd735d0b04e0793962485f3e5c51230557f62"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/efficacy-replay.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
+      "path": "wixie/shared/scripts/prompt_regions.py",
+      "sha1": "856ce32144953beda606461baac2a1790a90642d",
+      "sha256": "99966acef49fe6020ba2656596bae301e4508f030268c84bdf2ea89505e38906",
+      "source": "wixie",
+      "source_path": "shared/scripts/prompt_regions.py",
+      "source_revision": "git-blob:a5e452779debad5ca42f879827f0627eea33fbb3"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",

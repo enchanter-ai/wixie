@@ -9,6 +9,25 @@ Usage:
 """
 import sys, re, json, os
 
+
+def _prompt_view(path):
+    """Read a prompt through the shared editability module (WIX-CONV-001): an annotated master
+    is scored as its stripped view, an unannotated file as-is; a MALFORMED annotation exits 2
+    (unusable input). Bytes are read, line endings normalised as the text-mode read used to."""
+    import importlib.util
+    mod = sys.modules.get("prompt_regions")
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(
+            "prompt_regions", os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt_regions.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["prompt_regions"] = mod
+        spec.loader.exec_module(mod)
+    try:
+        return mod.read_view(path, normalize_newlines=True)
+    except mod.RegionError as e:
+        print(f"Error: {path}: malformed wixie-editable annotation: {e}", file=sys.stderr)
+        sys.exit(2)
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REGISTRY_PATH = os.path.join(SCRIPT_DIR, "..", "models-registry.json")
 
@@ -43,8 +62,7 @@ def read_input():
             args.append(a)
     if args:
         try:
-            with open(args[0], "r", encoding="utf-8") as f:
-                return f.read()
+            return _prompt_view(args[0])
         except FileNotFoundError:
             print(f"Error: File not found: {args[0]}", file=sys.stderr)
             sys.exit(2)

@@ -221,16 +221,16 @@ class ClosureDrift(unittest.TestCase):
         self.assertEqual(self.check().returncode, 0)
 
     def test_new_import_grows_the_closure_one_command(self):
-        # e.g. WIX-CONV-001 adding shared/scripts/prompt_spans.py imported by convergence.py
-        (self.repo / "shared/scripts/prompt_spans.py").write_text("SPANS = 1\n", encoding="utf-8", newline="\n")
+        # e.g. a new helper module shared/scripts/new_helper.py imported by convergence.py
+        (self.repo / "shared/scripts/new_helper.py").write_text("HELPER = 1\n", encoding="utf-8", newline="\n")
         src = self.repo / "shared/scripts/convergence.py"
-        src.write_bytes(src.read_bytes().replace(b"import sys, os, re", b"import prompt_spans\nimport sys, os, re", 1))
-        self.assert_both_fail("missing vendored file: vendor/wixie/shared/scripts/prompt_spans.py")
+        src.write_bytes(src.read_bytes().replace(b"import sys, os, re", b"import new_helper\nimport sys, os, re", 1))
+        self.assert_both_fail("missing vendored file: vendor/wixie/shared/scripts/new_helper.py")
         self.assertEqual(run(self.vis_args).returncode, 0)
         self.assertEqual(self.check().returncode, 0)
         self.assertEqual(self.check(offline=True).returncode, 0)
         for p in ("convergence-engine", "prompt-crafter", "prompt-refiner"):
-            self.assertTrue((self.repo / f"plugins/{p}/vendor/wixie/shared/scripts/prompt_spans.py").is_file(), p)
+            self.assertTrue((self.repo / f"plugins/{p}/vendor/wixie/shared/scripts/new_helper.py").is_file(), p)
 
     def test_duplicate_destination_in_manifest(self):
         m = self.repo / "plugins/prompt-translate/vendor/VENDORED.json"

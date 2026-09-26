@@ -117,11 +117,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/convergence.py",
       "path": "wixie/shared/scripts/convergence.py",
-      "sha1": "63d464267efdbe87c5781cedf5244df2effc5591",
-      "sha256": "205125cf95b3bf72f77882ef4d42dee14987196447c61b5f3fbf6b16e4695b12",
+      "sha1": "330ad4de4b050113831e99ea96dd247eac89654a",
+      "sha256": "45060b2cd70cb82689fa783a53536ad0ef4c3c79fbe4d4c32937791134d7e6a3",
       "source": "wixie",
       "source_path": "shared/scripts/convergence.py",
-      "source_revision": "git-blob:88f86c0dd5d68bd6556e0f84c135b5eb6e63e54c"
+      "source_revision": "git-blob:04599c6fe7932a45bed470f7397ca4f8558dc583"
     },
     {
       "consumers": [
@@ -129,11 +129,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/efficacy-replay.py",
       "path": "wixie/shared/scripts/efficacy-replay.py",
-      "sha1": "94fb6d46f5f759171ffd80d1422e56f8a1ae1902",
-      "sha256": "944bd223c3dadb1b332c46cec85ec887b327761bc07553409edcae1bcfb2826a",
+      "sha1": "3fb700d3219d582339a101284d727f90aff55b4a",
+      "sha256": "844a689c2f07113ba0b7c40b93bce0347d8ae16211e8c392276561f654cc1acc",
       "source": "wixie",
       "source_path": "shared/scripts/efficacy-replay.py",
-      "source_revision": "git-blob:82ab21007d09c5658d60a2eb630834d102337317"
+      "source_revision": "git-blob:517cd735d0b04e0793962485f3e5c51230557f62"
     },
     {
       "consumers": [
@@ -146,6 +146,21 @@
       "source": "wixie",
       "source_path": "shared/scripts/html-to-pdf.py",
       "source_revision": "git-blob:e91b0162b88cdec3ebd17416d7352c19e3ec4dc1"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/efficacy-replay.py",
+        "vendor/wixie/shared/scripts/self-eval.py",
+        "vendor/wixie/shared/scripts/token-count.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
+      "path": "wixie/shared/scripts/prompt_regions.py",
+      "sha1": "856ce32144953beda606461baac2a1790a90642d",
+      "sha256": "99966acef49fe6020ba2656596bae301e4508f030268c84bdf2ea89505e38906",
+      "source": "wixie",
+      "source_path": "shared/scripts/prompt_regions.py",
+      "source_revision": "git-blob:a5e452779debad5ca42f879827f0627eea33fbb3"
     },
     {
       "consumers": [
@@ -169,11 +184,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/self-eval.py",
       "path": "wixie/shared/scripts/self-eval.py",
-      "sha1": "916225a3e63186fddf61b5f85153352897b93d39",
-      "sha256": "5b9d0cead3498604dfdc340b6183b3772496e451db76517ae2008e3453f388a4",
+      "sha1": "4849cae25eae4398a044c685ba1c0be61756a502",
+      "sha256": "2197ec8c1610226a77180d4c293417a3098d25e27989446b92bc4922d12be86e",
       "source": "wixie",
       "source_path": "shared/scripts/self-eval.py",
-      "source_revision": "git-blob:9478bb2fa361041b62013f0aac3b2b763247d33a"
+      "source_revision": "git-blob:1091e99feb0b40c1594ee96a2dcd7e65a3d481bd"
     },
     {
       "consumers": [
@@ -182,11 +197,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/token-count.py",
       "path": "wixie/shared/scripts/token-count.py",
-      "sha1": "939715432cdae9c4ad3cc7b6790373637330f84b",
-      "sha256": "2e1eeaba00c0d692beede75ae51b39ef2660ea0a99072ab757c7679c926664e0",
+      "sha1": "65f0a62b0fb66045d09916cb2effc5ff0efc0e2a",
+      "sha256": "c31230f85f7b7eee52491bf28acbe9b61b8fef5303e51a00cb6afdcb45d8f8f1",
       "source": "wixie",
       "source_path": "shared/scripts/token-count.py",
-      "source_revision": "git-blob:439820d8eae67c09e6f43d98f6de3a26dd57471c"
+      "source_revision": "git-blob:167a215941448c4131592756f450b0c125ba106d"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",

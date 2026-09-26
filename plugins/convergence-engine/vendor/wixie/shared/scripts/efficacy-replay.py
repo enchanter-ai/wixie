@@ -17,6 +17,25 @@ import argparse, hashlib, json, math, os, re, shutil, signal, subprocess, sys, t
 from pathlib import Path
 from types import SimpleNamespace
 
+
+def _prompt_view(path):
+    """Read a prompt through the shared editability module (WIX-CONV-001): an annotated master
+    is scored as its stripped view, an unannotated file as-is; a MALFORMED annotation exits 2
+    (unusable input). Bytes are read, line endings normalised as the text-mode read used to."""
+    import importlib.util
+    mod = sys.modules.get("prompt_regions")
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(
+            "prompt_regions", os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt_regions.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["prompt_regions"] = mod
+        spec.loader.exec_module(mod)
+    try:
+        return mod.read_view(path, normalize_newlines=True)
+    except mod.RegionError as e:
+        print(f"Error: {path}: malformed wixie-editable annotation: {e}", file=sys.stderr)
+        sys.exit(2)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"
 CORPUS_ROOT = REPO_ROOT / "shared" / "eval-corpus"
@@ -686,7 +705,7 @@ def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_con
     for c in cases:
         if "id" not in c or "input" not in c:
             raise RuntimeError(f"corpus case malformed (needs id+input): {c}")
-    prompt_text = prompt_path.read_text(encoding="utf-8")
+    prompt_text = _prompt_view(str(prompt_path))
     floor = float(corpus.get("accept", {}).get("rate_floor", 0.75))
     runs_dir = cdir / "runs"
     runs_dir.mkdir(exist_ok=True)
