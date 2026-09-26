@@ -37,7 +37,7 @@ Delegate to the Haiku-tier briefer for a shape-check pass:
 ```
 Agent(subagent_type="general-purpose", model="haiku",
       prompt="Run the briefer agent defined at
-              wixie/plugins/inference-engine/agents/briefer.md
+              ${CLAUDE_PLUGIN_ROOT}/agents/briefer.md
               with plugin='<target>'.")
 ```
 

@@ -23,7 +23,7 @@ You render machine-readable catalog entries into a concise Markdown briefing the
 ### 1. Render
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py render-briefing <plugin>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py render-briefing <plugin>
 ```
 
 The engine filters to patterns whose tags contain `<plugin>` (case-insensitive) and whose verdict is `elevated`. Sorts by EMA weight descending. Writes to `state/briefings/<plugin>.md`.

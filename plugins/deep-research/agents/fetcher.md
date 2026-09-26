@@ -254,7 +254,7 @@ If any check fails, fix the object before emitting. Do not emit and flag — fix
 Despite the schema clauses above, Haiku fetchers schema-drift in practice (round-3 dispatch on 2026-04-25 — 9 of 10 fetchers returned non-canonical shapes; see substrate F11.1). The orchestrator MUST therefore post-process every fetcher return through:
 
 ```
-python wixie/shared/scripts/fetcher-normalize.py [--sq <id>] [--start-id S<n>] < raw.json > sources_block.jsonl
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/fetcher-normalize.py [--sq <id>] [--start-id S<n>] < raw.json > sources_block.jsonl
 ```
 
 The normalizer coerces drift shapes (`{claim, source, confidence}`, `{study_id, failure_mode, prevalence}`, `{benchmark, primary_source, failure_modes:[...]}`, etc.) into the canonical `{url, date, source_type, findings:[{claim, quote}]}`. Returns lacking a URL are dropped — never fabricated.

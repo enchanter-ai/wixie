@@ -24,8 +24,8 @@ Transform structured `claims.json` into a human-readable `report.md`.
 
 ## Preconditions
 
-- `${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/claims.json` exists
-- `${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/sources.jsonl` exists
+- `${CLAUDE_PLUGIN_ROOT}/state/briefs/<slug>/claims.json` exists
+- `${CLAUDE_PLUGIN_ROOT}/state/briefs/<slug>/sources.jsonl` exists
 
 If either is missing → FAIL with: *"No brief found for `<slug>`. Run `/deep-research <topic>` first."*
 

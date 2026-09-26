@@ -7,7 +7,7 @@ description: >
   "make this prompt better", "optimize this prompt", "help me prompt",
   "write a system prompt", "what prompting technique should I use",
   "how should I structure this prompt", "/create".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py *) Bash(mkdir *) Read Write Edit Agent
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Read Write Edit Agent
 ---
 
 # Wixie
@@ -93,7 +93,7 @@ Do NOT reuse the same questions across different tasks. Each question must be wr
 
 ## Phase 2.5: Model Fit Check (Do Not Skip)
 
-After Phase 2, before generating the prompt, validate that the user's chosen model actually fits the task. Read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json) and cross-reference:
+After Phase 2, before generating the prompt, validate that the user's chosen model actually fits the task. Read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json) and cross-reference:
 
 | Task Domain | Best Model Types | Poor Fit |
 |---|---|---|
@@ -180,7 +180,7 @@ If no research was needed, all three fields are `null`.
 
 Before generating, confirm the prompt's **direction** with the developer — grill-me style, one decision at a time. Default-on. This stops Wixie from auto-deciding the load-bearing choices and building the wrong prompt three phases deep.
 
-Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Reflect the understood direction in one line, resolve the **coarse** choices fast (state your inference on intent / scope / model / format / technique and invite a correction — don't burn a full question on each), then **deep-grill the task-specific forks** — the real ambiguities, edge cases, and failure modes of *this* prompt, plus every load-bearing assumption — **one question per call**, each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). A generic scope/model/format question is too shallow on its own: if a question would fit any prompt, it's the wrong question — find the ones that only fit this one. Do NOT enter Phase 3 until the direction is confirmed; carry overrides forward into 3A technique selection and 3B formatting.
+Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/direction-lock.md). Reflect the understood direction in one line, resolve the **coarse** choices fast (state your inference on intent / scope / model / format / technique and invite a correction — don't burn a full question on each), then **deep-grill the task-specific forks** — the real ambiguities, edge cases, and failure modes of *this* prompt, plus every load-bearing assumption — **one question per call**, each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). A generic scope/model/format question is too shallow on its own: if a question would fit any prompt, it's the wrong question — find the ones that only fit this one. Do NOT enter Phase 3 until the direction is confirmed; carry overrides forward into 3A technique selection and 3B formatting.
 
 Offer *"proceed with all recommendations"* for the coarse tier once the deep forks are settled — not before them. A trivial inline prompt may skip this gate.
 
@@ -192,7 +192,7 @@ Three sub-steps, executed in order.
 
 ### 3A: Select Techniques
 
-Read [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/technique-engine.md). Based on task type, complexity, and target model:
+Read [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/technique-engine.md). Based on task type, complexity, and target model:
 
 1. Classify task complexity: `simple` (single-step) | `moderate` (2–4 steps) | `complex` (5+ steps or ambiguous)
 2. Check target model reasoning capability: `standard` | `reasoning-native` | `extended-thinking`
@@ -202,14 +202,14 @@ Read [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/techniq
 
 ### 3B: Generate the Prompt
 
-Read [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/model-profiles.md) for the target model's format requirements.
-Read [output-formats.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/output-formats.md) for the task type's optimal structure.
+Read [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/model-profiles.md) for the target model's format requirements.
+Read [output-formats.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/output-formats.md) for the task type's optimal structure.
 
-**Registry check (do not skip):** Read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json) for the target model's context window and capabilities. This is the single source of truth — it overrides anything in the reference .md files.
+**Registry check (do not skip):** Read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json) for the target model's context window and capabilities. This is the single source of truth — it overrides anything in the reference .md files.
 
 1. Check the `last_updated` field. If it's more than 3 months old, verify critical specs via web search or your own knowledge before relying on them.
 2. If the target model is not in the registry, check if a close match exists (same family). If not, flag it: "Model not in registry — specs are best-effort."
-3. If you know a registry value is outdated (e.g., a model's context window has expanded since the registry was last updated), use the current value, note the correction in the Creation Report, and update `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json` with the new value and today's date in `last_updated`.
+3. If you know a registry value is outdated (e.g., a model's context window has expanded since the registry was last updated), use the current value, note the correction in the Creation Report, and update `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json` with the new value and today's date in `last_updated`.
 
 Apply all three layers:
 
@@ -219,9 +219,9 @@ Apply all three layers:
 
 ### Mandatory Prompt Components
 
-Read [prompt-anatomy.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/prompt-anatomy.md) for the full checklist and fallback patterns. Every generated prompt MUST include these components (unless the user explicitly opted out in Phase 2):
+Read [prompt-anatomy.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/prompt-anatomy.md) for the full checklist and fallback patterns. Every generated prompt MUST include these components (unless the user explicitly opted out in Phase 2):
 
-1. **Fallback instructions** — What to do when input is ambiguous, data is missing, or the task cannot be completed as specified. Read `${CLAUDE_PLUGIN_ROOT}/../../shared/references/prompt-anatomy.md` section "Fallback Patterns" for domain-specific templates.
+1. **Fallback instructions** — What to do when input is ambiguous, data is missing, or the task cannot be completed as specified. Read `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/prompt-anatomy.md` section "Fallback Patterns" for domain-specific templates.
 2. **Expected output** — A concrete example or description of what correct output looks like. Even a brief one anchors the model's format and depth.
 3. **Task roadmap** — For moderate/complex tasks: numbered phases or steps the model should follow. Keeps the output organized and ensures nothing is skipped.
 4. **Success criteria** — How to know the output is done and correct. Prevents the model from stopping too early or overproducing.
@@ -232,24 +232,24 @@ For image-gen prompts: fallbacks and task roadmap are not applicable. Include th
 
 Always present the final prompt inside a fenced code block (` ``` `).
 
-After the code block, save the prompt as a **folder** inside `${CLAUDE_PLUGIN_ROOT}/../../prompts/`. Use a kebab-case name derived from the task (e.g., `invoice-extractor`, `code-reviewer`).
+After the code block, save the prompt as a **folder** inside `${CLAUDE_PROJECT_DIR}/prompts/`. Use a kebab-case name derived from the task (e.g., `invoice-extractor`, `code-reviewer`).
 
-After saving the prompt folder, update `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json` — append an entry with the prompt's name, task, target model, domain, format, overall score, version, timestamps, and relative path. Create the file if it does not exist.
+After saving the prompt folder, update `${CLAUDE_PROJECT_DIR}/prompts/index.json` — append an entry with the prompt's name, task, target model, domain, format, overall score, version, timestamps, and relative path. Create the file if it does not exist.
 
 #### Delivery steps (execute ALL in order — do NOT skip any step)
 
-1. **Create the folder:** `mkdir -p ${CLAUDE_PLUGIN_ROOT}/../../prompts/<prompt-name>`
+1. **Create the folder:** `mkdir -p ${CLAUDE_PROJECT_DIR}/prompts/<prompt-name>`
 
 2. **Save the prompt file:** Write `prompt.<format>` into the folder. Use `.md` for Markdown, `.xml` for XML-tagged, `.json` for JSON, `.txt` for plain text or image-gen.
 
 3. **Run token count:** Execute this command and note the output:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py <prompt-file> --model <target-model>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
 4. **Run self-eval:** Execute this command and note the scores:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 
 5. **Save metadata.json:** Write this file with real values from steps 3-4:
@@ -296,7 +296,7 @@ Cover: typical input, clean/no-issue input, and an edge case (empty, malformed).
 
 7. **Generate report.pdf:** Execute this command (do NOT write the report manually):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder-path>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder-path>
 ```
 This generates a dark-themed single-page PDF audit report. Do NOT create report.html, report.md, or report.pdf yourself — the script handles it.
 
@@ -305,7 +305,7 @@ conversion failed; `report.html` was written as the documented fallback ("Done (
 fallback)."), a degraded-but-valid outcome — do not treat it as a failure to retry
 blindly. `2` = usage error (missing prompt-folder or `metadata.json`).
 
-8. **Update index.json:** Read `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json`, append an entry for this prompt, and write it back.
+8. **Update index.json:** Read `${CLAUDE_PROJECT_DIR}/prompts/index.json`, append an entry for this prompt, and write it back.
 
 #### Final folder contents
 
@@ -358,7 +358,7 @@ Execute this pipeline fully autonomously:
 
 **Step 2 — Run convergence:**
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <prompt-file>
 ```
 This loops up to 100 times, fixing hedge words, missing components, filler, format mismatches, and fallbacks. Exits on the **full** DEPLOY bar (overall ≥ 9.0, every axis ≥ 7.0, σ ≤ the dynamic floor, and 8/8 SAT assertions) or plateau.
 
@@ -419,9 +419,9 @@ These files contain the detailed knowledge that powers Phase 3. Read them on dem
 
 | File | Read During | Contains |
 |---|---|---|
-| [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/technique-engine.md) | Phase 3A | Decision matrix for 16 techniques, priority rules, anti-patterns |
-| [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/model-profiles.md) | Phase 3B | Per-model formatting specs for 10+ models |
-| [output-formats.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/output-formats.md) | Phase 3B | Task type → optimal output format mapping |
-| [prompt-anatomy.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/prompt-anatomy.md) | Phase 3B | Mandatory component checklist, fallback patterns, expected output templates |
-| [self-eval.py](${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py) | Phase 4 | Heuristic prompt scorer (run via Bash) |
-| [token-count.py](${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py) | Phase 3 delivery | Token estimator with context window warnings |
+| [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/technique-engine.md) | Phase 3A | Decision matrix for 16 techniques, priority rules, anti-patterns |
+| [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/model-profiles.md) | Phase 3B | Per-model formatting specs for 10+ models |
+| [output-formats.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/output-formats.md) | Phase 3B | Task type → optimal output format mapping |
+| [prompt-anatomy.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/prompt-anatomy.md) | Phase 3B | Mandatory component checklist, fallback patterns, expected output templates |
+| [self-eval.py](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py) | Phase 4 | Heuristic prompt scorer (run via Bash) |
+| [token-count.py](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py) | Phase 3 delivery | Token estimator with context window warnings |

@@ -18,7 +18,7 @@ You are a quality gate. After the optimizer finishes, you validate the prompt fo
 
 You receive:
 - `prompt_folder`: path to the prompt folder to validate
-- `registry_path`: path to models-registry.json (usually `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`)
+- `registry_path`: path to models-registry.json (usually `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`)
 
 ## Validation Checks
 
@@ -47,7 +47,7 @@ Parse `metadata.json` and verify:
 
 Run self-eval on the actual prompt file:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 Compare each axis with metadata.scores. If any axis differs by more than 1 point, report STALE.
 

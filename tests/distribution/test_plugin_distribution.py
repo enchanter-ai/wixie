@@ -114,7 +114,10 @@ class DriftDetection(unittest.TestCase):
         for name in (".vis-lock", ".vis-versions"):
             shutil.copy2(REPO / name, self.repo / name)
         shutil.copytree(REPO / "scripts", self.repo / "scripts")
-        shutil.copytree(REPO / "shared" / "conduct", self.repo / "shared" / "conduct")
+        # WIX-DIST-002: the vendored closure also draws on shared/ scripts, references,
+        # registry and eval corpora, so the fixture repo carries all of shared/.
+        shutil.copytree(REPO / "shared", self.repo / "shared",
+                        ignore=shutil.ignore_patterns("__pycache__", "runs", "verdict.json"))
         shutil.copytree(REPO / "plugins", self.repo / "plugins",
                         ignore=shutil.ignore_patterns("state", "__pycache__"))
         # Fixture vis: the referenced vis files (content from the vendored copies)

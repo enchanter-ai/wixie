@@ -23,7 +23,7 @@ You are the background statistics agent for the inference-engine. You read the a
 ### 1. Run the engine
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py reconcile
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py reconcile
 ```
 
 The engine:
@@ -62,7 +62,7 @@ Then parse the summary line. Confirm:
 If any pattern's verdict changed in this reconcile (compare to previous `catalog.json` via `git diff` if available), re-render the affected plugin's briefing:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py render-briefing <plugin>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py render-briefing <plugin>
 ```
 
 At Phase 1 only `wixie` is wired; re-render `wixie` unconditionally.

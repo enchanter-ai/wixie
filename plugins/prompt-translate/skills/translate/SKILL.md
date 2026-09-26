@@ -6,7 +6,7 @@ description: >
   Auto-triggers on: "/translate-prompt", "convert this prompt to GPT",
   "adapt for Claude", "port this prompt to Gemini",
   "make this work on o3", "translate prompt".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py *) Read Write Edit
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Read Write Edit
 ---
 
 # Prompt Translator
@@ -24,7 +24,7 @@ If loading from a saved prompt folder, read `metadata.json` to get the source mo
 - **Source model**: detected from metadata, format cues (XML → Claude, Markdown → GPT), or ask the user
 - **Target model**: the user specifies which model to translate to. If not specified, ask.
 
-Read both model entries from `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`.
+Read both model entries from `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`.
 
 ## Step 3: Diff the Models
 
@@ -44,8 +44,8 @@ Compare source and target across these dimensions:
 ## Step 4: Apply Translation
 
 Read reference files for the target model:
-- [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/model-profiles.md)
-- [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/technique-engine.md)
+- [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/model-profiles.md)
+- [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/technique-engine.md)
 
 Apply these transformations in order:
 
@@ -79,7 +79,7 @@ Apply these transformations in order:
 
 Run self-eval on the translated prompt:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <translated-prompt>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <translated-prompt>
 ```
 
 If the translated prompt scores LOWER than the source, warn the user and explain which dimensions degraded (e.g., "Model Fit improved 5→9 but Completeness dropped 10→7 because examples were removed for o-series").

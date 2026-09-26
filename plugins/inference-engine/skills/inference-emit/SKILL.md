@@ -13,7 +13,7 @@ allowed-tools: Bash(python *) Read Write
 
 # Inference Emit
 
-Append one artifact to `wixie/plugins/inference-engine/state/artifacts.jsonl`.
+Append one artifact to `${CLAUDE_PLUGIN_ROOT}/state/artifacts.jsonl`.
 
 ## Usage
 
@@ -98,7 +98,7 @@ If the caller gave you a JSON record, use it. If they gave structured text, buil
 ### Step 2: Emit
 
 ```bash
-WIXIE_INFERENCE_ENABLED=1 python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py emit <(cat <<'EOF'
+WIXIE_INFERENCE_ENABLED=1 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py emit <(cat <<'EOF'
 <your JSON record>
 EOF
 )

@@ -32,7 +32,7 @@ Execute ALL checks. Report results as PASS/FAIL with details.
 
 ### 2. Metadata Consistency
 Read `metadata.json` and verify:
-- [ ] `target_model` exists in `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`
+- [ ] `target_model` exists in `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`
 - [ ] `scores.overall` matches the average of the 5 axis scores
 - [ ] `tokens.estimated` is a positive number
 - [ ] `tokens.context_window` matches the registry value for the target model
@@ -49,13 +49,13 @@ Read `metadata.json` and verify:
 ### 4. Score Validation
 Run self-eval on the prompt and compare with metadata scores:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 - [ ] Scores from self-eval match metadata.scores (tolerance: ±1 per axis)
 - [ ] If scores diverged significantly, metadata is stale — flag for update
 
 ### 5. Registry Cross-Reference
-Read the model entry from `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`:
+Read the model entry from `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`:
 - [ ] If model has `reasoning: "reasoning-native"`, verify no CoT in prompt
 - [ ] If model has `few_shot: "REQUIRED"`, verify examples exist in prompt
 - [ ] If model has `few_shot: "AVOID"`, verify no examples in prompt

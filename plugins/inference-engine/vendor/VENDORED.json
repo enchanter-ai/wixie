@@ -2,24 +2,109 @@
   "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
   "files": [
     {
+      "consumers": [
+        "README.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/context.md",
       "package": "core",
       "path": "vis/packages/core/conduct/context.md",
       "sha1": "a4aa5663f85ed4af31e8c794ba27582aaf9906b8",
       "sha256": "fb6f46e9139eaaaef33d3d38244819d074e8679b5bdd1b8bd24cc2bbca2476cd",
       "source": "vis",
       "source_path": "packages/core/conduct/context.md",
+      "source_revision": "904873d7543d62bab5cddd3a3740422232983af2",
       "tag": "enchanter-core--v0.7.0",
       "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
       "version": "v0.7.0"
     },
     {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/context.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/delegation.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/delegation.md",
+      "sha1": "79cd1f6d3ae19b868c209d73813b9633e1a7377c",
+      "sha256": "910593def6a378fce2f1f7a6e8102fa9173efbdf281cdbdf1cdc585f395973c4",
+      "source": "vis",
+      "source_path": "packages/core/conduct/delegation.md",
+      "source_revision": "904873d7543d62bab5cddd3a3740422232983af2",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/delegation.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/tier-sizing.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/tier-sizing.md",
+      "sha1": "744ac38129969e7e2399a9271f271a37a1aecd5d",
+      "sha256": "e5e6a4e1eb0adc78b06902317f82e870483a3128f01c49c6fcc28e099eea9591",
+      "source": "vis",
+      "source_path": "packages/core/conduct/tier-sizing.md",
+      "source_revision": "904873d7543d62bab5cddd3a3740422232983af2",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "README.md",
+        "skills/inference-emit/SKILL.md",
+        "skills/inference-reconcile/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/conduct/inference-substrate.md",
       "path": "wixie/shared/conduct/inference-substrate.md",
       "sha1": "79790fd43290c5adf8180a39a1f38d1487e39ac3",
       "sha256": "b3552747a671cbdcc88c374bc4bade6d6d2fbd46b65a2efab2f1958daf55d628",
       "source": "wixie",
-      "source_path": "shared/conduct/inference-substrate.md"
+      "source_path": "shared/conduct/inference-substrate.md",
+      "source_revision": "git-blob:a970a38d6d9e878576e39526fa5aa0a412f1a601"
+    },
+    {
+      "consumers": [
+        "bin/model-freshness-report.py",
+        "scripts/model-freshness.py"
+      ],
+      "destination": "vendor/wixie/shared/models-registry.json",
+      "path": "wixie/shared/models-registry.json",
+      "sha1": "b36c5e356e08da697b3b5f5a0063f9b58213b7a9",
+      "sha256": "94add8d46aca00ca47477b9b32b89212676deedd6e8936fb49cf0b48f46fa62e",
+      "source": "wixie",
+      "source_path": "shared/models-registry.json",
+      "source_revision": "git-blob:196bf2c80f4072791798006a9dbd3e43c58f3825"
+    },
+    {
+      "consumers": [
+        "agents/briefer.md",
+        "agents/reconciler.md",
+        "skills/inference-emit/SKILL.md",
+        "skills/inference-query/SKILL.md",
+        "skills/inference-reconcile/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/inference-engine.py",
+      "path": "wixie/shared/scripts/inference-engine.py",
+      "sha1": "a1247404192d4ce3cef391efb478abada473a07e",
+      "sha256": "a9a9f98a57e6a2419508296bca0e571ee19d2f649e45adf83913c8a5706d0800",
+      "source": "wixie",
+      "source_path": "shared/scripts/inference-engine.py",
+      "source_revision": "git-blob:b11ff6c9f33ea791c9dfd953713e166693cb4321"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",
-  "schema": "wixie/vendored-conduct/v1"
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": [
+    {
+      "from": "vendor/vis/packages/core/conduct/context.md",
+      "link": "./memory-hygiene.md",
+      "reason": "absent at the pinned vis commit"
+    },
+    {
+      "from": "vendor/vis/packages/core/conduct/tier-sizing.md",
+      "link": "./cost-accounting.md",
+      "reason": "absent at the pinned vis commit"
+    }
+  ]
 }

@@ -2,28 +2,69 @@
   "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
   "files": [
     {
+      "consumers": [
+        "agents/executor.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/tier-sizing.md",
       "package": "core",
       "path": "vis/packages/core/conduct/tier-sizing.md",
       "sha1": "744ac38129969e7e2399a9271f271a37a1aecd5d",
       "sha256": "e5e6a4e1eb0adc78b06902317f82e870483a3128f01c49c6fcc28e099eea9591",
       "source": "vis",
       "source_path": "packages/core/conduct/tier-sizing.md",
+      "source_revision": "904873d7543d62bab5cddd3a3740422232983af2",
       "tag": "enchanter-core--v0.7.0",
       "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
       "version": "v0.7.0"
     },
     {
+      "consumers": [
+        "agents/executor.md"
+      ],
+      "destination": "vendor/vis/packages/skills/conduct/formatting.md",
       "package": "skills",
       "path": "vis/packages/skills/conduct/formatting.md",
       "sha1": "cbbb98a69153f74dc8fb733eb7f6b2741a9c2b2d",
       "sha256": "bdd5433467e794ca42c2dfbd0915d6dbea216d2342048690fdb5f279f7f22b82",
       "source": "vis",
       "source_path": "packages/skills/conduct/formatting.md",
+      "source_revision": "904873d7543d62bab5cddd3a3740422232983af2",
       "tag": "enchanter-skills--v0.7.0",
       "tag_commit": "904873d7543d62bab5cddd3a3740422232983af2",
       "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "skills/test-runner/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/eval-corpus/deploy-bar/corpus.json",
+      "path": "wixie/shared/eval-corpus/deploy-bar/corpus.json",
+      "sha1": "9e9f2697043860e8d9c5265a9a68fe26f660e2e9",
+      "sha256": "ff911cb217f447387ccc13892523179015c0259e72acfacf0b807c12070abf60",
+      "source": "wixie",
+      "source_path": "shared/eval-corpus/deploy-bar/corpus.json",
+      "source_revision": "git-blob:4eaa092e6cbee515e18b8b44ce65b79d882cbb29"
+    },
+    {
+      "consumers": [
+        "skills/test-runner/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/efficacy-replay.py",
+      "path": "wixie/shared/scripts/efficacy-replay.py",
+      "sha1": "94fb6d46f5f759171ffd80d1422e56f8a1ae1902",
+      "sha256": "944bd223c3dadb1b332c46cec85ec887b327761bc07553409edcae1bcfb2826a",
+      "source": "wixie",
+      "source_path": "shared/scripts/efficacy-replay.py",
+      "source_revision": "git-blob:82ab21007d09c5658d60a2eb630834d102337317"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",
-  "schema": "wixie/vendored-conduct/v1"
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": [
+    {
+      "from": "vendor/vis/packages/core/conduct/tier-sizing.md",
+      "link": "./cost-accounting.md",
+      "reason": "absent at the pinned vis commit"
+    }
+  ]
 }

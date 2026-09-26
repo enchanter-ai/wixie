@@ -6,7 +6,7 @@ description: >
   pass/fail results. Use for regression testing after refinements.
   Auto-triggers on: "/test-prompt", "test this prompt", "run prompt tests",
   "check if the prompt works", "regression test".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py *) Read Write
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Read Write
 ---
 
 # Prompt Test Runner
@@ -27,8 +27,8 @@ result to trust. When a pass/fail claim needs to be real, it comes from Layer 2,
 
 If the user provides:
 - A prompt folder path → read `tests.json` from it
-- A prompt name → look in `${CLAUDE_PLUGIN_ROOT}/../../prompts/<name>/tests.json`
-- Nothing → list available prompts from `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json` and ask
+- A prompt name → look in `${CLAUDE_PROJECT_DIR}/prompts/<name>/tests.json`
+- Nothing → list available prompts from `${CLAUDE_PROJECT_DIR}/prompts/index.json` and ask
 
 ### Step 2: Load the Prompt
 
@@ -58,7 +58,7 @@ Run the prompt against the fixed corpus with **real** `claude -p` calls and acce
 Wilson 95% CI — this is the measured result, not a self-simulation.
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py corpus deploy-bar \
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
   --prompt <prompt-file> -n 5
 ```
 

@@ -68,3 +68,9 @@ NUL
 # Never committed — .vis-lock is the durable, reviewable record of what was
 # materialized.
 .vis-cache/
+
+# Runtime outputs of vendored plugin scripts when run from a checkout
+# (scripts/vendor-conduct.py owns plugins/*/vendor/; these are not part of it).
+plugins/*/vendor/wixie/shared/eval-corpus/*/runs/
+plugins/*/vendor/wixie/shared/eval-corpus/*/verdict.json
+plugins/*/vendor/wixie/state/

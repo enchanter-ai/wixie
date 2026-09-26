@@ -19,7 +19,7 @@ You validate a refined prompt folder. Run after convergence. Be strict.
 2. **Metadata Consistency** — target_model in registry, scores valid, tokens positive, config exists
 3. **Score Freshness** — re-run self-eval, compare with metadata.scores.after (tolerance +/-1):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 4. **Format-Model Alignment** — file extension matches model preference
 5. **Test Coverage** — at least 3 test cases

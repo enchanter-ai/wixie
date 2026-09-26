@@ -1,0 +1,146 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md",
+        "vendor/wixie/shared/references/model-profiles.md",
+        "vendor/wixie/shared/references/technique-engine.md",
+        "vendor/wixie/shared/scripts/report-gen.py",
+        "vendor/wixie/shared/scripts/token-count.py"
+      ],
+      "destination": "vendor/wixie/shared/models-registry.json",
+      "path": "wixie/shared/models-registry.json",
+      "sha1": "b36c5e356e08da697b3b5f5a0063f9b58213b7a9",
+      "sha256": "94add8d46aca00ca47477b9b32b89212676deedd6e8936fb49cf0b48f46fa62e",
+      "source": "wixie",
+      "source_path": "shared/models-registry.json",
+      "source_revision": "git-blob:196bf2c80f4072791798006a9dbd3e43c58f3825"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/direction-lock.md",
+      "path": "wixie/shared/references/direction-lock.md",
+      "sha1": "7087e69b013bcb4d05872ab2522670b088af2623",
+      "sha256": "5c4148efe30b0e8f5f9876634ca7184d716b6373f4e7a72e2b894a7efe8c0147",
+      "source": "wixie",
+      "source_path": "shared/references/direction-lock.md",
+      "source_revision": "git-blob:020bfb0b6c89bc84deeb8e7b523f7a45169a2861"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/model-profiles.md",
+      "path": "wixie/shared/references/model-profiles.md",
+      "sha1": "f216cfc1371bd185b574cca8216aefa8c2c56f41",
+      "sha256": "1dd33c624cc7125b6a486937f7472cc13365d40f6f962dc992a350168d9dd065",
+      "source": "wixie",
+      "source_path": "shared/references/model-profiles.md",
+      "source_revision": "git-blob:5b08c16c5c576e5bbc0ea059ab05a9a2d1d535e4"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/output-formats.md",
+      "path": "wixie/shared/references/output-formats.md",
+      "sha1": "d63c07f52a316c07ae27f9f60d7598f032cfe08b",
+      "sha256": "b2871aa421aaeafe0482ba675a3a6ff869dd70e3356cc945b4c83fe9a67583a1",
+      "source": "wixie",
+      "source_path": "shared/references/output-formats.md",
+      "source_revision": "git-blob:94b808daaa643ceaa9f1b21e73462a4641c026a9"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/prompt-anatomy.md",
+      "path": "wixie/shared/references/prompt-anatomy.md",
+      "sha1": "7f03a504d6c5f27bd22754ca987547e9b0320572",
+      "sha256": "57227f8ba02f416b5f9268c27379007e797b27a93a86d1178cd4983b3c6310f7",
+      "source": "wixie",
+      "source_path": "shared/references/prompt-anatomy.md",
+      "source_revision": "git-blob:70fa218eb419c76595e392700966ce72ce59a925"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/technique-engine.md",
+      "path": "wixie/shared/references/technique-engine.md",
+      "sha1": "7f331b981822dd238de63f0909c3a29ef3d46496",
+      "sha256": "93ec9fe38fdd2e7216306d704816c1e4b6e37f3240b55ef7d984156287712e78",
+      "source": "wixie",
+      "source_path": "shared/references/technique-engine.md",
+      "source_revision": "git-blob:a4ee932f57240bc00c6672c1e5c4813016f40256"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/convergence.py",
+      "path": "wixie/shared/scripts/convergence.py",
+      "sha1": "63d464267efdbe87c5781cedf5244df2effc5591",
+      "sha256": "205125cf95b3bf72f77882ef4d42dee14987196447c61b5f3fbf6b16e4695b12",
+      "source": "wixie",
+      "source_path": "shared/scripts/convergence.py",
+      "source_revision": "git-blob:88f86c0dd5d68bd6556e0f84c135b5eb6e63e54c"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/report-gen.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/html-to-pdf.py",
+      "path": "wixie/shared/scripts/html-to-pdf.py",
+      "sha1": "210927fd93f464e1465048a14852b9dc869b50c1",
+      "sha256": "4eb1d03010c2c94ae2d328adc35bea24277a3358ac5c4c5164a805049bdb54c9",
+      "source": "wixie",
+      "source_path": "shared/scripts/html-to-pdf.py",
+      "source_revision": "git-blob:e91b0162b88cdec3ebd17416d7352c19e3ec4dc1"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/report-gen.py",
+      "path": "wixie/shared/scripts/report-gen.py",
+      "sha1": "7dfe7e6cc09c147fd1cd962465e14cdfbb23aa41",
+      "sha256": "d419eb45f35302a14492d817993ea6c6c823eba0edb6a89ac39fb8a102d8427b",
+      "source": "wixie",
+      "source_path": "shared/scripts/report-gen.py",
+      "source_revision": "git-blob:cb533917497ec378b89684053f7f0440a6bf0551"
+    },
+    {
+      "consumers": [
+        "agents/reviewer.md",
+        "skills/prompt-improver/SKILL.md",
+        "vendor/wixie/shared/scripts/convergence.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/self-eval.py",
+      "path": "wixie/shared/scripts/self-eval.py",
+      "sha1": "916225a3e63186fddf61b5f85153352897b93d39",
+      "sha256": "5b9d0cead3498604dfdc340b6183b3772496e451db76517ae2008e3453f388a4",
+      "source": "wixie",
+      "source_path": "shared/scripts/self-eval.py",
+      "source_revision": "git-blob:9478bb2fa361041b62013f0aac3b2b763247d33a"
+    },
+    {
+      "consumers": [
+        "skills/prompt-improver/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/token-count.py",
+      "path": "wixie/shared/scripts/token-count.py",
+      "sha1": "939715432cdae9c4ad3cc7b6790373637330f84b",
+      "sha256": "2e1eeaba00c0d692beede75ae51b39ef2660ea0a99072ab757c7679c926664e0",
+      "source": "wixie",
+      "source_path": "shared/scripts/token-count.py",
+      "source_revision": "git-blob:439820d8eae67c09e6f43d98f6de3a26dd57471c"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": []
+}
