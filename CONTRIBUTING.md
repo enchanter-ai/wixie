@@ -86,6 +86,14 @@ Register the plugin in `.claude-plugin/marketplace.json`.
 bash tests/run-all.sh
 ```
 
+All test scratch lives under one private temp root, `WIXIE_TEST_ROOT` (contract in
+`tests/lib/test-root.sh`). Unset, `run-all.sh` creates a fresh root under `.test-root/`
+(gitignored) and removes it afterwards; a test run on its own uses `.test-root/standalone`.
+A root inside `/tmp` or the real `%TEMP%` is refused. Tests must never write to shared temp
+directories: use `wixie_mktemp_d`, never a literal `/tmp` path or a bare `mktemp`
+(`tests/harness/test-no-shared-temp.sh` enforces this). The run ends with a
+`WIXIE_SUITE_SUMMARY total=N passed=P failed=F` line, which CI requires.
+
 15 tests: 7 prompt-crafter, 3 prompt-refiner, 2 convergence-engine, 1 prompt-tester, 1 prompt-harden, 1 prompt-translate.
 
 ## Submitting
