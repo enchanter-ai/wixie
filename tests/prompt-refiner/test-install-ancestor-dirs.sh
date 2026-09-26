@@ -26,6 +26,9 @@
 set -euo pipefail
 REPO_ROOT="${1:-.}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 BOOTSTRAP_SH="$REPO_ROOT/scripts/bootstrap.sh"
 BOOTSTRAP_PS1="$REPO_ROOT/scripts/bootstrap.ps1"
 
@@ -38,7 +41,7 @@ check() {
   fi
 }
 
-TMP="$(mktemp -d)"
+TMP="$(wixie_mktemp_d install-ancestor-dirs)" || exit 97
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 
@@ -80,15 +83,15 @@ for name in state .git node_modules .vis-cache; do
   # descends from the repo root, so this leg is a regression guard, not
   # expected to ever have failed) ------------------------------------------
   set +e
-  (cd "$parent/$name/wixie" && VIS_REPO="$parent/$name/vis" ./scripts/bootstrap.sh >/tmp/anc_boot.$$ 2>&1)
+  (cd "$parent/$name/wixie" && VIS_REPO="$parent/$name/vis" ./scripts/bootstrap.sh >"$TMP/anc_boot.out" 2>&1)
   RC=$?
   set -e
   check "[$name] bash bootstrap succeeds" "$RC" 0
   CNT=$(find "$parent/$name/wixie/.vis-cache" -type f 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$CNT" -eq 2 ]]; then pass=$((pass + 1)); else
-    fail=$((fail + 1)); echo "  FAIL: [$name] bash materialized $CNT files, expected 2 (output: $(cat /tmp/anc_boot.$$))" >&2
+    fail=$((fail + 1)); echo "  FAIL: [$name] bash materialized $CNT files, expected 2 (output: $(cat "$TMP/anc_boot.out"))" >&2
   fi
-  rm -f /tmp/anc_boot.$$
+  rm -f "$TMP/anc_boot.out"
   set +e
   (cd "$parent/$name/wixie" && ./scripts/bootstrap.sh --verify >/dev/null 2>&1)
   RC=$?

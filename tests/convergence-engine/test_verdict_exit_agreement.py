@@ -45,6 +45,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Private temp root (WIX-TEST-ENV-001, tests/_test_root.py): scratch never lands in shared temp.
+_root_spec = importlib.util.spec_from_file_location(
+    "wixie_test_root", Path(__file__).resolve().parents[1] / "_test_root.py")
+_root_mod = importlib.util.module_from_spec(_root_spec)
+_root_spec.loader.exec_module(_root_mod)
+_root_mod.ensure_test_root()
+
 PLACEHOLDER_PROMPT = "You are a helpful assistant. Do the task. Respond in JSON format. Do not guess.\n"
 
 BASE_ASSERTIONS = [

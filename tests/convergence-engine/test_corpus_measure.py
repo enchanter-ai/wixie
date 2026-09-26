@@ -23,6 +23,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Private temp root (WIX-TEST-ENV-001, tests/_test_root.py): scratch never lands in shared temp.
+_root_spec = importlib.util.spec_from_file_location(
+    "wixie_test_root", Path(__file__).resolve().parents[1] / "_test_root.py")
+_root_mod = importlib.util.module_from_spec(_root_spec)
+_root_spec.loader.exec_module(_root_mod)
+_root_mod.ensure_test_root()
+
 # Safety net (see module docstring): must be set before efficacy-replay.py is loaded, since
 # resolve_claude_bin() reads this env var at call time, not at import time — but setting it
 # early means every path in this test benefits, including ones that forget to mock.

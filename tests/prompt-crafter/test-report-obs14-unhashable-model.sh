@@ -11,8 +11,11 @@
 set -uo pipefail
 REPO_ROOT="${1:-.}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 
-WORK="$(mktemp -d)"
+WORK="$(wixie_mktemp_d report-obs14-unhashable-model)" || exit 97
 trap 'rm -rf "$WORK"' EXIT
 
 FAILED=0

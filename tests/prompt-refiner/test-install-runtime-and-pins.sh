@@ -19,6 +19,9 @@
 set -euo pipefail
 REPO_ROOT="${1:-.}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 
 BOOTSTRAP_SH="$REPO_ROOT/scripts/bootstrap.sh"
 CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
@@ -28,7 +31,7 @@ VERSIONS_FILE="$REPO_ROOT/.vis-versions"
 [[ -f "$CLAUDE_MD" ]] || { echo "missing $CLAUDE_MD" >&2; exit 1; }
 [[ -f "$VERSIONS_FILE" ]] || { echo "missing $VERSIONS_FILE" >&2; exit 1; }
 
-TMP="$(mktemp -d)"
+TMP="$(wixie_mktemp_d install-runtime-and-pins)" || exit 97
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 
@@ -40,7 +43,7 @@ mkdir -p "$WIXIE" "$VIS"
 # working-tree state too, e.g. when this test runs against a work-in-progress
 # checkout) into a disposable sibling location ------------------------------
 ( cd "$REPO_ROOT" && tar -cf - \
-    --exclude=.git --exclude=.vis-cache --exclude=state --exclude=node_modules . ) \
+    --exclude=.git --exclude=.vis-cache --exclude=state --exclude=node_modules --exclude=.test-root . ) \
   | ( cd "$WIXIE" && tar -xf - )
 chmod +x "$WIXIE/scripts/bootstrap.sh" 2>/dev/null || true
 

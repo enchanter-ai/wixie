@@ -19,9 +19,12 @@
 set -uo pipefail
 REPO_ROOT="${1:-.}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 SCRIPT="$REPO_ROOT/shared/scripts/html-to-pdf.py"
 
-WORK="$(mktemp -d)"
+WORK="$(wixie_mktemp_d pdf-fix-round1)" || exit 97
 trap 'rm -rf "$WORK"' EXIT
 
 # WIX-PDF-001 fix round 2: html-to-pdf.py's own temp usage must never touch the user's real

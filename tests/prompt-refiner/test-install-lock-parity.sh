@@ -20,6 +20,9 @@
 set -euo pipefail
 REPO_ROOT="${1:-.}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 
 pass=0
 fail=0
@@ -36,7 +39,7 @@ if ! command -v powershell.exe >/dev/null 2>&1; then
   exit 0
 fi
 
-TMP="$(mktemp -d)"
+TMP="$(wixie_mktemp_d install-lock-parity)" || exit 97
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 
@@ -45,7 +48,7 @@ VIS="$TMP/vis"
 mkdir -p "$WIXIE" "$VIS"
 
 ( cd "$REPO_ROOT" && tar -cf - \
-    --exclude=.git --exclude=.vis-cache --exclude=state --exclude=node_modules . ) \
+    --exclude=.git --exclude=.vis-cache --exclude=state --exclude=node_modules --exclude=.test-root . ) \
   | ( cd "$WIXIE" && tar -xf - )
 chmod +x "$WIXIE/scripts/bootstrap.sh"
 
@@ -113,12 +116,12 @@ fi
 
 # 4. bash --verify accepts the PS-written lock and cache.
 set +e
-(cd "$WIXIE" && ./scripts/bootstrap.sh --verify >/tmp/parity_bashverify.$$ 2>&1)
+(cd "$WIXIE" && ./scripts/bootstrap.sh --verify >"$TMP/bashverify.out" 2>&1)
 rc=$?
 set -e
 check "bash --verify accepts a PS-written lock+cache" "$rc" 0
-cat /tmp/parity_bashverify.$$ >&2 || true
-rm -f /tmp/parity_bashverify.$$
+cat "$TMP/bashverify.out" >&2 || true
+rm -f "$TMP/bashverify.out"
 
 # 5. PS -Verify accepts the bash-written lock and cache.
 rm -rf "$WIXIE/.vis-cache" "$WIXIE/.vis-lock"
@@ -131,41 +134,44 @@ set -e
 check "PS -Verify accepts a bash-written lock+cache" "$rc" 0
 [[ "$rc" -ne 0 ]] && printf '%s\n' "$psout" >&2
 
-# --- best-effort: native WSL (Linux, ext4) cross-check, per the brief ------
-if command -v wsl.exe >/dev/null 2>&1 && wsl.exe -e true >/dev/null 2>&1; then
-  WSL_DIR="/tmp/wixie-lock-parity-$$"
-  wsl.exe -e bash -c "rm -rf '$WSL_DIR' && mkdir -p '$WSL_DIR/wixie' '$WSL_DIR/vis'" >/dev/null 2>&1
-  WIN_TMP_WIXIE="$(cygpath -w "$WIXIE" 2>/dev/null || echo "$WIXIE")"
-  WIN_TMP_VIS="$(cygpath -w "$VIS" 2>/dev/null || echo "$VIS")"
-  # Copy via a WSL-side cp from the /mnt/c view onto native ext4, so the run
-  # is genuinely on WSL's own filesystem, not NTFS-through-9p.
-  MNT_WIXIE="$(wsl.exe -e wslpath -a "$WIN_TMP_WIXIE" 2>/dev/null | tr -d '\r')"
-  MNT_VIS="$(wsl.exe -e wslpath -a "$WIN_TMP_VIS" 2>/dev/null | tr -d '\r')"
-  if [[ -n "$MNT_WIXIE" && -n "$MNT_VIS" ]]; then
-    # sed -i 's/\r$//' is defensive, not a workaround for a real product
-    # defect: scripts/bootstrap.sh is verified elsewhere (grep -c $'\r') to
-    # have 0 CR bytes on disk. It guards only against this TEST's own
-    # Windows->WSL copy path (via wslpath's /mnt/c 9p mount) picking up a
-    # line-ending translation from something in the container/host tooling,
-    # which is a test-infra concern, not the product's.
-    wsl.exe -e bash -c "cp -r '$MNT_WIXIE/.' '$WSL_DIR/wixie/' && cp -r '$MNT_VIS/.' '$WSL_DIR/vis/' && sed -i 's/\r\$//' '$WSL_DIR/wixie/scripts/bootstrap.sh' && chmod +x '$WSL_DIR/wixie/scripts/bootstrap.sh' && rm -rf '$WSL_DIR/wixie/.vis-cache'" >/dev/null 2>&1
-    # Push the PS-written lock+cache in directly,
-    # then run bash --verify natively on WSL's own filesystem.
-    wsl.exe -e bash -c "rm -rf '$WSL_DIR/wixie/.vis-cache' '$WSL_DIR/wixie/.vis-lock'" >/dev/null 2>&1
-    cp -r "$TMP/bash.cache" "$TMP/wsl-push-cache"
-    WIN_PUSH_CACHE="$(cygpath -w "$TMP/wsl-push-cache" 2>/dev/null || echo "$TMP/wsl-push-cache")"
-    MNT_PUSH_CACHE="$(wsl.exe -e wslpath -a "$WIN_PUSH_CACHE" 2>/dev/null | tr -d '\r')"
-    WIN_PS_LOCK="$(cygpath -w "$TMP/ps.lock" 2>/dev/null || echo "$TMP/ps.lock")"
-    MNT_PS_LOCK="$(wsl.exe -e wslpath -a "$WIN_PS_LOCK" 2>/dev/null | tr -d '\r')"
-    set +e
-    wslout="$(wsl.exe -e bash -c "cp -r '$MNT_PUSH_CACHE' '$WSL_DIR/wixie/.vis-cache' && cp '$MNT_PS_LOCK' '$WSL_DIR/wixie/.vis-lock' && cd '$WSL_DIR/wixie' && ./scripts/bootstrap.sh --verify" 2>&1)"
-    wslrc=$?
-    set -e
-    check "native WSL bash --verify accepts a Windows PS-written lock+cache" "$wslrc" 0
-    [[ "$wslrc" -ne 0 ]] && printf '%s\n' "$wslout" >&2
-    wsl.exe -e bash -c "rm -rf '$WSL_DIR'" >/dev/null 2>&1 || true
+# --- native WSL (Linux bash/coreutils/git) cross-check -----------------------
+# WIX-TEST-ENV-001: the leg used to copy everything into the distro's SHARED /tmp
+# (/tmp/wixie-lock-parity-$$), outside any private test dir, with no trap. It now
+# works in a directory under WIXIE_TEST_ROOT reached from WSL through wslpath (the
+# /mnt/<drive> 9p view of the private root); wixie_wsl_path refuses any path that
+# is not inside the root. The leg still runs natively in WSL (Linux bash, GNU
+# coreutils, Linux git) on a WSL-side copy, which is what it exists to prove: that
+# a Windows PowerShell-written lock+cache verifies under the Linux toolchain. What
+# changes is the filesystem under the copy (DrvFs 9p instead of ext4); bootstrap.sh
+# --verify only reads bytes, hashes and git objects (no exec-bit, inode or
+# case-sensitivity dependence), so that does not weaken the check. TMPDIR is set
+# for the WSL side too, and the copy is removed by the WSL rm and by this test's
+# EXIT trap (it lives inside $TMP).
+if wixie_wsl_available; then
+  WSL_WIN_DIR="$TMP/wsl"
+  mkdir -p "$WSL_WIN_DIR/wixie" "$WSL_WIN_DIR/vis" "$WSL_WIN_DIR/tmp"
+  cp -r "$TMP/bash.cache" "$TMP/wsl-push-cache"
+  WSL_DIR="$(wixie_wsl_path "$WSL_WIN_DIR")" || exit 97
+  MNT_WIXIE="$(wixie_wsl_path "$WIXIE")" || exit 97
+  MNT_VIS="$(wixie_wsl_path "$VIS")" || exit 97
+  MNT_PUSH_CACHE="$(wixie_wsl_path "$TMP/wsl-push-cache")" || exit 97
+  MNT_PS_LOCK="$(wixie_wsl_path "$TMP/ps.lock")" || exit 97
+  WSL_ENV="export TMPDIR='$WSL_DIR/tmp' TMP='$WSL_DIR/tmp' TEMP='$WSL_DIR/tmp' GIT_CONFIG_GLOBAL=/dev/null"
+  # sed -i 's/\r$//' is defensive, not a workaround for a real product defect:
+  # scripts/bootstrap.sh has 0 CR bytes on disk; it guards only against this
+  # test's own Windows->WSL copy path picking up a line-ending translation.
+  set +e
+  wslout="$(wsl.exe -e bash -c "$WSL_ENV && cp -r '$MNT_WIXIE/.' '$WSL_DIR/wixie/' && cp -r '$MNT_VIS/.' '$WSL_DIR/vis/' && sed -i 's/\r\$//' '$WSL_DIR/wixie/scripts/bootstrap.sh' && chmod +x '$WSL_DIR/wixie/scripts/bootstrap.sh' && rm -rf '$WSL_DIR/wixie/.vis-cache' '$WSL_DIR/wixie/.vis-lock' && cp -r '$MNT_PUSH_CACHE' '$WSL_DIR/wixie/.vis-cache' && cp '$MNT_PS_LOCK' '$WSL_DIR/wixie/.vis-lock' && echo \"wsl-leg: kernel=\$(uname -s) dir=$WSL_DIR\" && cd '$WSL_DIR/wixie' && ./scripts/bootstrap.sh --verify" 2>&1)"
+  wslrc=$?
+  set -e
+  check "native WSL bash --verify accepts a Windows PS-written lock+cache" "$wslrc" 0
+  printf '%s\n' "$wslout" | grep '^wsl-leg: ' || true
+  [[ "$wslrc" -ne 0 ]] && printf '%s\n' "$wslout" >&2
+  wsl.exe -e bash -c "rm -rf '$WSL_DIR'" >/dev/null 2>&1 || true
+  if [[ -e "$WSL_WIN_DIR" ]]; then
+    fail=$((fail + 1)); echo "  FAIL: WSL scratch dir $WSL_WIN_DIR was not removed" >&2
   else
-    echo "  (could not resolve WSL paths -- skipping native-WSL leg)"
+    pass=$((pass + 1)); echo "wsl-leg: cleaned $WSL_DIR"
   fi
 else
   echo "  (wsl.exe not available -- skipping native-WSL leg)"

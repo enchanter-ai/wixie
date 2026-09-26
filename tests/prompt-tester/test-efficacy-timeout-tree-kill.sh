@@ -10,6 +10,9 @@
 # _run_trial_subprocess returns within TRIAL_TIMEOUT + TREE_KILL_DRAIN_TIMEOUT + a small margin.
 set -euo pipefail
 REPO_ROOT="${1:-.}"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 
 PYTHONIOENCODING=utf-8 python - "$REPO_ROOT" <<'PY'
 import importlib.util, os, pathlib, sys, tempfile, time

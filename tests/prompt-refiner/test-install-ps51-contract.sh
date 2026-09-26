@@ -9,6 +9,9 @@
 set -euo pipefail
 REPO_ROOT="${1:-.}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 PS1="$REPO_ROOT/scripts/bootstrap.ps1"
 
 [[ -f "$PS1" ]] || { echo "missing $PS1" >&2; exit 1; }
@@ -42,7 +45,7 @@ if command -v powershell.exe >/dev/null 2>&1; then
   PSVER="$(powershell.exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null | tr -d '\r')"
   echo "  (live PowerShell version on this host: $PSVER)"
 
-  TMP="$(mktemp -d)"
+  TMP="$(wixie_mktemp_d install-ps51-contract)" || exit 97
   trap 'rm -rf "$TMP"' EXIT
   # -Verify with no vis sibling at all: must fail with OUR message, not a
   # ParserError. A ParserError's stderr contains "ParserError" /

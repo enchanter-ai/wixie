@@ -55,6 +55,10 @@ tests/convergence-engine/learnings.md
 # pytest cache
 .pytest_cache/
 
+# Private test temp root (WIX-TEST-ENV-001, tests/lib/test-root.sh): default WIXIE_TEST_ROOT
+# for standalone test runs and per-run roots created by tests/run-all.sh.
+.test-root/
+
 # Windows null-device artifact: `> NUL` under a POSIX shell creates a real file
 NUL
 

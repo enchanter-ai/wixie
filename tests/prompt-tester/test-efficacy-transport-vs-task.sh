@@ -20,6 +20,9 @@
 # tokens, no network. Runs hermetically against a temp corpus dir.
 set -euo pipefail
 REPO_ROOT="${1:-.}"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 
 PYTHONIOENCODING=utf-8 python - "$REPO_ROOT" <<'PY'
 import importlib.util, io, json, contextlib, os, pathlib, subprocess, sys, tempfile, time

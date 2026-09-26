@@ -10,6 +10,9 @@
 # No network, no key, no real model id or lifecycle date is encoded here.
 set -euo pipefail
 REPO_ROOT="${1:-.}"
+# Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
+# shellcheck source=../lib/test-root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
 
 PYTHONIOENCODING=utf-8 python - "$REPO_ROOT" <<'PY'
 import contextlib, importlib.util, io, json, os, pathlib, sys, tempfile
