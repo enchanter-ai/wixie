@@ -42,7 +42,9 @@ payload always agree; none of them can be read as a full DEPLOY when another dis
     2  Usage / bad input — no prompt-file argument, the file does not exist, the file is
        empty, an annotated file outside editable/ (without --no-shipped), a file under editable/
        with no header, a master without its shipped file or disagreeing with it, or a bad
-       --proposal-out. Nothing was scored or written.
+       --proposal-out, or a malformed command line. Nothing was scored or written. --json-out
+       is written only after the auxiliary-write alias check accepted it (WIX-CONV-002), so a
+       command-line error found before that check never writes it.
     3  Internal error — an unexpected exception was raised while scoring, fixing, or saving.
        Distinct from HOLD: HOLD means the prompt WAS scored and fell short; 3 means scoring
        did not complete at all, so a consumer must not read it as either DEPLOY or HOLD.
@@ -765,10 +767,16 @@ def _guard_auxiliary_writes(prompt_path, json_out, proposal_out, want_json):
         protected.append(PR.master_for(prompt_path))
     aux = _learnings_paths(PR.prompt_folder_of(prompt_path)) + [json_out, proposal_out]
     problems = PR.aux_write_problems(protected, aux)
+    global _json_out_cleared
+    _json_out_cleared = None
+    if json_out:
+        # WIX-CONV-002: --json-out becomes writable only here, once the canonical alias check has
+        # found no problem of its own (problems about the prompt name alone do not count).
+        own = set(PR.aux_write_problems(protected, [json_out])) - set(PR.aux_write_problems(protected, []))
+        if not own:
+            _json_out_cleared = json_out
     if problems:
-        bad_json_out = bool(json_out) and any(json_out in pr for pr in problems)
-        _usage_error("refusing to run: " + "; ".join(problems), want_json,
-                     None if bad_json_out else json_out)
+        _usage_error("refusing to run: " + "; ".join(problems), want_json, json_out)
 
 
 def _verify_committed_pair(prompt_path, shipped_path, extra):
@@ -1178,12 +1186,22 @@ def _verdict_payload(scores=None, deploy=False, sigma=0.0, floor=0.0, passed=0, 
     return payload
 
 
+# WIX-CONV-002: the only --json-out path _emit_machine_verdict may write; set solely by
+# _guard_auxiliary_writes after the alias check passes, reset at the start of main().
+_json_out_cleared = None
+
+
 def _emit_machine_verdict(payload, want_json, json_out):
     """Opt-in only: nothing is written or printed unless the caller asked for it via
     --json / --json-out, so a plain `convergence.py <file>` run has zero new side effects."""
     if want_json:
         print("VERDICT_JSON " + json.dumps(payload, sort_keys=True))
-    if json_out:
+    if json_out and json_out != _json_out_cleared:
+        # WIX-CONV-002: a command-line error (or anything else) before _guard_auxiliary_writes has
+        # accepted this path never writes it: the path could be the prompt or an alias of it.
+        print(f"Warning: --json-out {json_out} not written: it was not (or could not be) checked "
+              f"against the prompt files", file=sys.stderr)
+    elif json_out:
         try:
             with open(json_out, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, sort_keys=True)
@@ -1275,6 +1293,8 @@ def _print_final(scores, assertions, iterations, text, force_hold=False):
 
 
 def main():
+    global _json_out_cleared
+    _json_out_cleared = None
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
     want_json = "--json" in sys.argv
     max_iter = 100

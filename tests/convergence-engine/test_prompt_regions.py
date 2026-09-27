@@ -16,6 +16,7 @@ Test classes map 1:1 to D15's acceptance list (A1..A7) plus the review items (RC
     A6  try_offline_fix / LLM fix: same boundary         TestA6OutputTest
     A7  structural failure never DEPLOY / 0              TestA7NeverDeployOnFailure
     +   EOL/BOM, determinism, round trip, annotate/check, install, view identity   TestLifecycle
+    WIX-CONV-002: a CLI usage error never writes --json-out (prompt/master/shipped/aliases)   TestUsageErrorJsonOut
 
 Offline only: no model, no network (the output-test model client is a stub). Usage:
     python test_prompt_regions.py <REPO_ROOT>        (exit 0 = all pass)
@@ -1029,6 +1030,103 @@ class TestAuxiliaryWriteAliasing(unittest.TestCase):
             ot.PromptWorking(str(folder / "output-reference.md"))
         (folder / "prompt.md").write_text("You are x.\n", encoding="utf-8")
         self.assertFalse(ot.PromptWorking(str(folder / "prompt.md")).writable)
+
+
+class TestUsageErrorJsonOut(unittest.TestCase):
+    """WIX-CONV-002 (verifier CX-3): a malformed command line exits 2 from main()'s argument
+    parsing, before run()'s _guard_auxiliary_writes. It may report the error (stderr, exit 2,
+    stdout --json) but must never write --json-out; above all not onto the input prompt, the
+    master, the shipped file or any alias of them. Bytes AND mtime must stay unchanged."""
+
+    OLD = 1_600_000_000_000_000_000
+    ERRORS = {
+        "missing --max value": lambda p, j: [p, "--json-out", j, "--max"],
+        "bad --max value": lambda p, j: [p, "--json-out", j, "--max", "abc"],
+        "no prompt argument": lambda p, j: ["--json", "--json-out", j, "--max", "3"],
+        "missing --proposal-out value": lambda p, j: [p, "--json-out", j, "--proposal-out"],
+        "second --json-out without value": lambda p, j: [p, "--json-out", j, "--json-out"],
+    }
+
+    def _aliases(self, folder, target):
+        """Alias spellings the canonical guard already handles; the ones this machine cannot
+        create (symlink without privilege, 8.3 disabled, no admin share) are left out."""
+        t = str(target)
+        out = {"same": t, "upper": t.upper(),
+               "dotdot": str(folder / "sub" / ".." / Path(t).relative_to(folder))}
+        link = folder / ("hard-" + Path(t).name)
+        os.link(t, link)
+        out["hardlink"] = str(link)
+        if os.name == "nt":
+            out["ads"] = t + ":stream"
+            out["extended-length"] = "\\\\?\\" + os.path.abspath(t)
+            drive, rest = os.path.splitdrive(os.path.abspath(t))
+            unc = "\\\\localhost\\" + drive[0] + "$" + rest
+            if os.path.exists(unc):
+                out["unc"] = unc
+            import ctypes
+            buf = ctypes.create_unicode_buffer(1024)
+            if ctypes.windll.kernel32.GetShortPathNameW(t, buf, 1024) and buf.value != t:
+                out["8.3"] = buf.value
+            j = folder / ("junc-" + Path(t).name)
+            if subprocess.run(["cmd", "/c", "mklink", "/J", str(j), str(Path(t).parent)],
+                              capture_output=True).returncode == 0:
+                out["junction"] = str(j / Path(t).name)
+                self.addCleanup(os.rmdir, j)
+        sl = folder / ("sym-" + Path(t).name)
+        try:
+            os.symlink(t, sl)
+            out["symlink"] = str(sl)
+        except OSError:
+            pass
+        return out
+
+    def _check(self, inp, files, target, folder, errors):
+        for label, alias in self._aliases(folder, target).items():
+            for err in errors:
+                argv = self.ERRORS[err]
+                for f in files:
+                    os.utime(f, ns=(self.OLD, self.OLD))
+                before = [PR.file_state(f) for f in files]
+                rc, out, _ = run_cli(*argv(inp, alias))
+                self.assertEqual(rc, 2, (label, err, out))
+                self.assertEqual([PR.file_state(f) for f in files], before, (label, err, out))
+
+    def test_plain_prompt_and_its_aliases_never_overwritten(self):
+        folder = scratch("c002-p-")
+        p = folder / "longpromptfilename.md"
+        p.write_bytes(b"You are an analyst.\nSummarize the input.\n")
+        self._check(p, [p], p, folder, list(self.ERRORS))
+
+    def test_master_and_shipped_never_overwritten(self):
+        for inp_key in ("master", "shipped"):
+            for target_key in ("master", "shipped"):
+                folder, master, shipped = make_pair(b"You are maybe an analyst.\n<example>d</example>\n",
+                                                    [("r", 1, 1)], fname="longpromptfilename.md")
+                pair = {"master": master, "shipped": shipped}
+                # one error kind per pair keeps the runtime down; all kinds share one code path
+                self._check(pair[inp_key], [master, shipped], pair[target_key], folder,
+                            ["bad --max value"])
+
+    def test_usage_error_writes_no_json_out_at_all(self):
+        """Parsing failed, so the prompt is not known reliably: nothing is written, even to an
+        unrelated path; stdout --json still carries the ERROR verdict."""
+        folder = scratch("c002-n-")
+        p = folder / "prompt.md"
+        p.write_bytes(b"You are x.\n")
+        for err, argv in self.ERRORS.items():
+            j = folder / "verdict.json"
+            rc, out, payload = run_cli(*(["--json"] + argv(p, j)))
+            self.assertEqual(rc, 2, (err, out))
+            self.assertFalse(j.exists(), err)
+            self.assertEqual((payload or {}).get("verdict"), "ERROR", (err, out))
+
+    def test_guarded_usage_error_still_writes_json_out(self):
+        """After the guard accepted --json-out, a later usage error (missing file) still writes it."""
+        folder = scratch("c002-g-")
+        j = folder / "verdict.json"
+        rc, out, payload = run_cli(folder / "missing.md", "--json", "--json-out", j)
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(json.loads(j.read_text(encoding="utf-8")), payload)
 
 
 if __name__ == "__main__":

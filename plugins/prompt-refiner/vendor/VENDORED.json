@@ -164,11 +164,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/convergence.py",
       "path": "wixie/shared/scripts/convergence.py",
-      "sha1": "909b0c63ed0a7357f74708e35fc4b3bd80d98d43",
-      "sha256": "7e70c0539d9acbd316a6ed49fffb714d3aedcbaca82b8dc9ad699fb5afacb2af",
+      "sha1": "905760713aee5793e337fbb511bd433d77168c69",
+      "sha256": "098a776187651b43c5e48c1187a689d378ba47616e5d252276deee858907bfa3",
       "source": "wixie",
       "source_path": "shared/scripts/convergence.py",
-      "source_revision": "git-blob:163a07eab398a831effc354df909300511c62cd1"
+      "source_revision": "git-blob:e9d97c41b6beee4469e1a84a49af94e495d6be65"
     },
     {
       "consumers": [

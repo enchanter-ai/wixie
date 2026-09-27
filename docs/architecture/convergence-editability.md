@@ -736,7 +736,10 @@ a warning.
      any prompt, master or shipped file whose name is reserved (`learnings.md`,
      `learnings.json`, `output-reference.md`, `output-test-results.json`).
    - **When.** All of this is checked with exit 2 before any work. A refused `--json-out` is
-     never written.
+     never written. `--json-out` is written only after this check has accepted it (WIX-CONV-002):
+     a malformed command line (bad or missing `--max` value, no prompt argument, ...) fails
+     before the check can run, so it exits 2 without writing `--json-out` (stdout `--json` and
+     stderr still report the error).
    - **Before any exit that reports DEPLOY or `mutation: "applied"`.** The master and the
      shipped file are re-read from disk. Two conditions must hold: `strip(master) == shipped`,
      and both hashes equal the payload's. On a mismatch the run exits HOLD / 1 with
