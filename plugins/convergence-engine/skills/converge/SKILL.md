@@ -197,7 +197,8 @@ Heuristic pre-check: PASS / HOLD  [axis scores]
 Measured (deploy-bar, n=N): ACCEPT / REJECT / NO_MEASUREMENT  (treatment CI low L.LL, floor 0.75[, lift over control])
 Verdict: DEPLOY (measured ACCEPT) / HOLD (measured REJECT) / HOLD (measure step unavailable or NO_MEASUREMENT)
 ```
-DEPLOY requires the measured **ACCEPT**, not just a heuristic pass. NO_MEASUREMENT (exit 3) is
+DEPLOY requires BOTH the canonical heuristic bar (convergence.py exit 0 / `VERDICT: DEPLOY`, i.e.
+`deploy_bar.py`) AND the measured **ACCEPT**; a measured ACCEPT never lifts a heuristic HOLD. NO_MEASUREMENT (exit 3) is
 not a measured HOLD — say plainly that the measure step never ran (transport failure), not that
 the prompt failed it.
 

@@ -53,7 +53,7 @@ Output: optimized prompt (8.1/10) + updated metadata + fresh report.pdf
 
 ## Exit Conditions
 
-- **DEPLOY:** overall ≥ 9.0, all axes ≥ 7.0
+- **DEPLOY:** the canonical bar in `shared/scripts/deploy_bar.py`: overall ≥ 9.0, all axes ≥ 7.0, σ ≤ the dynamic floor, 8/8 SAT assertions (heuristic; the measured step still decides the product DEPLOY)
 - **PLATEAU:** score unchanged for 3 consecutive iterations
 - **MAX:** 100 iterations reached
 

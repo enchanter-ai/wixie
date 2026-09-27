@@ -126,7 +126,7 @@ The Convergence Engine doesn't just loop — it **learns**. Each iteration:
 
 ```
 WIXIE CONVERGENCE ENGINE
-Target: DEPLOY (overall >= 9.0, all axes >= 7.0)
+Target: DEPLOY (heuristic bar — overall >= 9.0, all axes >= 7.0, sigma <= floor, 8/8 assertions)
 
 Iteration 1:  8.4/10 — hypothesis: fix Failure Resilience
               applied → improved (8.4 → 9.4)
