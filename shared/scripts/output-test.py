@@ -41,14 +41,28 @@ Model identity:
     models whose registry entry declares sampling "adjustable". Cost uses the
     resolved entry's registry price; with no price or no usage it is UNKNOWN.
 
+Results and exit codes (WIX-SEC-OT-STALE-RESULT-001):
+    Every run gets a run_id. Before anything else it atomically replaces
+    output-test-results.json with an IN_PROGRESS record, so an earlier result can
+    never be read as this run's. The run then ends as exactly one of:
+      run_status COMPLETE  this run's own verdict (PASS, MARGINAL, FAIL, API_ERROR,
+                           PREFLIGHT_FAIL, DRY_RUN, MODEL_RESOLUTION_FAILED)
+      run_status ERROR     final_verdict EVALUATION_ERROR, with error provenance
+                           (malformed evaluator reply, internal exception,
+                           interruption, setup failure); a malformed evaluator or
+                           fixer payload is kept under iterations_detail[].fix.error
+    Exit codes: 0 = an iteration measured PASS; 1 = the run completed without a
+    PASS; 2 = refused to run (an output file would alias the prompt); 3 = the run
+    ended in ERROR (no valid measurement). A killed process leaves IN_PROGRESS.
+
 Cost awareness:
     Phase 1 is always free. Phase 2 calls the target model (~$1.20 for Opus).
     Phase 3 is mostly offline. Phase 4 calls the evaluator/fixer model (~$0.10)
     only when needed. Default max 3 iterations = ~$3.90 worst case. Use --max
     to control.
 """
-import sys, os, re, json, time, importlib, importlib.util
-from datetime import datetime
+import sys, os, re, json, time, math, uuid, hashlib, traceback, importlib, importlib.util
+from datetime import datetime, timezone
 
 # Fix Windows encoding issues with Unicode characters (checkmarks, arrows, etc.)
 if sys.platform == "win32":
@@ -427,6 +441,8 @@ def estimate_cost(resolution, usage):
     rid = (resolution or {}).get("resolved_registry_id")
     if not usage or usage.get("input_tokens") is None or usage.get("output_tokens") is None:
         return None, "UNKNOWN: provider usage not reported"
+    if _usage_problem(usage.get("input_tokens"), usage.get("output_tokens")):
+        return None, "UNKNOWN: provider usage malformed"
     pricing = (resolution or {}).get("pricing_usd_per_mtok")
     if not isinstance(pricing, dict) or not all(
             isinstance(pricing.get(k), (int, float)) for k in ("input", "output")):
@@ -477,15 +493,27 @@ def _redact(text):
     return text
 
 
+def _usage_problem(*counts):
+    """None, or why provider token counts are not usable (STALE-RESULT-001: a malformed
+    count is UNKNOWN usage, never a crash and never a measured zero)."""
+    bad = [repr(v)[:40] for v in counts
+           if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 0)]
+    return f"provider usage malformed (non-integer or negative token count: {', '.join(bad)})" if bad else None
+
+
 def _usage_of(response):
+    """Returns (usage dict or None, problem or None). None usage = UNKNOWN, not zero."""
     u = getattr(response, "usage", None)
     if u is None:
-        return None
+        return None, None
     it = getattr(u, "input_tokens", None)
     ot = getattr(u, "output_tokens", None)
     if it is None and ot is None:
-        return None
-    return {"input_tokens": it, "output_tokens": ot}
+        return None, None
+    problem = _usage_problem(it, ot)
+    if problem:
+        return None, problem
+    return {"input_tokens": it, "output_tokens": ot}, None
 
 
 def call_model(client, resolution, system_prompt, user_prompt, max_tokens=4096, sampling=None):
@@ -533,32 +561,39 @@ def call_model(client, resolution, system_prompt, user_prompt, max_tokens=4096, 
         return None, record
     text = ""
     for block in getattr(response, "content", None) or []:
-        if hasattr(block, "text"):
+        if isinstance(getattr(block, "text", None), str):
             text += block.text
     observed = getattr(response, "model", None)
     record["observed"] = observed if isinstance(observed, str) and observed else None
     if record["observed"] is not None:
         record["identity_mismatch"] = record["observed"] != record["resolved"]
     record["stop_reason"] = getattr(response, "stop_reason", None)
-    record["usage"] = _usage_of(response)
-    record["cost_usd"], record["cost_provenance"] = estimate_cost(resolution, record["usage"])
+    record["usage"], usage_problem = _usage_of(response)
+    if usage_problem:
+        record["usage_error"] = _redact(usage_problem)
+        record["cost_usd"], record["cost_provenance"] = None, "UNKNOWN: " + record["usage_error"]
+    else:
+        record["cost_usd"], record["cost_provenance"] = estimate_cost(resolution, record["usage"])
     record["ok"] = True
     return text, record
 
 # ─── Loaders ──────────────────────────────────────────────────────────────────
 
-def load_prompt_folder(folder):
-    """Load prompt, metadata, and tests from a prompt folder."""
+def find_prompt_file(folder):
+    """The folder's prompt.<ext>; exits 1 when there is none (then nothing is written)."""
     folder = os.path.abspath(folder)
-    prompt_file = None
     for ext in ["xml", "md", "txt", "json"]:
         candidate = os.path.join(folder, f"prompt.{ext}")
         if os.path.isfile(candidate):
-            prompt_file = candidate
-            break
-    if not prompt_file:
-        print(f"ERROR: No prompt file found in {folder}", file=sys.stderr)
-        sys.exit(1)
+            return candidate
+    print(f"ERROR: No prompt file found in {folder}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_prompt_folder(folder):
+    """Load prompt, metadata, and tests from a prompt folder."""
+    folder = os.path.abspath(folder)
+    prompt_file = find_prompt_file(folder)
 
     # Bytes, never text mode (WIX-CONV-001): what models and scorers see is the stripped view.
     try:
@@ -772,8 +807,8 @@ def run_generate(client, prompt_text, meta, folder, iteration, target=None):
 
     # Save output as reference
     output_path = os.path.join(folder, "output-reference.md")
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(output)
+    _write_atomic(output_path, output)
+    gen_info["output_reference_sha256"] = hashlib.sha256(output.encode("utf-8")).hexdigest()
 
     gen_info["output_words"] = output_words
     gen_info["output_tokens"] = usage.get("output_tokens")
@@ -875,7 +910,7 @@ def run_evaluate(output, prompt_text, tests, meta, preflight_results, verbose=Fa
     details["self_check"] = self_check
 
     # 3d. Schema validation via output-schema
-    schema = (preflight_results or {}).get("schema", {}).get("schema")
+    schema = ((preflight_results or {}).get("schema") or {}).get("schema")
     if _output_schema and schema:
         try:
             validation = _output_schema.validate(output, schema)
@@ -914,6 +949,105 @@ def run_evaluate(output, prompt_text, tests, meta, preflight_results, verbose=Fa
     return scores, details
 
 # ─── Phase 4: Learn & Fix (CHEAP) ────────────────────────────────────────────
+#
+# Evaluator and fixer replies are schema-validated before any downstream use
+# (WIX-SEC-OT-STALE-RESULT-001). An invalid reply becomes an InvalidReply: its errors
+# and a bounded, redacted copy of the raw text are kept as diagnosis evidence. An
+# invalid EVALUATOR reply ends the run as ERROR (no valid evaluation); an invalid
+# FIXER reply is a failed fix (nothing applied) and the loop goes on.
+
+EVALUATOR_VERDICTS = ("PASS", "FAIL")
+RAW_EVIDENCE_CHARS = 4000
+
+
+class InvalidReply(dict):
+    """A model reply that failed validation. A dict subclass so a model cannot forge it."""
+
+
+def _jtype(v):
+    return {dict: "object", list: "array", str: "string", bool: "boolean",
+            type(None): "null"}.get(type(v), "number" if isinstance(v, (int, float)) else type(v).__name__)
+
+
+def _invalid_reply(kind, overall, errors, raw):
+    raw = raw if isinstance(raw, str) else repr(raw)
+    return InvalidReply({
+        "criteria": [], "overall": overall, "output_quality_score": None, "top_fix": None,
+        "error": {
+            "kind": kind,
+            "errors": [_redact(str(e))[:300] for e in errors[:20]],
+            "raw_response": _redact(raw)[:RAW_EVIDENCE_CHARS],
+            "raw_length": len(raw),
+            "raw_sha256": hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest(),
+        },
+    })
+
+
+def _parse_json_reply(text):
+    """(value, None) or (None, reason). A ```json fence wins over the whole text."""
+    m = re.search(r"```json\s*(.*?)\s*```", text, re.S)
+    try:
+        return json.loads(m.group(1) if m else text), None
+    except (ValueError, RecursionError) as e:
+        return None, f"reply is not valid JSON ({type(e).__name__}: {str(e)[:120]})"
+
+
+def validate_evaluator_reply(obj):
+    """Return a list of schema problems (empty = usable)."""
+    if not isinstance(obj, dict):
+        return [f"top level must be a JSON object, got {_jtype(obj)}"]
+    errs = []
+    crit = obj.get("criteria")
+    if "criteria" not in obj:
+        errs.append("missing required field 'criteria'")
+    elif not isinstance(crit, list):
+        errs.append(f"'criteria' must be an array, got {_jtype(crit)}")
+    else:
+        for i, c in enumerate(crit):
+            if not isinstance(c, dict):
+                errs.append(f"criteria[{i}] must be an object, got {_jtype(c)}")
+                continue
+            cid = c.get("id")
+            if "id" not in c:
+                errs.append(f"criteria[{i}] missing required field 'id'")
+            elif isinstance(cid, bool) or not isinstance(cid, (int, str)) or (isinstance(cid, str) and not cid.strip()):
+                errs.append(f"criteria[{i}].id must be an integer or a non-empty string, got {_jtype(cid)}")
+            if not isinstance(c.get("verdict"), str) or c.get("verdict") not in EVALUATOR_VERDICTS:
+                errs.append(f"criteria[{i}].verdict must be PASS or FAIL, got {c.get('verdict')!r}"[:200])
+            if "reason" in c and not isinstance(c["reason"], str):
+                errs.append(f"criteria[{i}].reason must be a string, got {_jtype(c['reason'])}")
+            if c.get("fix") is not None and not isinstance(c["fix"], str):
+                errs.append(f"criteria[{i}].fix must be a string or null, got {_jtype(c['fix'])}")
+    ov = obj.get("overall")
+    if "overall" not in obj:
+        errs.append("missing required field 'overall'")
+    elif not isinstance(ov, str) or ov not in EVALUATOR_VERDICTS:
+        errs.append(f"'overall' must be PASS or FAIL, got {ov!r}"[:200])
+    for k in ("weakest_area", "top_fix"):
+        if obj.get(k) is not None and not isinstance(obj[k], str):
+            errs.append(f"'{k}' must be a string or null, got {_jtype(obj[k])}")
+    q = obj.get("output_quality_score")
+    if q is not None and (isinstance(q, bool) or not isinstance(q, (int, float))
+                          or not math.isfinite(q) or not 0 <= q <= 10):
+        errs.append(f"'output_quality_score' must be a number in [0, 10] or null, got {q!r}"[:200])
+    if not errs and ov == "PASS" and any(c["verdict"] == "FAIL" for c in crit):
+        errs.append("'overall' is PASS but a criterion is FAIL")
+    return errs
+
+
+def validate_fixer_reply(obj, regions=None):
+    """Return a list of schema problems (empty = usable)."""
+    if not isinstance(obj, dict):
+        return [f"top level must be a JSON object, got {_jtype(obj)}"]
+    errs = []
+    keys = ("region_id", "target", "replacement") if regions else ("target", "replacement")
+    for k in keys:
+        if not isinstance(obj.get(k), str):
+            errs.append(f"'{k}' must be a string, got {_jtype(obj.get(k))}")
+    if obj.get("reason") is not None and not isinstance(obj["reason"], str):
+        errs.append(f"'reason' must be a string or null, got {_jtype(obj['reason'])}")
+    return errs
+
 
 def run_llm_evaluation(client, prompt_text, output, meta, evaluator):
     """Use the resolved evaluator model to judge the output against the prompt's
@@ -965,21 +1099,14 @@ Respond in this exact JSON format:
     )
     if response_text is None:
         return None, call
-    try:
-        json_match = re.search(r"```json\s*(.*?)\s*```", response_text, re.S)
-        if json_match:
-            return json.loads(json_match.group(1)), call
-        return json.loads(response_text), call
-    except json.JSONDecodeError:
-        # The call succeeded but produced no usable verdict: no score, not a zero.
-        return {
-            "criteria": [],
-            "overall": "UNPARSEABLE",
-            "weakest_area": "Could not parse evaluator response",
-            "top_fix": response_text[:500],
-            "output_quality_score": None,
-            "raw_response": response_text[:1000],
-        }, call
+    # The call succeeded; a reply that is not a valid evaluation has no score (not a zero).
+    parsed, why = _parse_json_reply(response_text)
+    if why:
+        return _invalid_reply("malformed_evaluator_reply", "UNPARSEABLE", [why], response_text), call
+    errors = validate_evaluator_reply(parsed)
+    if errors:
+        return _invalid_reply("malformed_evaluator_reply", "INVALID", errors, response_text), call
+    return parsed, call
 
 def generate_fix(client, prompt_text, eval_result, test_results, scores, prompt_file, fixer, regions=None):
     """Use the resolved fixer model to generate a specific prompt fix based on failures.
@@ -1045,13 +1172,11 @@ Rules:
     )
     if response_text is None:
         return None, call
-    try:
-        json_match = re.search(r"```json\s*(.*?)\s*```", response_text, re.S)
-        if json_match:
-            return json.loads(json_match.group(1)), call
-        return json.loads(response_text), call
-    except json.JSONDecodeError:
-        return {"error": response_text[:500]}, call
+    parsed, why = _parse_json_reply(response_text)
+    errors = [why] if why else validate_fixer_reply(parsed, regions)
+    if errors:
+        return _invalid_reply("malformed_fixer_reply", "INVALID", errors, response_text), call
+    return parsed, call
 
 def try_offline_fix(prompt_text, scores, details, working=None):
     """Attempt convergence.py's offline fixers for structural failures -- under the SAME
@@ -1177,6 +1302,24 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
                     "evaluation_failed": True, "error": err}
         return prompt_text, fix_info, calls
 
+    if not isinstance(eval_result, InvalidReply):
+        errors = validate_evaluator_reply(eval_result)   # also covers injected evaluators
+        if errors:
+            eval_result = _invalid_reply("malformed_evaluator_reply", "INVALID", errors,
+                                         json.dumps(eval_result, default=repr, ensure_ascii=False)
+                                         if not isinstance(eval_result, str) else eval_result)
+    if isinstance(eval_result, InvalidReply):
+        # No valid evaluation: keep the evidence, fix nothing, and end the run as ERROR.
+        err = eval_result["error"]
+        print(f" {RED}EVALUATOR REPLY INVALID{RESET}: {err['errors'][0][:120]}")
+        fix_info = {"method": "llm_evaluation", "applied": False, "evaluation_failed": True,
+                    "description": "evaluator reply failed validation; no evaluation, no fix attempted",
+                    "llm_evaluation": {"overall": eval_result["overall"], "output_quality_score": None},
+                    "error": err,
+                    "run_error": {"kind": err["kind"], "phase": "evaluate",
+                                  "message": "; ".join(err["errors"])[:500]}}
+        return prompt_text, fix_info, calls
+
     overall_verdict = eval_result.get("overall", "UNPARSEABLE")
     quality_score = eval_result.get("output_quality_score")
     fix_info["llm_evaluation"] = {"overall": overall_verdict, "output_quality_score": quality_score}
@@ -1208,6 +1351,11 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
                                  prompt_file, fixer, regions=regions)
     if fix_call is not None:
         calls.append(fix_call)
+    if fix is not None and not isinstance(fix, InvalidReply):
+        errors = validate_fixer_reply(fix, regions)      # also covers injected fixers
+        if errors:
+            fix = _invalid_reply("malformed_fixer_reply", "INVALID", errors,
+                                 json.dumps(fix, default=repr, ensure_ascii=False))
 
     if fix_call is not None and not fix_call["ok"]:
         err = fix_call["error"]
@@ -1215,8 +1363,14 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
         fix_info = {"method": "llm_fix", "applied": False,
                     "description": "fixer provider call failed", "fix_failed": True,
                     "error": err, "llm_evaluation": llm_eval}
-    elif fix and "error" not in fix:
-        reason = fix.get("reason", "no reason")
+    elif isinstance(fix, InvalidReply):
+        err = fix["error"]
+        print(f" {RED}FIXER REPLY INVALID{RESET}: {err['errors'][0][:120]}")
+        fix_info = {"method": "llm_fix", "applied": False, "fix_failed": True,
+                    "description": "fixer reply failed validation; nothing applied",
+                    "error": err, "llm_evaluation": llm_eval}
+    elif fix:
+        reason = fix.get("reason") or "no reason"
         proposal = {k: fix.get(k) for k in ("region_id", "target", "replacement", "reason")}
         if working is None or not working.writable:
             # WIX-CONV-001 / D15: no explicit editable region -> proposal only, never written.
@@ -1243,9 +1397,8 @@ def diagnose_and_fix(client, prompt_text, output, scores, details, meta, prompt_
             fix_info = {"method": "llm_fix", "applied": False, "description": why,
                         "proposal": proposal, "llm_evaluation": llm_eval}
     else:
-        err = fix.get("error", "unknown") if fix else "no fix generated"
-        print(f" {RED}Fix failed{RESET}: {str(err)[:80]}")
-        fix_info = {"method": "llm_fix", "applied": False, "description": str(err)[:200],
+        print(f" {RED}Fix failed{RESET}: no fix generated")
+        fix_info = {"method": "llm_fix", "applied": False, "description": "no fix generated",
                     "llm_evaluation": llm_eval}
 
     return prompt_text, fix_info, calls
@@ -1266,9 +1419,73 @@ def _identity_with_observed(identity, calls):
     return out
 
 
+RESULTS_NAME = "output-test-results.json"
+RESULTS_VERSION = "2.1"          # 2.1 adds run identity fields; every 2.0 field is kept
+RUN_IN_PROGRESS, RUN_COMPLETE, RUN_ERROR = "IN_PROGRESS", "COMPLETE", "ERROR"
+EVALUATION_ERROR = "EVALUATION_ERROR"
+EXIT_PASS, EXIT_NO_PASS, EXIT_REFUSED, EXIT_ERROR = 0, 1, 2, 3
+
+
+class RunOutcome(list):
+    """run()'s return value: the iterations_detail list (as before) plus the run's identity."""
+
+    def __init__(self, iterations=(), run_id=None, run_status=RUN_COMPLETE, final_verdict=None):
+        super().__init__(iterations)
+        self.run_id, self.run_status, self.final_verdict = run_id, run_status, final_verdict
+
+
+def exit_code_for(outcome):
+    """CLI exit code: ERROR (3) is never confused with an honest non-PASS (1)."""
+    if getattr(outcome, "run_status", RUN_COMPLETE) != RUN_COMPLETE:
+        return EXIT_ERROR
+    return EXIT_PASS if any(r.get("verdict") == "PASS" for r in outcome) else EXIT_NO_PASS
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def _sha256_file(path):
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def new_run_context(folder, prompt_view, prompt_file):
+    """Identity of one run: run_id, start time and hashes of the inputs it evaluates."""
+    return {
+        "run_id": uuid.uuid4().hex,
+        "started_at": _utc_now(),
+        "inputs": {
+            "prompt_file": os.path.basename(prompt_file),
+            "prompt_view_sha256": (hashlib.sha256(prompt_view.encode("utf-8")).hexdigest()
+                                   if prompt_view is not None else None),
+            "tests_sha256": _sha256_file(os.path.join(folder, "tests.json")),
+            "metadata_sha256": _sha256_file(os.path.join(folder, "metadata.json")),
+        },
+        "output_reference": None,
+    }
+
+
+def _write_atomic(path, text):
+    """Replace `path` in one step (temp file + fsync + os.replace): readers see the old or the
+    new record, never a torn one. Uses prompt_regions' writer (temp name carries its TMP_TAG,
+    which no accepted prompt file may carry)."""
+    if _PR is None:
+        raise RuntimeError("prompt_regions.py is missing; refusing to write results")
+    _PR._atomic_write(path, text.encode("utf-8"))
+
+
 def save_results(folder, run_data):
-    """Save comprehensive results to output-test-results.json."""
-    path = os.path.join(folder, "output-test-results.json")
+    """Atomically publish output-test-results.json for ONE run (see RESULTS_VERSION).
+
+    run_data["run"] is the run context (new_run_context); run_data["run_status"] is
+    IN_PROGRESS, COMPLETE (default) or ERROR, and run_data["error"] the error provenance."""
+    path = os.path.join(folder, RESULTS_NAME)
+    run = run_data.get("run") or new_run_context(folder, None, "")
+    status = run_data.get("run_status", RUN_COMPLETE)
     calls = run_data.get("calls", [])
     known, unknown = sum_known_costs(calls)
     if not calls:
@@ -1277,7 +1494,17 @@ def save_results(folder, run_data):
         cost_status = "complete" if unknown == 0 else "partial"
     data = {
         "engine": "hybrid-convergence",
-        "version": "2.0",
+        "version": RESULTS_VERSION,
+        # Run identity (STALE-RESULT-001): which run wrote this record and whether it finished.
+        "run_id": run["run_id"],
+        "run_status": status,
+        "started_at": run["started_at"],
+        "finished_at": None if status == RUN_IN_PROGRESS else _utc_now(),
+        "error": run_data.get("error"),
+        "inputs": run.get("inputs"),
+        # The output-reference.md this run wrote last (None: this run wrote none, so any
+        # output-reference.md on disk is not this run's).
+        "output_reference": run.get("output_reference"),
         "last_run": datetime.now().isoformat(),
         "prompt_folder": folder,
         "model": run_data.get("model", "unknown"),
@@ -1300,8 +1527,7 @@ def save_results(folder, run_data):
         "iterations_detail": run_data.get("iterations_detail", []),
         "available_engines": run_data.get("available_engines", []),
     }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _write_atomic(path, json.dumps(data, indent=2, ensure_ascii=False, default=repr))
     return path
 
 # ─── Main engine ──────────────────────────────────────────────────────────────
@@ -1317,15 +1543,100 @@ def _close_iteration(iter_data, calls, iter_start):
     return iter_data
 
 
+def _publish_error(ctx, folder, kind, message, **extra):
+    """End the run as a CURRENT ERROR RESULT: whatever this run recorded so far, plus the
+    error provenance. Returns the partial iterations. Never raises."""
+    data = {}
+    snap = ctx.get("snapshot")
+    if snap is not None:
+        try:
+            data = snap()
+        except Exception:
+            data = {}
+    error = {"kind": kind, "phase": ctx.get("phase"), "message": _redact(str(message))[:500]}
+    error.update(extra)
+    data.update(run=ctx, run_status=RUN_ERROR, final_verdict=EVALUATION_ERROR, final_score=None,
+                error=error)
+    try:
+        save_results(folder, data)
+    except Exception as e:
+        print(f"ERROR: could not publish the ERROR record ({type(e).__name__}: {e}); "
+              f"{RESULTS_NAME} still reads IN_PROGRESS for run {ctx['run_id']}", file=sys.stderr)
+    return data.get("iterations_detail", [])
+
+
 def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         no_fix=False, verbose=False, evaluator_model=None, fixer_model=None, client=None):
+    """Run the pipeline once. Returns a RunOutcome (the iterations_detail list plus run_id,
+    run_status and final_verdict); exit_code_for(outcome) is the CLI's exit code.
+
+    STALE-RESULT-001: once the prompt folder is accepted, output-test-results.json is atomically
+    replaced by an IN_PROGRESS record of this run BEFORE any model call, and the run ends by
+    publishing exactly one COMPLETE or ERROR record of the same run_id. An exception inside the
+    run is recorded as ERROR (never left behind an older record); an interrupt or an early
+    sys.exit is recorded as ERROR too and then re-raised (a non-zero exit becomes EXIT_ERROR)."""
     _init_colors()
-    prompt_text, meta, tests, prompt_file, folder = load_prompt_folder(folder)
+    folder = os.path.abspath(folder)
+    prompt_file = find_prompt_file(folder)
     try:
         working = PromptWorking(prompt_file)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(EXIT_REFUSED)
+    except Exception as e:
+        # The prompt could not be opened. Record that as this run's ERROR, but only when the
+        # alias guard can still prove the result path is not a prompt file.
+        print(f"ERROR: cannot open {prompt_file}: {type(e).__name__}: {e}", file=sys.stderr)
+        try:
+            safe = _PR is not None and not _PR.aux_write_problems(
+                [prompt_file, _PR.master_for(prompt_file)],
+                [os.path.join(folder, "output-reference.md"), os.path.join(folder, RESULTS_NAME)])
+        except Exception:
+            safe = False
+        if safe:
+            ctx = new_run_context(folder, None, prompt_file)
+            ctx["phase"] = "open_prompt"
+            _publish_error(ctx, folder, "prompt_unreadable", f"{type(e).__name__}: {e}")
+        sys.exit(EXIT_ERROR)
+    ctx = new_run_context(folder, working.view, prompt_file)
+    ctx["phase"] = "start"
+    try:
+        save_results(folder, {"run": ctx, "run_status": RUN_IN_PROGRESS,
+                              "final_verdict": RUN_IN_PROGRESS, "final_score": None})
+    except Exception as e:
+        print(f"ERROR: cannot publish the in-progress record {RESULTS_NAME} "
+              f"({type(e).__name__}: {e}); nothing was evaluated", file=sys.stderr)
+        sys.exit(EXIT_ERROR)
+    try:
+        return _run(ctx, folder, working, max_iterations, dry_run, skip_preflight, no_fix,
+                    verbose, evaluator_model, fixer_model, client)
+    except KeyboardInterrupt:
+        _publish_error(ctx, folder, "interrupted", "run interrupted before it finished")
+        raise
+    except SystemExit as e:
+        if e.code in (None, 0):
+            raise
+        _publish_error(ctx, folder, "setup_exit", f"run stopped with exit status {e.code!r} "
+                                                  f"before producing a verdict")
+        raise SystemExit(EXIT_ERROR)
+    except Exception as e:
+        iterations = _publish_error(
+            ctx, folder, "internal_exception", f"{type(e).__name__}: {e}",
+            exception_type=type(e).__name__,
+            traceback=_redact(traceback.format_exc(limit=6))[-2000:])
+        print(f"ERROR: evaluation failed ({type(e).__name__}: {str(e)[:200]}); recorded as "
+              f"run_status ERROR, run {ctx['run_id']}", file=sys.stderr)
+        return RunOutcome(iterations, ctx["run_id"], RUN_ERROR, EVALUATION_ERROR)
+
+
+def _run(ctx, folder, working, max_iterations, dry_run, skip_preflight, no_fix, verbose,
+         evaluator_model, fixer_model, client):
+    ctx["phase"] = "load"
+    _prompt_text, meta, tests, prompt_file, folder = load_prompt_folder(folder)
+    if not isinstance(meta, dict):
+        raise ValueError(f"metadata.json must hold a JSON object, got {_jtype(meta)}")
+    if not isinstance(tests, list) or not all(isinstance(t, dict) for t in tests):
+        raise ValueError("tests.json must hold a JSON array of objects")
     prompt_text = working.view
 
     # Resolve every role up front, through the registry, before any call.
@@ -1380,21 +1691,24 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             "model_resolution_errors": model_errors,
             "fallback_events": fallback_events,
             "calls": all_calls,
-            "total_iterations": 0,
             "final_score": 0,
             "total_duration": round(time.time() - run_start, 1),
             "cost_breakdown": {k: cost_summary(v) for k, v in bucket_calls.items()},
             "preflight": preflight_results,
-            "iterations_detail": [],
+            "iterations_detail": list(iterations_detail),
+            "total_iterations": len(iterations_detail),
             "available_engines": available,
             "editability": working.describe(),
+            "run": ctx,
         }
         data.update(kw)
         return data
+    ctx["snapshot"] = _run_data     # what an ERROR record keeps of this run
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Phase 1: Pre-flight (FREE)
     # ═══════════════════════════════════════════════════════════════════════════
+    ctx["phase"] = "preflight"
     if not skip_preflight:
         print_phase("Phase 1: Pre-flight (free)")
         preflight_ok, preflight_results = run_preflight(prompt_text, meta, folder, verbose=verbose)
@@ -1407,7 +1721,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
                 final_verdict="PREFLIGHT_FAIL", preflight=preflight_results))
             print(f"\n  Results saved: {os.path.basename(results_path)}")
             _print_summary(0, 0, round(time.time() - run_start, 1), 0, "PREFLIGHT_FAIL")
-            return []
+            return RunOutcome([], ctx["run_id"], RUN_COMPLETE, "PREFLIGHT_FAIL")
     else:
         print(f"\n  {DIM}(--skip-preflight: Phase 1 skipped){RESET}")
 
@@ -1420,7 +1734,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         print(f"\n  Results saved: {os.path.basename(results_path)}")
         _print_summary(0, 0, round(time.time() - run_start, 1), 0,
                        preflight_results.get("prompt_quality", {}).get("verdict", "DRY_RUN") if preflight_results else "DRY_RUN")
-        return []
+        return RunOutcome([], ctx["run_id"], RUN_COMPLETE, "DRY_RUN")
 
     # No call is made unless every role resolved to a sendable provider model.
     if model_errors:
@@ -1430,17 +1744,20 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         results_path = save_results(folder, _run_data(final_verdict="MODEL_RESOLUTION_FAILED"))
         print(f"\n  Results saved: {os.path.basename(results_path)}")
         _print_summary(0, 0, round(time.time() - run_start, 1), 0, "MODEL_RESOLUTION_FAILED")
-        return []
+        return RunOutcome([], ctx["run_id"], RUN_COMPLETE, "MODEL_RESOLUTION_FAILED")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Iteration loop: Phase 2 -> Phase 3 -> Phase 4 -> repeat
     # ═══════════════════════════════════════════════════════════════════════════
+    ctx["phase"] = "client"
     if client is None:
         client = get_client()
+    run_error = None
 
     for iteration in range(1, max_iterations + 1):
         iter_start = time.time()
         calls = []
+        ctx["phase"] = "generate"
 
         # ───────────────────────────────────────────────────────────────────────
         # Phase 2: Generate (COSTS MONEY)
@@ -1463,10 +1780,14 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             }, calls, iter_start))
             final_verdict = "API_ERROR"
             break
+        ctx["output_reference"] = {"path": "output-reference.md", "run_id": ctx["run_id"],
+                                   "iteration": iteration,
+                                   "sha256": gen_info.get("output_reference_sha256")}
 
         # ───────────────────────────────────────────────────────────────────────
         # Phase 3: Evaluate (CHEAP — mostly offline)
         # ───────────────────────────────────────────────────────────────────────
+        ctx["phase"] = "evaluate"
         print_phase("Phase 3: Evaluate")
         scores, details = run_evaluate(
             output, prompt_text, tests, meta, preflight_results, verbose=verbose
@@ -1504,6 +1825,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             continue
 
         if iteration < max_iterations:
+            ctx["phase"] = "fix"
             print_phase("Phase 4: Learn & Fix")
             new_prompt, fix_info, fix_calls = diagnose_and_fix(
                 client, prompt_text, output, scores, details, meta, prompt_file,
@@ -1518,6 +1840,13 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
                 prompt_text = new_prompt
 
         iterations_detail.append(_close_iteration(iter_data, calls, iter_start))
+        if iter_data.get("fix", {}).get("run_error"):
+            # No valid evaluation this iteration: the run ends as ERROR, evidence kept.
+            run_error = dict(iter_data["fix"]["run_error"], iteration=iteration,
+                             evidence=f"iterations_detail[{len(iterations_detail) - 1}].fix.error")
+            final_verdict, final_score = EVALUATION_ERROR, None
+            print(f"\n  {RED}{BOLD}EVALUATION ERROR{RESET}: {run_error['message'][:160]}")
+            break
         iter_cost_txt = (f"${iter_data['cost_usd']:.3f}" if iter_data["cost_complete"]
                          else f"UNKNOWN (${iter_data['known_cost_usd']:.3f} known + "
                               f"{iter_data['cost_unknown_calls']} unpriced/failed call(s))")
@@ -1541,13 +1870,17 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
     total_duration = round(time.time() - run_start, 1)
     total_iterations = len(iterations_detail)
     total_cost, unknown_cost_calls = sum_known_costs(all_calls)
+    run_status = RUN_ERROR if run_error else RUN_COMPLETE
 
+    ctx["phase"] = "save"
     results_path = save_results(folder, _run_data(
         total_iterations=total_iterations,
         final_verdict=final_verdict,
         final_score=final_score,
         total_duration=total_duration,
         iterations_detail=iterations_detail,
+        run_status=run_status,
+        error=run_error,
     ))
     print(f"\n  Results saved: {os.path.basename(results_path)}")
 
@@ -1571,7 +1904,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         print(f"  {'Total':>4}  {'':>7}  {'':>10}  ${total_cost:>7.3f}  {total_duration:>5.0f}s")
         print()
 
-    return iterations_detail
+    return RunOutcome(iterations_detail, ctx["run_id"], run_status, final_verdict)
 
 def _print_summary(cost, iterations, duration, score, verdict, unknown_cost_calls=0):
     color = GREEN if verdict == "PASS" else YELLOW if verdict in ("MARGINAL", "DRY_RUN") else RED
@@ -1659,8 +1992,6 @@ if __name__ == "__main__":
         fixer_model=fixer_model,
     )
 
-    # Exit code: 0 if any iteration passed, 1 otherwise
-    if any(r.get("verdict") == "PASS" for r in results):
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    # Exit code: 0 = an iteration measured PASS, 1 = completed without PASS,
+    # 3 = the run ended in ERROR (no valid measurement); 2 = refused (inside run()).
+    sys.exit(exit_code_for(results))
