@@ -6,7 +6,7 @@ description: >
   Auto-triggers on: "/translate-prompt", "convert this prompt to GPT",
   "adapt for Claude", "port this prompt to Gemini",
   "make this work on o3", "translate prompt".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Read Write Edit
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit
 ---
 
 # Prompt Translator
@@ -89,6 +89,15 @@ If the translated prompt scores LOWER than the source, warn the user and explain
 ## Step 6: Save
 
 Save the translated prompt as a new folder: `prompts/<name>-<target-model>/`
+
+**Editable regions (WIX-CONV-001):** follow [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md) (section "Translating"). Output
+the translation unannotated plus (a) a mapping source region id -> translated line range and (b) the
+line ranges of content you ADDED (examples, sandwich repeats). Save the master header-only
+(`prompt_regions.py annotate <shipped> <folder>/editable/<file>` with no `--region`) until the user
+confirms the side-by-side mapping in one Direction Lock question; then annotate with
+`--exclude-nonce <source nonce>` and require
+`prompt_regions.py check <master> --translated-from <source master> --added <ranges>` to exit 0.
+Never place added examples inside a region; never type marker lines.
 
 Run the full delivery pipeline (token count, metadata, tests, report).
 

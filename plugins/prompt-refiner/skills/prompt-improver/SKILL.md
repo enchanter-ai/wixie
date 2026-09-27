@@ -7,7 +7,7 @@ description: >
   Auto-triggers on: "make this prompt better", "improve this prompt",
   "refine this prompt", "fix this prompt", "optimize this prompt",
   "what's wrong with this prompt", "/refine".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Read Write Edit Agent
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Wixie — Prompt Refiner
@@ -159,6 +159,13 @@ Save the refined prompt as a folder inside `${CLAUDE_PROJECT_DIR}/prompts/`. App
 
 2. **Save the refined prompt file:** Write `prompt.<format>` into the folder.
 
+2b. **Mark editable regions (WIX-CONV-001):** follow [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md). Write the refined prompt
+unannotated, propose ranges over instruction prose only, confirm them in one Direction Lock
+question showing each range's full text, and apply them only with `prompt_regions.py annotate`.
+If a previous master exists, run `prompt_regions.py check <new master> --against <old master>` and
+re-confirm every added or grown region. Legacy (unannotated) prompts get the same treatment: you
+may propose ranges, the user confirms them, the tool writes them. Never type marker lines.
+
 3. **Run token count on the refined prompt:**
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
@@ -235,7 +242,9 @@ Same pipeline as prompt-crafter. Run autonomously.
 
 ### Mode A: Text Prompts
 
-1. Run convergence: `python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <prompt-file>`
+1. Run convergence on the master (`prompts/<name>/editable/<file>`) if one exists, else on the
+   prompt file (critique and proposals only; an unannotated prompt is never rewritten):
+   `python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>`
    Exit codes (WIX-EVAL-004): `0` DEPLOY, `1` HOLD, `2` usage/bad input, `3` internal error
    (distinct from HOLD). **Exit 0 / "VERDICT: DEPLOY" is a heuristic verdict only** — zero
    model API calls — NOT a measured DEPLOY; the measured step is converge SKILL.md's Step 2.5

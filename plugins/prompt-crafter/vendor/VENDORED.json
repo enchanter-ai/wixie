@@ -11,7 +11,7 @@
       "sha256": "63ea59ea212ab238e131be933690897c26d75b614a9e4fe662cc0b4bf4a99eb2",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## Agent tiers"
     },
     {
@@ -20,11 +20,11 @@
       ],
       "destination": "vendor/wixie/claude-md.anti-patterns.md",
       "path": "wixie/claude-md.anti-patterns.md",
-      "sha1": "13cb4dbe745993b78a7ce47d992bd71361aecd76",
-      "sha256": "14e42da3b50d7c3566c6328559fbbaba48a4bf26f03ec74f10c9f76d71c4db9b",
+      "sha1": "f2413c3230ffb091c6a496d15a7d047f56006edd",
+      "sha256": "caaadd3c6bf05368ba731d2bc79ea4ea63bf871bf21b558a91a065de9b3969f1",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## Anti-patterns"
     },
     {
@@ -34,11 +34,11 @@
       ],
       "destination": "vendor/wixie/claude-md.artifacts-per-prompt.md",
       "path": "wixie/claude-md.artifacts-per-prompt.md",
-      "sha1": "7587c9582b725b0b2112711c9773bce9633d9a20",
-      "sha256": "7aeb1db34957a033ab859fecec0ed57c2cb2bbd465b4b04ed80a42a7e6964f05",
+      "sha1": "68bb4a95700a90229aeb82b35a775c6a75b1479d",
+      "sha256": "c6133b96981c7685744799cba059e70d1685ba56b43666eff1ed9dde3487c1a1",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## Artifacts per prompt"
     },
     {
@@ -53,7 +53,7 @@
       "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## Behavioral contracts"
     },
     {
@@ -68,7 +68,7 @@
       "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## DEPLOY bar"
     },
     {
@@ -100,6 +100,19 @@
       "source": "wixie",
       "source_path": "shared/references/direction-lock.md",
       "source_revision": "git-blob:020bfb0b6c89bc84deeb8e7b523f7a45169a2861"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md",
+        "vendor/wixie/claude-md.artifacts-per-prompt.md"
+      ],
+      "destination": "vendor/wixie/shared/references/editable-regions.md",
+      "path": "wixie/shared/references/editable-regions.md",
+      "sha1": "bebc6dafab83f8ded0bf6f8d92904b8933f9bb9f",
+      "sha256": "be1fc51879df1575d8db0b60ebd939068b08a525723b9fa6d3c7a7d370a88496",
+      "source": "wixie",
+      "source_path": "shared/references/editable-regions.md",
+      "source_revision": "git-blob:c426bf7897a3f10103014ba5fa83f0f32d7e5c66"
     },
     {
       "consumers": [
@@ -175,6 +188,7 @@
     },
     {
       "consumers": [
+        "skills/prompt-creator/SKILL.md",
         "vendor/wixie/shared/scripts/convergence.py",
         "vendor/wixie/shared/scripts/self-eval.py",
         "vendor/wixie/shared/scripts/token-count.py"

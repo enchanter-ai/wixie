@@ -6,7 +6,7 @@ description: >
   suggests specific defenses. Use on any user-facing or API-deployed prompt.
   Auto-triggers on: "/harden", "harden this prompt", "test for injection",
   "is this prompt safe", "security check prompt", "red team this prompt".
-allowed-tools: Read Write
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
 ---
 
 # Prompt Hardening
@@ -114,7 +114,11 @@ If yes:
 1. Add the suggested defense instructions to the prompt
 2. Re-run the failing attacks to verify they're now blocked
 3. Update metadata.json and regenerate report.pdf
-4. Save the hardened prompt as a new version
+4. Save the hardened prompt as a new version: an unannotated new prompt file (convergence then
+   only critiques it until regions are confirmed), or, when the prompt has a master
+   (`editable/<file>`), edit only its region bodies and write them with
+   `prompt_regions.py verify` + `prompt_regions.py commit` (WIX-CONV-001,
+   [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md)). Never edit the shipped file directly and never type marker lines.
 
 ## Rules
 

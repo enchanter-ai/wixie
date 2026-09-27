@@ -6,7 +6,7 @@ description: >
   failure resilience until the prompt reaches DEPLOY quality.
   Auto-triggers on: "/converge", "converge this prompt", "optimize until perfect",
   "iterate until deploy", "run convergence".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Read Write Edit Agent
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Convergence Engine
@@ -42,6 +42,14 @@ If the user provides:
 - A prompt name → look in `${CLAUDE_PROJECT_DIR}/prompts/<name>/prompt.*`
 - Nothing → list available prompts from `${CLAUDE_PROJECT_DIR}/prompts/index.json` and ask user to pick
 
+**Editable regions (WIX-CONV-001).** Read [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md). Convergence edits ONLY
+explicitly marked regions. If `prompts/<name>/editable/<shipped filename>` exists, the prompt file
+for Step 2 is that **master**; convergence then writes the master and the shipped file together.
+Otherwise the prompt is unannotated: Step 2 scores and critiques it and writes proposals to
+`${CLAUDE_PROJECT_DIR}/state/converge-proposals/<name>/<utc>.json` (`--proposal-out`), but never
+rewrites it. Before Step 2 on a master, run `prompt_regions.py strip --check <master> <shipped>`; a
+mismatch means someone edited one file by hand: stop and ask which one wins.
+
 ### Step 1.5: Direction Lock (once, before the loop)
 
 Convergence runs autonomously — no per-iteration asks (see Rules). But confirm the **direction** once, before the loop starts, so the loop optimizes toward the right target.
@@ -51,10 +59,12 @@ Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/re
 ### Step 2: Run convergence
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file> --json \
+  [--proposal-out ${CLAUDE_PROJECT_DIR}/state/converge-proposals/<name>/<utc>.json]
 ```
 
-This runs up to 100 iterations:
+On a master this runs up to 100 iterations (fixes land only inside the explicit editable regions;
+every candidate is re-verified; every exit writes master + shipped through `prompt_regions.commit`):
 - Scores the prompt on 5 axes (Clarity, Completeness, Efficiency, Model Fit, Failure Resilience)
 - Identifies the weakest axis
 - Applies targeted fix (hedge words, missing components, filler, format, fallbacks)
@@ -73,13 +83,17 @@ says otherwise):**
 |------|---------|
 | `0` | DEPLOY — the full bar above was met. Still heuristic-only, not a measured DEPLOY. |
 | `1` | HOLD — the full bar was not met (score, an axis, σ, or an assertion failed), or no final report was reached. |
-| `2` | Usage / bad input — no prompt-file argument, missing file, or empty file. Nothing was scored. |
+| `2` | Usage / bad input — no prompt-file argument, missing or empty file, an annotated file outside `editable/`, a file under `editable/` without a header, a master whose shipped file is missing or differs from `strip(master)`, or a bad `--proposal-out`. Nothing was scored or written. |
 | `3` | Internal error — an unexpected exception during scoring/fixing/saving. Distinct from HOLD: the prompt was never fully scored, so exit 1 (HOLD) and exit 3 (crash) must not be confused. |
 
 Pass `--json` to also print a `VERDICT_JSON {...}` line to stdout, or `--json-out <path>` to
 also write that same object to a file, with fields (`verdict`, `deploy`, `exit_code`, `overall`,
 `axes`, `sigma`, `sigma_floor`, `assertions_passed`/`_total`, `measured: false`, `note`) that
-mirror the printed report exactly. `measured` is always `false` here — see Step 2.5.
+mirror the printed report exactly. `measured` is always `false` here — see Step 2.5. The payload
+also carries `editability` (status, regions, warnings, code), `mutation` (`"applied"` / `"none"`),
+`structural_trip`, `master_sha256` and `shipped_sha256`. A MALFORMED annotation is HOLD / exit 1
+with `scored: false` (nothing scored or written). On an unannotated prompt a DEPLOY has
+`mutation: "none"`: report it as "meets the heuristic bar, unmodified", never as "converged".
 
 ### Step 2.5: Measure against the eval corpus (the DEPLOY-relevant signal)
 
@@ -88,8 +102,12 @@ on the Wilson 95% CI. This is what turns DEPLOY from a self-satisfiable linter i
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
-  --prompt <prompt-file> -n 5 --with-control
+  --prompt <shipped-prompt-file> -n 5 --with-control
 ```
+
+Measure the **shipped** file (never the master), and first assert
+`sha256(<shipped-prompt-file>) == payload.shipped_sha256` from Step 2: the measured bytes must be
+the converged bytes.
 
 - Reads `shared/eval-corpus/deploy-bar/corpus.json` (add per-domain corpora with the same schema).
 - Each case scores PASS/FAIL on expect/reject regexes over real model output; pass rate gets a Wilson CI.
@@ -153,6 +171,8 @@ prompt-folder argument, or no `metadata.json`).
 Validate the result:
 - All files exist and are non-empty
 - Metadata scores match self-eval output (tolerance ±1)
+- If a master exists: `prompt_regions.py strip --check <master> <shipped>` passes and no shipped
+  file contains the text `wixie-editable`
 - Target model exists in registry
 - Format matches model preference
 
@@ -175,4 +195,7 @@ the prompt failed it.
 - Do NOT ask for permission. Run everything autonomously.
 - Do NOT modify the prompt's intent or domain content.
 - The convergence script handles all text fixes. You handle artifacts and review.
-- If convergence.py fails, fall back to manual: read self-eval, apply fixes yourself, re-score, repeat up to 10 times.
+- If convergence.py fails, fall back to manual only on a master: edit region bodies only, then
+  `prompt_regions.py verify <master before> <candidate>` and `prompt_regions.py commit <master> <candidate>`;
+  anything that fails verify is discarded. Never hand-edit an unannotated prompt from here, never
+  type marker lines, and never edit a shipped file directly.

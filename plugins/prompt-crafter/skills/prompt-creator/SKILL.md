@@ -7,7 +7,7 @@ description: >
   "make this prompt better", "optimize this prompt", "help me prompt",
   "write a system prompt", "what prompting technique should I use",
   "how should I structure this prompt", "/create".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Read Write Edit Agent
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Wixie
@@ -244,6 +244,13 @@ After saving the prompt folder, update `${CLAUDE_PROJECT_DIR}/prompts/index.json
 
 2. **Save the prompt file:** Write `prompt.<format>` into the folder. Use `.md` for Markdown, `.xml` for XML-tagged, `.json` for JSON, `.txt` for plain text or image-gen.
 
+2b. **Mark editable regions (text prompts, WIX-CONV-001):** follow [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md). Propose line
+ranges over your own instruction prose only (never examples, schemas, code, tables, pasted data),
+confirm them in one Direction Lock question that shows each range's full text, then run
+`prompt_regions.py annotate prompts/<name>/prompt.<format> prompts/<name>/editable/prompt.<format> --region <id>=L<a>-L<b> ...`.
+Never type marker lines yourself. Without confirmed ranges the prompt stays unannotated and
+convergence will only critique it. Record the `editability` object in metadata.json.
+
 3. **Run token count:** Execute this command and note the output:
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
@@ -358,9 +365,10 @@ Execute this pipeline fully autonomously:
 
 **Step 1 — Save initial prompt** to `prompts/<name>/prompt.<format>`.
 
-**Step 2 — Run convergence:**
+**Step 2 — Run convergence** on the master (`prompts/<name>/editable/prompt.<format>`) if 2b
+created one, else on the prompt file (critique only, nothing written):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <prompt-file>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>
 ```
 This loops up to 100 times, fixing hedge words, missing components, filler, format mismatches, and fallbacks. Exits on the **full** DEPLOY bar (overall ≥ 9.0, every axis ≥ 7.0, σ ≤ the dynamic floor, and 8/8 SAT assertions) or plateau.
 

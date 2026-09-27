@@ -8,11 +8,11 @@
       ],
       "destination": "vendor/wixie/claude-md.anti-patterns.md",
       "path": "wixie/claude-md.anti-patterns.md",
-      "sha1": "13cb4dbe745993b78a7ce47d992bd71361aecd76",
-      "sha256": "14e42da3b50d7c3566c6328559fbbaba48a4bf26f03ec74f10c9f76d71c4db9b",
+      "sha1": "f2413c3230ffb091c6a496d15a7d047f56006edd",
+      "sha256": "caaadd3c6bf05368ba731d2bc79ea4ea63bf871bf21b558a91a065de9b3969f1",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## Anti-patterns"
     },
     {
@@ -26,7 +26,7 @@
       "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## Behavioral contracts"
     },
     {
@@ -39,7 +39,7 @@
       "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
       "source": "wixie",
       "source_path": "CLAUDE.md",
-      "source_revision": "git-blob:055f49350f3d25216ee3927139c46337812c6e1c",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
       "source_section": "## DEPLOY bar"
     },
     {
@@ -72,6 +72,18 @@
       "consumers": [
         "skills/translate/SKILL.md"
       ],
+      "destination": "vendor/wixie/shared/references/editable-regions.md",
+      "path": "wixie/shared/references/editable-regions.md",
+      "sha1": "bebc6dafab83f8ded0bf6f8d92904b8933f9bb9f",
+      "sha256": "be1fc51879df1575d8db0b60ebd939068b08a525723b9fa6d3c7a7d370a88496",
+      "source": "wixie",
+      "source_path": "shared/references/editable-regions.md",
+      "source_revision": "git-blob:c426bf7897a3f10103014ba5fa83f0f32d7e5c66"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md"
+      ],
       "destination": "vendor/wixie/shared/references/model-profiles.md",
       "path": "wixie/shared/references/model-profiles.md",
       "sha1": "f216cfc1371bd185b574cca8216aefa8c2c56f41",
@@ -94,6 +106,7 @@
     },
     {
       "consumers": [
+        "skills/translate/SKILL.md",
         "vendor/wixie/shared/scripts/self-eval.py"
       ],
       "destination": "vendor/wixie/shared/scripts/prompt_regions.py",

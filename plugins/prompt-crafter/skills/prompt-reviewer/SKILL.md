@@ -32,6 +32,13 @@ Execute ALL checks. Report results as PASS/FAIL with details.
 - [ ] `tests.json` exists and has >= 3 test cases
 - [ ] `report.pdf` exists and is > 0 bytes
 
+### 1b. Editability (WIX-CONV-001)
+- [ ] If `editable/<shipped filename>` exists: the shipped file is byte-equal to `strip(master)`
+      (`prompt_regions.py strip --check <master> <shipped>`) and `metadata.editability.shipped_sha256`
+      matches the shipped file
+- [ ] No shipped file that has a master contains the text `wixie-editable`
+- [ ] No `editable/` file is referenced as a model-facing prompt anywhere in the folder
+
 ### 2. Metadata Consistency
 Read `metadata.json` and verify:
 - [ ] `target_model` exists in `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`

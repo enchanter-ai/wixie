@@ -6,7 +6,7 @@ description: >
   pass/fail results. Use for regression testing after refinements.
   Auto-triggers on: "/test-prompt", "test this prompt", "run prompt tests",
   "check if the prompt works", "regression test".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Read Write
+allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
 ---
 
 # Prompt Test Runner
@@ -34,7 +34,9 @@ If the user provides:
 
 ### Step 2: Load the Prompt
 
-Read `prompt.*` from the same folder. Read `metadata.json` for target model and config.
+Read the shipped `prompt.*` from the same folder (top level only; never a file under
+`editable/`, which is the annotated master and must never reach a model; WIX-CONV-001). Read
+`metadata.json` for target model and config.
 
 ### Step 3: Execute Each Test Case
 
