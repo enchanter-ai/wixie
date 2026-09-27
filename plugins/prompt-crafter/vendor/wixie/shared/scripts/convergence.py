@@ -89,54 +89,41 @@ AXES = _eval.AXES
 SCORERS = _eval.SCORERS
 
 
-def score_prompt(text):
-    scores = {a: round(fn(text), 1) for a, fn in zip(AXES, SCORERS)}
-    scores["overall"] = round(sum(scores[a] for a in AXES) / len(AXES), 1)
-    return scores
+# ─── The DEPLOY bar (WIX-SEC-REPORT-VERDICT-001) ────────────────────────────────
+# The scores, the 8 SAT assertions and the bar itself live in deploy_bar.py, the ONE canonical
+# definition shared with report-gen.py. The names below stay module attributes so callers (and
+# tests that monkeypatch score_prompt / run_assertions) see the same surface as before.
+
+def _load_deploy_bar():
+    mod = sys.modules.get("deploy_bar")
+    if mod is not None:
+        return mod
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("deploy_bar", os.path.join(SCRIPT_DIR, "deploy_bar.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["deploy_bar"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+DB = _load_deploy_bar()
+score_prompt = DB.score
+run_assertions = DB.run_assertions
 
 
 def is_deploy(scores):
     """Scores gate only. The full DEPLOY bar (sigma + 8/8 assertions) is deploy_verdict()."""
-    return scores["overall"] >= 9.0 and all(scores[a] >= 7.0 for a in AXES)
+    return scores["overall"] >= DB.OVERALL_MIN and all(scores[a] >= DB.AXIS_MIN for a in AXES)
 
 
 def deploy_verdict(scores, assertions, text):
-    """The full DEPLOY bar per the contract: overall >= 9.0 AND every axis >= 7.0 AND
+    """The full DEPLOY bar (deploy_bar.evaluate): overall >= 9.0 AND every axis >= 7.0 AND
     sigma <= the dynamic floor (self-eval.dynamic_sigma_floor) AND all 8 SAT assertions
     pass. Returns (deploy_bool, sigma, floor). Honest-numbers contract: a prompt that
     fails sigma or any assertion is HOLD, not DEPLOY — regardless of overall score."""
-    sigma = statistics.pstdev([scores[a] for a in AXES])
     floor = _eval.dynamic_sigma_floor(text)
-    all_assertions_pass = all(a[1] for a in assertions)
-    deploy = is_deploy(scores) and sigma <= floor and all_assertions_pass
-    return deploy, sigma, floor
-
-
-# ─── Binary Assertions ────────────────────────────────────────────────────────
-
-def run_assertions(text):
-    """Binary pass/fail checks. More stable than numeric scores for detecting issues."""
-    results = []
-    tl = text.lower()
-
-    results.append(("has_role", bool(re.search(r'\b(you are|act as|role:|your role|your job)\b', tl)),
-                     "Prompt defines a role or persona"))
-    results.append(("has_task", bool(re.search(r'\b(task:|objective:|goal:|your job|you will|you should|analyze|generate|create|build|extract|classify|summari[sz]e|translate|rewrite|convert|parse|identify|detect|evaluate|score|rank|label|produce|write|compose|answer|respond)\b', tl)),
-                     "Prompt defines a clear task"))
-    results.append(("has_format", bool(re.search(r'\b(output format|respond in|format:|json|xml|markdown)\b|<output|<format', tl)),
-                     "Prompt specifies output format"))
-    results.append(("has_constraints", bool(re.search(r"\b(do not|don't|never|avoid|constraint|must not)\b", tl)),
-                     "Prompt has constraints/guardrails"))
-    results.append(("has_edge_cases", bool(re.search(r'\b(if.{0,20}(empty|invalid|error|missing)|edge case|fallback|if unsure)\b', tl)),
-                     "Prompt handles edge cases"))
-    results.append(("no_hedge_words", not bool(re.search(r'\b(maybe|perhaps|possibly|somewhat|might want to)\b', tl)),
-                     "No hedge words (maybe, perhaps, possibly)"))
-    results.append(("no_filler", not bool(re.search(r"(it's worth noting|please note that|keep in mind|in order to)", tl)),
-                     "No filler phrases"))
-    results.append(("has_structure", bool(re.search(r'(^#{1,3}\s|\n#{1,3}\s|<\w+>)', text)),
-                     "Prompt has structural markup (headers or XML tags)"))
-
-    return results
+    result = DB.evaluate(scores, assertions, floor)
+    return result["deploy"], result["sigma"], floor
 
 
 # ─── Explicit editability contract (WIX-CONV-001, D15) ─────────────────────────

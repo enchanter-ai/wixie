@@ -130,11 +130,23 @@
       ],
       "destination": "vendor/wixie/shared/scripts/convergence.py",
       "path": "wixie/shared/scripts/convergence.py",
-      "sha1": "905760713aee5793e337fbb511bd433d77168c69",
-      "sha256": "098a776187651b43c5e48c1187a689d378ba47616e5d252276deee858907bfa3",
+      "sha1": "75f1320d980e11765bfa6fc9bdacc281a8b36d6f",
+      "sha256": "8c68dc551ebb57d47e8f1baa7c1b1015f0c631caea280f8a2ec50d63ea003990",
       "source": "wixie",
       "source_path": "shared/scripts/convergence.py",
-      "source_revision": "git-blob:e9d97c41b6beee4469e1a84a49af94e495d6be65"
+      "source_revision": "git-blob:af45ec10b1af488fea06258b5207deeb30aef6bf"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/convergence.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/deploy_bar.py",
+      "path": "wixie/shared/scripts/deploy_bar.py",
+      "sha1": "367e746f8de4164b3804956fb005c6a2a8cf8e96",
+      "sha256": "02262076951b3b8ae3abdc94fdced29cfea478be5a962b0360c699f9a40c016f",
+      "source": "wixie",
+      "source_path": "shared/scripts/deploy_bar.py",
+      "source_revision": "git-blob:e168a2e59912466cc23ebfde7bdb5f0e62778c45"
     },
     {
       "consumers": [
@@ -176,6 +188,7 @@
       "consumers": [
         "skills/converge/SKILL.md",
         "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/deploy_bar.py",
         "vendor/wixie/shared/scripts/efficacy-replay.py",
         "vendor/wixie/shared/scripts/self-eval.py",
         "vendor/wixie/shared/scripts/token-count.py"
@@ -206,7 +219,8 @@
         "agents/optimizer.md",
         "agents/reviewer.md",
         "skills/converge/SKILL.md",
-        "vendor/wixie/shared/scripts/convergence.py"
+        "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/deploy_bar.py"
       ],
       "destination": "vendor/wixie/shared/scripts/self-eval.py",
       "path": "wixie/shared/scripts/self-eval.py",
