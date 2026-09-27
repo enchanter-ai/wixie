@@ -127,6 +127,14 @@ class PromptWorking(object):
         self.shipped_path = shipped_path
         self.master_path = _PR.master_for(shipped_path)
         self.notes = []
+        # WIX-CONV-001 fix round 1: this run also writes output-reference.md and
+        # output-test-results.json into the folder; neither may alias a prompt file.
+        folder = os.path.dirname(os.path.abspath(shipped_path))
+        problems = _PR.aux_write_problems(
+            [shipped_path, self.master_path],
+            [os.path.join(folder, "output-reference.md"), os.path.join(folder, "output-test-results.json")])
+        if problems:
+            raise ValueError("refusing to run: " + "; ".join(problems))
         with open(shipped_path, "rb") as f:
             shipped_raw = f.read()
         self.writable = False
@@ -1310,7 +1318,11 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
         no_fix=False, verbose=False, evaluator_model=None, fixer_model=None, client=None):
     _init_colors()
     prompt_text, meta, tests, prompt_file, folder = load_prompt_folder(folder)
-    working = PromptWorking(prompt_file)
+    try:
+        working = PromptWorking(prompt_file)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(2)
     prompt_text = working.view
 
     # Resolve every role up front, through the registry, before any call.

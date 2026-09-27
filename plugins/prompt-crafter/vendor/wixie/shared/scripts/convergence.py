@@ -748,6 +748,59 @@ def _check_proposal_out(proposal_out, prompt_path, shipped_path, prompt_folder, 
         _usage_error(f"--proposal-out {proposal_out} already exists (never overwritten)", want_json, json_out)
 
 
+def _learnings_paths(prompt_folder):
+    return [os.path.join(prompt_folder, "learnings.json"), os.path.join(prompt_folder, "learnings.md")]
+
+
+def _guard_auxiliary_writes(prompt_path, json_out, proposal_out, want_json):
+    """WIX-CONV-001 fix round 1: every write this run makes outside prompt_regions.commit()
+    (learnings.json / learnings.md, --json-out, --proposal-out) must not resolve to the input
+    prompt, the master or the shipped file, and none of those may carry a reserved auxiliary
+    name. Checked before any work; a refused --json-out is never written."""
+    protected = [prompt_path]
+    if PR.is_master(prompt_path):
+        protected.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(prompt_path))),
+                                      os.path.basename(prompt_path)))
+    else:
+        protected.append(PR.master_for(prompt_path))
+    aux = _learnings_paths(PR.prompt_folder_of(prompt_path)) + [json_out, proposal_out]
+    problems = PR.aux_write_problems(protected, aux)
+    if problems:
+        bad_json_out = bool(json_out) and any(json_out in pr for pr in problems)
+        _usage_error("refusing to run: " + "; ".join(problems), want_json,
+                     None if bad_json_out else json_out)
+
+
+def _verify_committed_pair(prompt_path, shipped_path, extra):
+    """Defence in depth before any exit that reports DEPLOY or mutation 'applied': the files on
+    disk NOW must be a consistent pair whose hashes are the payload's. Returns '' or a reason."""
+    m = PR.file_state(prompt_path)
+    if m is None:
+        return "master unreadable"
+    if _sha(m[0]) != extra.get("master_sha256"):
+        return "master on disk differs from the committed bytes (payload master_sha256)"
+    if shipped_path is not None:
+        s_ = PR.file_state(shipped_path)
+        if s_ is None:
+            return "shipped file unreadable"
+        try:
+            if PR.strip(m[0]) != s_[0]:
+                return "shipped file on disk != strip(master)"
+        except PR.RegionError as e:
+            return f"master on disk no longer strips: {e}"
+        if _sha(s_[0]) != extra.get("shipped_sha256"):
+            return "shipped file on disk differs from the payload shipped_sha256"
+    return ""
+
+
+def _force_hold_after_check(scores, extra, reason):
+    extra["structural_trip"] = True
+    extra["post_check"] = reason
+    scores["_deploy"] = False
+    print(f"  POST-SAVE INTEGRITY CHECK FAILED: {reason}")
+    print(f"  VERDICT: HOLD (final; overrides any verdict printed above -- WIX-CONV-001)")
+
+
 def _write_proposal(proposal_out, raw, status, scores, assertions):
     import difflib
     text = _scoring_text(raw)
@@ -775,11 +828,13 @@ def _write_proposal(proposal_out, raw, status, scores, assertions):
 
 def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_out=None,
         proposal_out=None, no_shipped=False):
+    _guard_auxiliary_writes(prompt_path, json_out, proposal_out, want_json)
     if not os.path.isfile(prompt_path):
         _usage_error(f"{prompt_path} not found", want_json, json_out)
 
     with open(prompt_path, "rb") as f:
         orig_raw = f.read()
+    orig_state = PR.file_state(prompt_path)
     doc = PR.parse(orig_raw)
     is_master = PR.is_master(prompt_path)
 
@@ -860,12 +915,13 @@ def run(prompt_path, max_iterations=100, verbose=False, want_json=False, json_ou
         return {"_deploy": False, "_scored": False, "_extra": extra}
 
     if doc.status is not PR.Status.ANNOTATED or not doc.editable_regions:
-        return _run_readonly(prompt_path, prompt_folder, orig_raw, doc, proposal_out, extra, max_iterations)
+        return _run_readonly(prompt_path, prompt_folder, orig_raw, doc, proposal_out, extra, max_iterations,
+                             orig_state)
     return _run_loop(prompt_path, prompt_folder, orig_raw, doc, shipped_path, exp_shipped,
                      max_iterations, verbose, extra)
 
 
-def _run_readonly(prompt_path, prompt_folder, raw, doc, proposal_out, extra, max_iterations):
+def _run_readonly(prompt_path, prompt_folder, raw, doc, proposal_out, extra, max_iterations, orig_state):
     """UNANNOTATED / NO_REGIONS (D15): score, critique, optionally propose -- never write the
     prompt. DEPLOY is possible only when the unmodified input already meets the bar
     (mutation "none": nothing was written, the verdict is score-only on the exact input)."""
@@ -883,6 +939,9 @@ def _run_readonly(prompt_path, prompt_folder, raw, doc, proposal_out, extra, max
         _write_proposal(proposal_out, raw, doc.status.value, scores, assertions)
     _print_final(scores, assertions, 1, text)
     save_learnings(prompt_folder, [], prev_learnings, text)
+    if PR.file_state(prompt_path) != orig_state:
+        _force_hold_after_check(scores, extra, "the read-only input changed on disk during the run "
+                                               "(bytes or mtime); nothing may write it")
     scores["_extra"] = extra
     return scores
 
@@ -950,6 +1009,14 @@ def _run_loop(prompt_path, prompt_folder, orig_raw, doc, shipped_path, exp_shipp
                 assertions = run_assertions(text)
             _print_final(scores, assertions, iteration, text, force_hold=not ok)
             save_learnings(prompt_folder, learnings, prev_learnings, text)
+            if ok and (scores.get("_deploy") or extra["mutation"] == "applied"):
+                reason = _verify_committed_pair(prompt_path, shipped_path, extra)
+                if reason:
+                    _force_hold_after_check(scores, extra, reason)
+                    if res is not None and res["written"]:
+                        PR.cas_restore(prompt_path, candidate, orig_raw)
+                        if shipped_path is not None:
+                            PR.cas_restore(shipped_path, res["shipped"], exp_shipped)
         except BaseException:
             # Crash after a verified write (exit 3): restore the originals, but only where the
             # disk still holds this run's bytes (compare-then-replace, single writer; RC-08).

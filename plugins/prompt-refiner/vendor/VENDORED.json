@@ -164,11 +164,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/convergence.py",
       "path": "wixie/shared/scripts/convergence.py",
-      "sha1": "330ad4de4b050113831e99ea96dd247eac89654a",
-      "sha256": "45060b2cd70cb82689fa783a53536ad0ef4c3c79fbe4d4c32937791134d7e6a3",
+      "sha1": "909b0c63ed0a7357f74708e35fc4b3bd80d98d43",
+      "sha256": "7e70c0539d9acbd316a6ed49fffb714d3aedcbaca82b8dc9ad699fb5afacb2af",
       "source": "wixie",
       "source_path": "shared/scripts/convergence.py",
-      "source_revision": "git-blob:04599c6fe7932a45bed470f7397ca4f8558dc583"
+      "source_revision": "git-blob:163a07eab398a831effc354df909300511c62cd1"
     },
     {
       "consumers": [
@@ -191,11 +191,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
       "path": "wixie/shared/scripts/prompt_regions.py",
-      "sha1": "856ce32144953beda606461baac2a1790a90642d",
-      "sha256": "99966acef49fe6020ba2656596bae301e4508f030268c84bdf2ea89505e38906",
+      "sha1": "44e6431bac9eac4b7c8cf263f752cdb749d0b6ba",
+      "sha256": "b073ed5adc8045da8729ae1254ceaaead5f118d4ccf5e9421951c2dc1ddee75a",
       "source": "wixie",
       "source_path": "shared/scripts/prompt_regions.py",
-      "source_revision": "git-blob:a5e452779debad5ca42f879827f0627eea33fbb3"
+      "source_revision": "git-blob:39ce25dbd95f027117acab18bcc2ac322c231f60"
     },
     {
       "consumers": [

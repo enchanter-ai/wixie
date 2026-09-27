@@ -726,3 +726,20 @@ a warning.
    pair check and CAS restore as the library call.
 7. **Where learnings are written.** For a master they go to the prompt folder (the parent of
    `editable/`), never inside `editable/`.
+8. **Auxiliary-write aliasing (fix round 1, verifier CX-1 / CX-2).** A run writes files outside
+   `commit`: `learnings.json` and `learnings.md` in the prompt folder, `--json-out` and
+   `--proposal-out`, and in output-test `output-reference.md` and `output-test-results.json`.
+   None of these may resolve to the input prompt, the master or the shipped file.
+   - **How it is checked.** Paths are compared after realpath, normcase (case-folding on
+     Windows) and a samefile check (hard links, 8.3 names, junctions).
+   - **What is refused.** Any Windows alternate-data-stream path (`x:stream`) is refused. So is
+     any prompt, master or shipped file whose name is reserved (`learnings.md`,
+     `learnings.json`, `output-reference.md`, `output-test-results.json`).
+   - **When.** All of this is checked with exit 2 before any work. A refused `--json-out` is
+     never written.
+   - **Before any exit that reports DEPLOY or `mutation: "applied"`.** The master and the
+     shipped file are re-read from disk. Two conditions must hold: `strip(master) == shipped`,
+     and both hashes equal the payload's. On a mismatch the run exits HOLD / 1 with
+     `structural_trip` and `post_check` set, and restores by compare-then-replace.
+   - **Read-only runs.** They re-check that the input's bytes and mtime are unchanged before
+     exit.

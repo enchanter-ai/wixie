@@ -451,6 +451,78 @@ def prompt_folder_of(path) -> str:
     return os.path.dirname(os.path.dirname(path)) if is_master(path) else os.path.dirname(path)
 
 
+# ─── auxiliary-write aliasing guard (WIX-CONV-001 fix round 1) ───────────────────
+# Every file a convergence / output-test run writes other than through commit() (learnings,
+# --json-out, --proposal-out, results, references) is an AUXILIARY write. None may resolve to the
+# input prompt, the master or the shipped file, and none of those may carry a reserved auxiliary
+# name, or the auxiliary write would overwrite the prompt after commit().
+RESERVED_AUX_NAMES = frozenset({
+    "learnings.md", "learnings.json",                    # convergence.save_learnings
+    "output-reference.md", "output-test-results.json",   # output-test.py
+})
+
+
+def _has_ads(path) -> bool:
+    """True if a Windows path addresses an alternate data stream ('file:stream', 'dir:stream')."""
+    if os.name != "nt":
+        return False
+    _drive, rest = os.path.splitdrive(os.fspath(path))
+    return ":" in rest
+
+
+def canonical_path(path) -> str:
+    """abspath -> realpath (symlinks, junctions, 8.3 names of existing prefixes) -> normcase
+    (case-folding on Windows)."""
+    return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
+
+
+def same_file(a, b) -> bool:
+    if a is None or b is None:
+        return False
+    if canonical_path(a) == canonical_path(b):
+        return True
+    try:
+        return os.path.exists(a) and os.path.exists(b) and os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def aux_write_problems(protected, aux) -> list:
+    """Return human-readable problems (empty = safe). `protected` are the prompt files of the run
+    (input, master, shipped); `aux` the paths the run will write outside commit()."""
+    problems = []
+    protected = [p for p in protected if p]
+    for p in protected:
+        base = os.path.basename(os.fspath(p)).casefold()
+        if base in RESERVED_AUX_NAMES:
+            problems.append(f"prompt file {p} has the reserved auxiliary name {base!r} "
+                            f"(the run writes a file of that name next to the prompt)")
+        if TMP_TAG in base:
+            problems.append(f"prompt file {p} looks like a commit temp file")
+        if _has_ads(p):
+            problems.append(f"prompt path {p} addresses an alternate data stream")
+    for a in aux:
+        if not a:
+            continue
+        if _has_ads(a):
+            problems.append(f"auxiliary output {a} addresses an alternate data stream")
+            continue
+        for p in protected:
+            if same_file(a, p):
+                problems.append(f"auxiliary output {a} resolves to the prompt file {p}")
+    return problems
+
+
+def file_state(path):
+    """(bytes, mtime_ns) or None: used to prove a read-only run left the input untouched."""
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+        return data, os.stat(path).st_mtime_ns
+    except OSError:
+        return None
+
+
 def stale_temp_files(path) -> list:
     d = os.path.dirname(os.path.abspath(path))
     prefix = "." + os.path.basename(path) + TMP_TAG

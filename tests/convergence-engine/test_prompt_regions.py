@@ -925,5 +925,111 @@ class TestLifecycle(unittest.TestCase):
         self.assertTrue((master.parent / (".prompt.md" + PR.TMP_TAG + "999")).exists())
 
 
+# ════════════════════════════════════════════════════════════════════════════
+class TestAuxiliaryWriteAliasing(unittest.TestCase):
+    """Fix round 1 (verifier CX-1 / CX-2): no write outside prompt_regions.commit() may land on
+    the input prompt, the master or the shipped file; post-save pair check before DEPLOY/0."""
+
+    def _pair(self, name):
+        folder = scratch("aux-")
+        master_bytes = PR.annotate(b"You are maybe an analyst.\n<example>d</example>\n", [("r", 1, 1)])
+        (folder / "editable").mkdir()
+        (folder / "editable" / name).write_bytes(master_bytes)
+        (folder / name).write_bytes(PR.strip(master_bytes))
+        return folder / "editable" / name, folder / name
+
+    def test_cx1_master_with_reserved_name_refused(self):
+        for name in ("learnings.md", "learnings.json", "LEARNINGS.MD", "output-test-results.json"):
+            master, shipped = self._pair(name)
+            before = (master.read_bytes(), shipped.read_bytes())
+            rc, out, payload = run_cli(master, "--json", "--max", "5")
+            self.assertEqual(rc, 2, (name, out))
+            self.assertEqual((master.read_bytes(), shipped.read_bytes()), before, name)
+
+    def test_cx2_unannotated_reserved_name_refused(self):
+        for name in ("learnings.md", "learnings.json"):
+            folder = scratch("aux-u-")
+            p = folder / name
+            p.write_bytes(b"You are an analyst.\nMaybe summarize the input.\n")
+            before = PR.file_state(p)
+            rc, out, _ = run_cli(p, "--max", "3")
+            self.assertEqual(rc, 2, out)
+            self.assertEqual(PR.file_state(p), before)
+
+    def test_json_out_and_proposal_out_aliasing_refused(self):
+        folder = scratch("aux-j-")
+        p = folder / "prompt.md"
+        body = b"You are x. maybe do it.\n"
+        p.write_bytes(body)
+        link = folder / "hard.md"
+        os.link(p, link)
+        aliases = [p, folder / "PROMPT.MD", folder / "sub" / ".." / "prompt.md", link]
+        for a in aliases:
+            rc, out, _ = run_cli(p, "--json", "--json-out", a)
+            self.assertEqual(rc, 2, (a, out))
+            self.assertEqual(p.read_bytes(), body, a)
+        master, shipped = self._pair("prompt.md")
+        for a in (master, shipped, str(shipped).upper()):
+            before = (master.read_bytes(), shipped.read_bytes())
+            rc, out, _ = run_cli(master, "--json", "--json-out", a)
+            self.assertEqual(rc, 2, (a, out))
+            self.assertEqual((master.read_bytes(), shipped.read_bytes()), before)
+        if os.name == "nt":
+            state = scratch("aux-ads-")
+            for a in (str(state) + ":ads", str(p) + ":stream"):
+                self.assertEqual(run_cli(p, "--proposal-out", a)[0], 2, a)
+                self.assertEqual(run_cli(p, "--json", "--json-out", a)[0], 2, a)
+            self.assertEqual(p.read_bytes(), body)
+
+    def test_post_save_pair_check_blocks_deploy(self):
+        master, shipped = self._pair("prompt.md")
+        conv = conv_module()
+        calls = {"n": 0}
+        real = conv.score_prompt
+
+        def sp(text):
+            calls["n"] += 1
+            return fixed_scores(9.6) if calls["n"] > 1 else real(text)
+        conv.score_prompt = sp
+        conv.run_assertions = lambda t: list(ALL_PASS)
+        real_save = conv.save_learnings
+
+        def clobber(*a, **k):
+            real_save(*a, **k)
+            shipped.write_bytes(b"clobbered by an auxiliary write\n")
+        conv.save_learnings = clobber
+        code, out, payload = invoke_main(conv, [master, "--json", "--max", "3"])
+        self.assertEqual(code, 1, out)
+        self.assertEqual(payload["verdict"], "HOLD")
+        self.assertTrue(payload["structural_trip"])
+        self.assertIn("post_check", payload)
+
+    def test_readonly_input_change_blocks_deploy(self):
+        folder = scratch("aux-ro-")
+        p = folder / "prompt.md"
+        p.write_bytes(b"You are x.\n")
+        conv = conv_module()
+        conv.score_prompt = lambda t: fixed_scores(9.6)
+        conv.run_assertions = lambda t: list(ALL_PASS)
+        real_save = conv.save_learnings
+
+        def touch(*a, **k):
+            real_save(*a, **k)
+            p.write_bytes(b"You are y.\n")
+        conv.save_learnings = touch
+        code, out, payload = invoke_main(conv, [p, "--json"])
+        self.assertEqual(code, 1, out)
+        self.assertTrue(payload["structural_trip"])
+
+    def test_output_test_refuses_aliasing_names(self):
+        ot = ot_module()
+        folder = scratch("aux-ot-")
+        (folder / "output-reference.md").write_text("You are x.\n", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            ot.PromptWorking(str(folder / "output-reference.md"))
+        (folder / "prompt.md").write_text("You are x.\n", encoding="utf-8")
+        self.assertFalse(ot.PromptWorking(str(folder / "prompt.md")).writable)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
