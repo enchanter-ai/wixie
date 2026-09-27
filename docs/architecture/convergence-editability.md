@@ -699,3 +699,30 @@ a warning.
 - For a run on a non-master file (critique path), `shipped_sha256` is `sha256(input file)` and
   `master_sha256` is `null`.
 - Step 2.5's assertion is therefore defined on every path.
+
+## 11. Implementation notes (deltas settled during implementation; the verifier should check them)
+
+1. **Displaced header.** `E_BAD_HEADER` fires only when line 1's detection form starts with
+   `@wixie-editable`. A header anywhere else in a non-master file is plain data (RC2-07) and
+   produces a `marker_like_text_ignored@L<n>` warning. Under `editable/` the same file is
+   `UNANNOTATED`, which gives exit 2 (RC2-02). Such a file therefore cannot reach a shipped
+   file, because only `commit` writes shipped files.
+2. **Strip is not re-applied.** `strip` refuses `UNANNOTATED` input (RC2-01), so
+   `strip(strip(x))` raises `E_NOT_ANNOTATED`. The lifecycle property that is tested instead:
+   - `view(strip(x)) == view(x)`;
+   - `strip(annotate(x, R)) == x`.
+3. **Where output-test records LLM proposals.** They go inline in
+   `output-test-results.json` as `iterations_detail[].fix.proposal` (region_id, target,
+   replacement, reason), not as a separate `state/test-proposals/` file. The results file is a
+   run record, never a prompt, so it cannot alias the prompt (RC-14's concern).
+4. **Readers normalise line endings.** `self-eval.py`, `token-count.py`, `efficacy-replay.py`
+   and output-test normalise CR/CRLF to LF after `read_view`. This is exactly what their
+   previous text-mode reads did, so scores and model inputs are unchanged for unannotated
+   prompts. `convergence.py` scores the same normalised view.
+5. **Line numbers in `check --added`.** They are in the stripped numbering, which is the
+   translator's unannotated output.
+6. **Manual fallback CLI.** `prompt_regions.py commit MASTER CANDIDATE [--no-shipped]`
+   exposes `commit` for the converge skill's manual fallback. It runs the same `verify`,
+   pair check and CAS restore as the library call.
+7. **Where learnings are written.** For a master they go to the prompt folder (the parent of
+   `editable/`), never inside `editable/`.
