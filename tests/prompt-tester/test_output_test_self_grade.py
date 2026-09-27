@@ -88,8 +88,108 @@ class TestPhase3Scores(unittest.TestCase):
         _, details = self._eval(H.MARGINAL_OUTPUT + "<self_check>PASS</self_check>")
         sc = details["self_check"]
         self.assertTrue(sc["found"])
-        self.assertEqual(sc["raw"], "PASS")
+        self.assertIn("PASS", sc["raw"])
         self.assertIn("never", sc["note"])
+
+
+# Fix round 2 (verifier held-out): a self-report that ECHOES a criterion -- including an
+# admission such as "- [ ] MISSING: <criterion>", the exact format self-check-inject.py asks the
+# target to append -- must not earn that criterion's credit.
+ECHOES = {
+    "injected_missing_line": "## Self-Check\n- [x] Mentions --json\n- [ ] MISSING: acme legacy removal\n",
+    "xml_fail": "<self_check>acme legacy: FAIL</self_check>",
+    "hyphen_tag_attr": "<Self-Check id=\"1\">acme legacy not covered</Self-Check>",
+    "unclosed_tag": "<self_check>\nacme legacy -- not mentioned above\n",
+    "h3_with_subheading": "### Self Check\n#### Content checks\n- [ ] MISSING: acme legacy\n",
+    "bold_label": "**Self-Check**\n- acme legacy: MISSING\n",
+    "plain_label": "Self-Check: acme legacy is missing.\n",
+    "zero_width_word": "## Self​Check\n- [ ] MISSING: acme legacy\n",
+}
+
+
+class TestEchoedCriteria(unittest.TestCase):
+    def setUp(self):
+        self.tree = H.script_tree(REPO, ROOT, minimal=True)
+        self.ot = H.load_ot(self.tree)
+
+    def test_echo_earns_no_assertion_credit(self):
+        ref, _ = quiet(self.ot.run_evaluate, H.MARGINAL_OUTPUT, H.PROMPT, H.TESTS, {}, None)
+        self.assertEqual((ref["assertions"], ref["verdict"]), (6.7, "MARGINAL"))
+        for name, block in ECHOES.items():
+            with self.subTest(echo=name):
+                scores, details = quiet(self.ot.run_evaluate, H.MARGINAL_OUTPUT + "\n" + block,
+                                        H.PROMPT, H.TESTS, {}, None)
+                self.assertEqual(scores, ref)
+                self.assertTrue(details["self_check"]["found"])
+                failed = [t["name"] for t in details["test_results"] if not t["passed"]]
+                self.assertEqual(failed, ["legacy-removed"])
+
+    def test_echo_does_not_pass_the_run_or_skip_the_evaluator(self):
+        for name, block in ECHOES.items():
+            with self.subTest(echo=name):
+                folder = H.make_folder(ROOT, "sg-echo")
+                client = H.StubClient(target=[H.MARGINAL_OUTPUT + "\n" + block] * 2,
+                                      evaluator=[H.EVAL_FAIL] * 2, fixer=[H.FIX_OK] * 2)
+                res, exc, log = H.run_in_process(self.ot, folder, client, max_iterations=2)
+                self.assertIsNone(exc, log)
+                r = H.results(folder)
+                self.assertEqual(r["final_verdict"], "MARGINAL")
+                self.assertIn("evaluator", client.log)
+                self.assertFalse(any(it.get("verdict") == "PASS" for it in res))   # CLI exit 1
+
+    def test_evaluator_input_excludes_self_report(self):
+        folder = H.make_folder(ROOT, "sg-evin")
+        out = H.MARGINAL_OUTPUT + "\n## Self-Check\n- [ ] MISSING: ZZ-ECHO-SENTINEL acme legacy\n"
+        client = H.StubClient(target=[out] * 2, evaluator=[H.EVAL_FAIL] * 2, fixer=[H.FIX_OK] * 2)
+        H.run_in_process(self.ot, folder, client, max_iterations=2)
+        ev = [kw for role, kw in client.requests if role == "evaluator"][0]["messages"][0]["content"]
+        self.assertNotIn("ZZ-ECHO-SENTINEL", ev)
+        self.assertIn("acme sync no longer crashes", ev)
+
+    def test_real_cli_echo(self):
+        folder = H.make_folder(ROOT, "sg-echo-cli")
+        scen = {"target": [H.MARGINAL_OUTPUT + "\n" + ECHOES["injected_missing_line"]] * 2,
+                "evaluator": [H.EVAL_FAIL] * 2, "fixer": [H.FIX_OK] * 2}
+        code, out, roles = H.run_cli(ROOT, self.tree, folder, scen, ["--max", "2"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("evaluator", roles)
+
+
+class TestEchoRealEngines(unittest.TestCase):
+    """All heuristic engines loaded: the verifier's realistic release-notes case and the
+    framework-name echo; and a violation inside a self-report still costs points."""
+
+    def setUp(self):
+        self.ot = H.load_ot(H.script_tree(REPO, ROOT, minimal=False), name="output_test_full_echo")
+
+    def _ev(self, out, tests=H.TESTS):
+        return quiet(self.ot.run_evaluate, out, H.PROMPT, tests, {}, None)
+
+    def test_realistic_release_notes_admission(self):
+        body = ("## Summary\nAcme CLI 2.4.0 fixes a sync crash and removes a deprecated command.\n\n"
+                "## Changes\n- `acme sync` no longer crashes on empty repositories.\n"
+                "- `acme legacy` has been removed.\n\n## Upgrade notes\n"
+                "Scripts that call `acme legacy` must be updated.\n")
+        selfcheck = ("\n## Self-Check\n- [x] Mentions the sync crash fix.\n- [x] Mentions removal of acme legacy.\n"
+                     "- [ ] MISSING: Mentions --json flag for acme status.\n")
+        ref, _ = self._ev(body)
+        got, details = self._ev(body + selfcheck)
+        self.assertEqual(got, ref)
+        self.assertIn("json-flag", [t["name"] for t in details["test_results"] if not t["passed"]])
+
+    def test_framework_echo_earns_no_prior_art(self):
+        ref, _ = self._ev(H.MARGINAL_OUTPUT)
+        got, _ = self._ev(H.MARGINAL_OUTPUT + "\n<self_check>checked against Mythic Sliver Velociraptor "
+                          "Caldera Wazuh TheHive Covenant PoshC2: FAIL</self_check>\n")
+        self.assertEqual(got, ref)
+
+    def test_penalty_inside_self_report_still_counts(self):
+        ref, _ = self._ev(H.MARGINAL_OUTPUT)
+        got, _ = self._ev(H.MARGINAL_OUTPUT + "\n<self_check>used a database, a message queue and some "
+                          "kind of cache: PASS</self_check>\n")
+        self.assertLess(got["specificity"], ref["specificity"])
+        for k in ("structural", "prior_art", "assertions"):
+            self.assertLessEqual(got[k], ref[k])
 
 
 class TestRealEngines(unittest.TestCase):
