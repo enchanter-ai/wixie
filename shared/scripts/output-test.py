@@ -55,7 +55,10 @@ Results and exit codes (WIX-SEC-OT-STALE-RESULT-001):
                            fixer payload is kept under iterations_detail[].fix.error
     Exit codes: 0 = an iteration measured PASS; 1 = the run completed without a
     PASS; 2 = refused to run (an output file would alias the prompt); 3 = the run
-    ended in ERROR (no valid measurement). A killed process leaves IN_PROGRESS.
+    ended in ERROR (no valid measurement), including a missing prompt file (an
+    existing results record is replaced by an ERROR record; none is created) and a
+    prompt that cannot be decoded (kind prompt_unreadable). A killed process
+    leaves IN_PROGRESS.
 
 Cost awareness:
     Phase 1 is always free. Phase 2 calls the target model (~$1.20 for Opus).
@@ -130,6 +133,11 @@ def _load_prompt_regions():
 _PR = _load_prompt_regions()
 
 
+class RunRefused(ValueError):
+    """An output file of this run would alias a prompt file: nothing may be written (exit 2).
+    Distinct from prompt_regions.RegionError, which is also a ValueError."""
+
+
 class PromptWorking(object):
     """The prompt this run may change (WIX-CONV-001 / D15).
 
@@ -152,7 +160,7 @@ class PromptWorking(object):
             [shipped_path, self.master_path],
             [os.path.join(folder, "output-reference.md"), os.path.join(folder, "output-test-results.json")])
         if problems:
-            raise ValueError("refusing to run: " + "; ".join(problems))
+            raise RunRefused("refusing to run: " + "; ".join(problems))
         with open(shipped_path, "rb") as f:
             shipped_raw = f.read()
         self.writable = False
@@ -581,15 +589,23 @@ def call_model(client, resolution, system_prompt, user_prompt, max_tokens=4096, 
 
 # ─── Loaders ──────────────────────────────────────────────────────────────────
 
-def find_prompt_file(folder):
-    """The folder's prompt.<ext>; exits 1 when there is none (then nothing is written)."""
+def _prompt_file_or_none(folder):
     folder = os.path.abspath(folder)
     for ext in ["xml", "md", "txt", "json"]:
         candidate = os.path.join(folder, f"prompt.{ext}")
         if os.path.isfile(candidate):
             return candidate
-    print(f"ERROR: No prompt file found in {folder}", file=sys.stderr)
-    sys.exit(1)
+    return None
+
+
+def find_prompt_file(folder):
+    """The folder's prompt.<ext>; exits 1 when there is none. (run() checks this itself first
+    and exits 3 with an ERROR record; see run().)"""
+    found = _prompt_file_or_none(folder)
+    if found is None:
+        print(f"ERROR: No prompt file found in {os.path.abspath(folder)}", file=sys.stderr)
+        sys.exit(1)
+    return found
 
 
 def load_prompt_folder(folder):
@@ -1635,15 +1651,26 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
     sys.exit is recorded as ERROR too and then re-raised (a non-zero exit becomes EXIT_ERROR)."""
     _init_colors()
     folder = os.path.abspath(folder)
-    prompt_file = find_prompt_file(folder)
+    prompt_file = _prompt_file_or_none(folder)
+    if prompt_file is None:
+        # No prompt: nothing can be measured. Exit 3, and if this folder already holds a results
+        # record (an earlier run's), replace it with this run's ERROR so it cannot read as current.
+        print(f"ERROR: No prompt file found in {folder}", file=sys.stderr)
+        if os.path.isfile(os.path.join(folder, RESULTS_NAME)) and _PR is not None \
+                and not _PR.aux_write_problems([], [os.path.join(folder, RESULTS_NAME)]):
+            ctx = new_run_context(folder, None, "")
+            ctx["phase"] = "open_prompt"
+            _publish_error(ctx, folder, "no_prompt_file", "no prompt.<xml|md|txt|json> in the folder")
+        sys.exit(EXIT_ERROR)
     try:
         working = PromptWorking(prompt_file)
-    except ValueError as e:
+        view = working.view          # may raise RegionError (e.g. invalid UTF-8, MALFORMED)
+    except RunRefused as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(EXIT_REFUSED)
     except Exception as e:
-        # The prompt could not be opened. Record that as this run's ERROR, but only when the
-        # alias guard can still prove the result path is not a prompt file.
+        # The prompt could not be opened or decoded. Record that as this run's ERROR, but only
+        # when the alias guard can still prove the result path is not a prompt file.
         print(f"ERROR: cannot open {prompt_file}: {type(e).__name__}: {e}", file=sys.stderr)
         try:
             safe = _PR is not None and not _PR.aux_write_problems(
@@ -1656,7 +1683,7 @@ def run(folder, max_iterations=3, dry_run=False, skip_preflight=False,
             ctx["phase"] = "open_prompt"
             _publish_error(ctx, folder, "prompt_unreadable", f"{type(e).__name__}: {e}")
         sys.exit(EXIT_ERROR)
-    ctx = new_run_context(folder, working.view, prompt_file)
+    ctx = new_run_context(folder, view, prompt_file)
     ctx["phase"] = "start"
     try:
         save_results(folder, {"run": ctx, "run_status": RUN_IN_PROGRESS,

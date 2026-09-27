@@ -288,6 +288,70 @@ class TestRunIdentity(Base):
                           "prompt.xml", "tests.json"])
 
 
+# Fix round 2 (verifier held-out): a prompt that passes PromptWorking but whose view cannot be
+# decoded, and a folder whose prompt file is gone.
+UNDECODABLE = {
+    "invalid_utf8": b"<role>x</role>\n\xff\xfe\x80 not utf-8\n",
+    "malformed_unclosed_region": (b"@wixie-editable/1 nonce=0123456789abcdef\n"
+                                  b"@wixie-editable/1 begin a 0123456789abcdef\nSay hello.\n"),
+}
+
+
+class TestPromptOpening(Base):
+    def test_undecodable_prompt_is_a_current_error(self):
+        for name, raw in UNDECODABLE.items():
+            with self.subTest(prompt=name):
+                folder, r1 = self.pass_first("undec")
+                (folder / "prompt.xml").write_bytes(raw)
+                client = H.StubClient(target=[H.GOOD_OUTPUT])
+                res, exc, log = H.run_in_process(self.ot, folder, client, max_iterations=1)
+                self.assertIsInstance(exc, SystemExit, log)
+                self.assertEqual(exc.code, 3)
+                r = H.results(folder)
+                self.assertNotEqual(r["run_id"], r1["run_id"])
+                self.assertEqual((r["run_status"], r["final_verdict"], r["error"]["kind"], r["error"]["phase"]),
+                                 ("ERROR", "EVALUATION_ERROR", "prompt_unreadable", "open_prompt"))
+                self.assertIn("RegionError", r["error"]["message"])
+                self.assertEqual(client.log, [])
+                self.assertEqual((folder / "prompt.xml").read_bytes(), raw)   # prompt untouched
+
+    def test_missing_prompt_file_is_distinct(self):
+        folder, r1 = self.pass_first("noprompt")
+        (folder / "prompt.xml").unlink()
+        res, exc, log = H.run_in_process(self.ot, folder, H.StubClient(), max_iterations=1)
+        self.assertIsInstance(exc, SystemExit, log)
+        self.assertEqual(exc.code, 3)
+        r = H.results(folder)
+        self.assertNotEqual(r["run_id"], r1["run_id"])
+        self.assertEqual((r["run_status"], r["error"]["kind"]), ("ERROR", "no_prompt_file"))
+        # a folder that never held a result gets none
+        empty = H.scratch(ROOT, "noprompt-empty-")
+        res, exc, log = H.run_in_process(self.ot, empty, H.StubClient(), max_iterations=1)
+        self.assertEqual((type(exc), exc.code), (SystemExit, 3))
+        self.assertEqual(list(empty.iterdir()), [])
+
+    def test_alias_refusal_still_exit_2_without_writing(self):
+        folder, r1 = self.pass_first("alias")
+        results = folder / "output-test-results.json"
+        results.unlink()
+        os.link(folder / "prompt.xml", results)          # results path IS the prompt
+        before = (folder / "prompt.xml").read_bytes()
+        res, exc, log = H.run_in_process(self.ot, folder, H.StubClient(), max_iterations=1)
+        self.assertEqual((type(exc), exc.code), (SystemExit, 2))
+        self.assertEqual((folder / "prompt.xml").read_bytes(), before)
+
+    def test_undecodable_prompt_via_cli(self):
+        folder, r1 = self.pass_first("undec-cli")
+        (folder / "prompt.xml").write_bytes(UNDECODABLE["invalid_utf8"])
+        code, out, roles = H.run_cli(ROOT, self.tree, folder, {"target": [H.GOOD_OUTPUT]}, ["--max", "1"])
+        self.assertEqual(code, 3, out)
+        self.assertNotIn("Traceback", out)
+        self.assertEqual(roles, [])
+        r = H.results(folder)
+        self.assertNotEqual(r["run_id"], r1["run_id"])
+        self.assertEqual(r["error"]["kind"], "prompt_unreadable")
+
+
 class TestCli(Base):
     def test_exit_codes_distinguish_error_from_honest_fail(self):
         folder = H.make_folder(ROOT, "cli")
