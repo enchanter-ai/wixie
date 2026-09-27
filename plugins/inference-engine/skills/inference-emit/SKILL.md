@@ -15,7 +15,9 @@ allowed-tools: Bash(python *) Read Write
 
 **Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
 
-Append one artifact to `${CLAUDE_PLUGIN_ROOT}/state/artifacts.jsonl`.
+**State location (WIX-SEC-WS-001).** The installed plugin tree is read-only. The engine keeps its state in `${CLAUDE_PLUGIN_DATA}/state/` (passed as `--plugin-data`), seeded once from the shipped `state/` on first write; `WIXIE_INFERENCE_STATE` overrides it, and in a repo checkout without plugin data it uses `plugins/inference-engine/state/`. `state/...` paths below are relative to that resolved directory (`status` prints it as `state_dir`).
+
+Append one artifact to the engine's `state/artifacts.jsonl`.
 
 ## Usage
 
@@ -100,7 +102,7 @@ If the caller gave you a JSON record, use it. If they gave structured text, buil
 ### Step 2: Emit
 
 ```bash
-WIXIE_INFERENCE_ENABLED=1 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py emit <(cat <<'EOF'
+WIXIE_INFERENCE_ENABLED=1 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" emit <(cat <<'EOF'
 <your JSON record>
 EOF
 )

@@ -14,6 +14,8 @@ allowed-tools: Bash(python *) Read Agent
 
 # Inference Brief
 
+**State location (WIX-SEC-WS-001).** The installed plugin tree is read-only. The engine keeps its state in `${CLAUDE_PLUGIN_DATA}/state/` (passed as `--plugin-data`), seeded once from the shipped `state/` on first write; `WIXIE_INFERENCE_STATE` overrides it, and in a repo checkout without plugin data it uses `plugins/inference-engine/state/`. `state/...` paths below are relative to that resolved directory (`status` prints it as `state_dir`).
+
 Emit `state/briefings/<plugin>.md` — a concise Markdown summary of elevated patterns that apply to the target plugin.
 
 ## Usage
@@ -38,7 +40,7 @@ Delegate to the Haiku-tier briefer for a shape-check pass:
 Agent(subagent_type="general-purpose", model="haiku",
       prompt="Run the briefer agent defined at
               ${CLAUDE_PLUGIN_ROOT}/agents/briefer.md
-              with plugin='<target>'.")
+              with plugin='<target>' plugin_data='${CLAUDE_PLUGIN_DATA}'.")
 ```
 
 ### Step 2: Parse the agent's report

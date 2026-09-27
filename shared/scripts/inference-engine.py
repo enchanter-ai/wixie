@@ -11,6 +11,21 @@ Subcommands:
     backfill <source.jsonl>         Replay an external JSONL (e.g. precedent.jsonl) through emit
     status                          Print catalog summary + last reconcile timestamp
 
+Global option (before the subcommand): --plugin-data <dir> carries the plugin data directory
+that Claude Code substitutes for ${CLAUDE_PLUGIN_DATA} in skill/agent text.
+
+State location (WIX-SEC-WS-001; one precedence, shared/scripts/plugin_state.py):
+    1. WIXIE_INFERENCE_STATE            explicit override (tests, sandboxes); used as-is, never seeded
+    2. CLAUDE_PLUGIN_DATA/state         installed plugin (env var from Claude Code, or --plugin-data)
+    3. <checkout>/plugins/inference-engine/state   full-checkout development mode (unchanged)
+    Otherwise every subcommand refuses with exit 2: the installed plugin tree is never written.
+The shipped plugin state/ is a read-only seed. On the first write to an empty plugin-data state
+dir (reconcile, render-briefing, backfill, or an enabled emit) it is copied there once and the
+copy is logged; status/query read the seed in place until then. WIXIE_INFERENCE_SEED=0 starts
+empty instead. A shipped state/ that holds anything besides the seed files (runtime residue a
+pre-WIX-SEC-WS-001 version wrote into the install) is not copied and not touched: the data dir
+starts empty and a one-line notice says so. The seed decision is recorded in <state>/.seed.json.
+
 Exit codes (contract: shared/conduct/inference-substrate.md):
     0   success, incl. documented no-ops (gate-off emit, empty reconcile) and the emit outcomes
         "duplicate" and "queued"
@@ -37,6 +52,7 @@ import math
 import os
 import random
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -56,17 +72,54 @@ if hasattr(sys.stderr, "reconfigure"):
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+# WIX-SEC-WS-001: never write bytecode caches next to a vendored copy in an installed plugin.
+sys.dont_write_bytecode = True
+
+
+def _load_plugin_state():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("wixie_plugin_state", SCRIPT_DIR / "plugin_state.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+plugin_state = _load_plugin_state()
+
+# The plugin that ships this script, whose state/ is the read-only seed: the repository's
+# plugins/inference-engine/ for the canonical copy, or <plugin>/ for the copy vendored at
+# <plugin>/vendor/wixie/shared/scripts/ (WIX-DIST-002).
 PLUGIN_DIR = SCRIPT_DIR.parent.parent / "plugins" / "inference-engine"
-# WIX-DIST-002: an installed plugin carries this script at
-# <plugin>/vendor/wixie/shared/scripts/, so its state is <plugin>/state/.
 _INSTALLED_ROOT = SCRIPT_DIR.parents[3] if len(SCRIPT_DIR.parents) > 3 else None
 if _INSTALLED_ROOT and SCRIPT_DIR.parents[2].name == "vendor" and (_INSTALLED_ROOT / ".claude-plugin" / "plugin.json").is_file():
     PLUGIN_DIR = _INSTALLED_ROOT
-# Tests + sandboxes override via WIXIE_INFERENCE_STATE to avoid polluting
-# production state at plugins/inference-engine/state/.
-STATE_DIR = Path(os.environ.get("WIXIE_INFERENCE_STATE") or (PLUGIN_DIR / "state"))
-BRIEFINGS_DIR = STATE_DIR / "briefings"
-CATALOG_PATH = STATE_DIR / "catalog.json"
+SEED_DIR = PLUGIN_DIR / "state"
+# The files a shipped seed consists of; anything else in the shipped state/ is runtime residue.
+SEED_TOP_FILES = ("artifacts.jsonl", "catalog.json")
+SEED_SUBDIR_GLOBS = (("briefings", "*.md"),)
+SEED_MARKER = ".seed.json"
+
+
+def resolve_state(plugin_data: str | None = None) -> tuple[Path | None, str]:
+    """WIXIE_INFERENCE_STATE > CLAUDE_PLUGIN_DATA/state > checkout plugins/inference-engine/state."""
+    return plugin_state.resolve(
+        __file__, explicit=os.environ.get("WIXIE_INFERENCE_STATE"), data_sub="state",
+        checkout_rel="plugins/inference-engine/state", plugin_data=plugin_data)
+
+
+def _bind_state(state_dir: Path) -> None:
+    """Point every state path at `state_dir` (module globals read at call time)."""
+    global STATE_DIR, BRIEFINGS_DIR, CATALOG_PATH, LOCK_PATH, PENDING_DIR
+    STATE_DIR = state_dir
+    BRIEFINGS_DIR = state_dir / "briefings"
+    CATALOG_PATH = state_dir / "catalog.json"
+    LOCK_PATH = state_dir / ".lock"
+    PENDING_DIR = state_dir / "pending"
+
+
+STATE_DIR, STATE_SOURCE = resolve_state()
+# Unresolved (an installed copy without CLAUDE_PLUGIN_DATA): main() refuses before any use.
+_bind_state(STATE_DIR if STATE_DIR is not None else Path("<unresolved-inference-state>"))
 
 
 def env_enabled() -> bool:
@@ -796,8 +849,7 @@ def iso_now() -> str:
 
 EXIT_LOCK_BUSY = 75       # the state lock was not acquired within the bound; nothing changed
 
-LOCK_PATH = STATE_DIR / ".lock"
-PENDING_DIR = STATE_DIR / "pending"
+# LOCK_PATH (<state>/.lock) and PENDING_DIR (<state>/pending) are bound by _bind_state().
 
 
 class LockBusy(RuntimeError):
@@ -1426,6 +1478,7 @@ def cmd_status(_args: list[str]) -> int:
                 "new_rejected_lines": (catalog.get("accounting") or {}).get("new_rejected_lines"),
                 "verdicts": verdicts,
                 "state_dir": str(STATE_DIR),
+                "state_source": STATE_SOURCE,
             },
             indent=2,
         )
@@ -1446,7 +1499,126 @@ COMMANDS = {
 }
 
 
+# ─── State location + read-only seed (WIX-SEC-WS-001) ─────────────────────────
+
+
+def _note(msg: str) -> None:
+    sys.stderr.write(f"[inference-engine] {msg}\n")
+
+
+def seed_files(seed_dir: Path) -> tuple[list[str], list[str]]:
+    """(seed files, residue) under the shipped state/: residue is anything that is not a seed file."""
+    wanted = set(SEED_TOP_FILES)
+    seed_dirs = {d for d, _ in SEED_SUBDIR_GLOBS}
+    files, residue = [], []
+    for p in sorted(seed_dir.rglob("*")):
+        rel = p.relative_to(seed_dir).as_posix()
+        if p.is_dir():
+            if rel not in seed_dirs:
+                residue.append(rel + "/")
+            continue
+        parent = rel.rpartition("/")[0]
+        if rel in wanted or any(parent == d and p.match(g) for d, g in SEED_SUBDIR_GLOBS):
+            files.append(rel)
+        else:
+            residue.append(rel)
+    return files, residue
+
+
+def _is_empty_dir(d: Path) -> bool:
+    return d.is_dir() and not any(d.iterdir())
+
+
+def ensure_seeded(state_dir: Path, seed_dir: Path) -> None:
+    """Copy the shipped read-only seed into an empty plugin-data state dir, once.
+
+    Never writes to `seed_dir`. The decision (copied, or why not) is recorded in
+    <state_dir>/.seed.json, so it is taken once per data dir; deleting the data dir re-runs it."""
+    if state_dir.exists() and not _is_empty_dir(state_dir):
+        return
+    decision: dict = {"schema": "wixie/inference-seed/v1", "decided_at": iso_now(), "seed": str(seed_dir)}
+    files: list[str] = []
+    if os.environ.get("WIXIE_INFERENCE_SEED", "1").strip() == "0":
+        decision.update(copied=False, reason="WIXIE_INFERENCE_SEED=0 (owner override: start empty)")
+    elif not seed_dir.is_dir():
+        decision.update(copied=False, reason="no shipped seed")
+    else:
+        files, residue = seed_files(seed_dir)
+        if residue:
+            decision.update(copied=False, residue=residue, reason=(
+                "the shipped state/ holds runtime residue written by an earlier version into the "
+                "installed plugin, so it is not a pristine seed"))
+            files = []
+        else:
+            decision.update(copied=True, files={
+                rel: hashlib.sha256((seed_dir / rel).read_bytes()).hexdigest() for rel in files})
+    tmp = state_dir.parent / f".{state_dir.name}.seeding-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    try:
+        tmp.mkdir(parents=True)
+        for rel in files:
+            dst = tmp / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes((seed_dir / rel).read_bytes())
+        (tmp / SEED_MARKER).write_text(json.dumps(decision, indent=2) + "\n", encoding="utf-8")
+        if _is_empty_dir(state_dir):
+            state_dir.rmdir()
+        try:
+            os.rename(tmp, state_dir)
+        except OSError:
+            if state_dir.is_dir() and not _is_empty_dir(state_dir):
+                return  # a concurrent process seeded it first
+            raise
+    finally:
+        if tmp.exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+    if decision.get("copied"):
+        _note(f"seeded {state_dir} from the shipped read-only seed {seed_dir} ({len(files)} files); "
+              "the seed itself is never written")
+    elif decision.get("residue"):
+        _note(f"NOT seeding {state_dir}: {seed_dir} contains runtime residue from an earlier version "
+              f"({', '.join(decision['residue'][:5])}); it was left as-is and not migrated. The data dir "
+              "starts empty; reinstall the plugin to get a pristine seed.")
+    else:
+        _note(f"{state_dir} starts empty: {decision['reason']}")
+
+
+# Subcommands that write state. emit writes only when the gate is on (gate-off emit is a no-op).
+_WRITERS = {"reconcile", "render-briefing", "backfill"}
+
+
+def _configure_state(cmd: str, plugin_data: str | None) -> int | None:
+    """Resolve + bind the state dir for this command. Returns an exit code to stop with, or None."""
+    global STATE_SOURCE
+    state_dir, source = resolve_state(plugin_data)
+    STATE_SOURCE = source
+    if state_dir is None:
+        _note(f"{cmd}: refused: {plugin_state.UNRESOLVED_HINT}. Nothing was changed.")
+        return EXIT_USAGE
+    _bind_state(state_dir)
+    if source != "plugin-data":
+        return None
+    writes = cmd in _WRITERS or (cmd == "emit" and env_enabled())
+    if writes:
+        ensure_seeded(state_dir, SEED_DIR)
+    elif (not state_dir.exists() or _is_empty_dir(state_dir)) and SEED_DIR.is_dir():
+        # Read-only use before the first write: read the shipped seed in place; persist nothing.
+        _bind_state(SEED_DIR)
+        STATE_SOURCE = "plugin-data (unseeded: reading the shipped seed read-only)"
+    return None
+
+
 def main(argv: list[str]) -> int:
+    argv = list(argv)
+    plugin_data = None
+    if len(argv) > 1 and argv[1].startswith("--plugin-data="):
+        plugin_data = argv[1].split("=", 1)[1]
+        del argv[1]
+    elif len(argv) > 1 and argv[1] == "--plugin-data":
+        if len(argv) < 3:
+            sys.stderr.write("usage: inference-engine.py [--plugin-data <dir>] <subcommand> ...\n")
+            return 2
+        plugin_data = argv[2]
+        del argv[1:3]
     if len(argv) < 2 or argv[1] in ("-h", "--help"):
         sys.stderr.write(__doc__ or "")
         return 0 if len(argv) >= 2 else 2
@@ -1456,6 +1628,9 @@ def main(argv: list[str]) -> int:
         sys.stderr.write(f"available: {', '.join(COMMANDS)}\n")
         return 2
     try:
+        stop = _configure_state(cmd, plugin_data)
+        if stop is not None:
+            return stop
         return COMMANDS[cmd](argv[2:])
     except LockBusy as exc:
         sys.stderr.write(f"[inference-engine] {cmd}: {exc}. Nothing was changed; retry later.\n")

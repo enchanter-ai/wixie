@@ -150,13 +150,19 @@ class InstallLayoutRuntime(unittest.TestCase):
         self.assertNotIn("no corpus at", r.stderr)
         self.assertEqual(r.returncode, 3, r.stderr[-600:])  # NO_MEASUREMENT: the CLI override does not exist
 
-    def test_inference_engine_uses_its_own_state_when_installed(self):
+    def test_inference_engine_runs_from_install_layout_with_plugin_data(self):
+        # C6: replaces test_inference_engine_uses_its_own_state_when_installed, which pinned the
+        # WIX-DIST-002 choice <plugin>/state. Decision D17 (2026-09-27, WIX-SEC-WS-001) supersedes it:
+        # the installed tree is immutable product content; runtime state lives in CLAUDE_PLUGIN_DATA.
         root = self.install("inference-engine")
-        r = self.py(root, "inference-engine.py", "status")
+        data = self.tmp / "data" / "inference-engine-wixie"
+        r = self.py(root, "inference-engine.py", "--plugin-data", str(data), "render-briefing", "wixie")
         self.assert_ran(r, ok=(0,))
-        self.assertEqual(Path(json.loads(r.stdout)["state_dir"]).resolve(), (root / "state").resolve())
-        r = subprocess.run([sys.executable, str(root / "scripts/model-freshness.py"), "--print"], cwd=self.proj,
-                           env=self.env, capture_output=True, text=True, timeout=120)
+        r = self.py(root, "inference-engine.py", "--plugin-data", str(data), "status")
+        self.assert_ran(r, ok=(0,))
+        self.assertEqual(Path(json.loads(r.stdout)["state_dir"]).resolve(), (data / "state").resolve())
+        r = subprocess.run([sys.executable, str(root / "scripts/model-freshness.py"), "--print", "--dry-run"],
+                           cwd=self.proj, env=self.env, capture_output=True, text=True, timeout=120)
         self.assert_ran(r, ok=(0,))
         self.assertIn("models_in_registry", r.stdout)
 

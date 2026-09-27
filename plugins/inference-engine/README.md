@@ -160,6 +160,18 @@ Standalone:
 /plugin install inference-engine@wixie
 ```
 
+**State location (WIX-SEC-WS-001).** An installed plugin never writes into its own install directory.
+The engine keeps its state in `$CLAUDE_PLUGIN_DATA/state/` (Claude Code's per-plugin data directory,
+`~/.claude/plugins/data/inference-engine-wixie/` by default), seeded once from the shipped `state/` on
+the first write and logged; `WIXIE_INFERENCE_STATE` overrides it; in a repository checkout it is
+`plugins/inference-engine/state/` as before. The shipped seed is read-only. `plugin uninstall` asks
+whether to delete the data directory (`--keep-data` keeps it); a reinstall starts from the kept data or,
+if it was deleted, from the pristine seed; nothing depends on files left in the plugin cache. An install
+of an earlier version that wrote runtime files into its cache is left as-is: a new data directory is not
+seeded from it (one-line notice), and reinstalling gives a pristine seed.
+Model-freshness telemetry is written only while `WIXIE_INFERENCE_ENABLED=1`, to
+`$CLAUDE_PLUGIN_DATA/telemetry/model-usage.ndjson`.
+
 ## Quickstart
 
 ```bash
@@ -352,7 +364,7 @@ wixie/shared/conduct/
 
 ## Opt-in + Graceful Degradation
 
-The substrate is **off by default**. `emit` is a no-op unless `WIXIE_INFERENCE_ENABLED=1`. `reconcile` and `render-briefing` run regardless but are safe on empty state (reconcile over zero artifacts yields an empty catalog; render-briefing writes a placeholder *"no elevated patterns yet"*).
+The substrate is **off by default**. `emit` is a no-op unless `WIXIE_INFERENCE_ENABLED=1`, and the SessionStart telemetry hook persists nothing unless it is set. `reconcile` and `render-briefing` run regardless but are safe on empty state (reconcile over zero artifacts yields an empty catalog; render-briefing writes a placeholder *"no elevated patterns yet"*).
 
 When enabled and later unreachable — filesystem error, missing script, permission problem:
 

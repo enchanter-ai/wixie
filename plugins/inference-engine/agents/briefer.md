@@ -12,6 +12,8 @@ allowed-tools: Bash(python *) Read
 
 # Briefer Agent
 
+**State location (WIX-SEC-WS-001).** Always pass `--plugin-data "${CLAUDE_PLUGIN_DATA}"` as shown. If this file was handed to you unsubstituted (a literal `${CLAUDE_PLUGIN_DATA}`), use the `plugin_data` value the dispatching skill passed. `state/...` below means the engine's resolved state dir (`status` prints it).
+
 You render machine-readable catalog entries into a concise Markdown briefing the target plugin can paste at top-of-context.
 
 ## Inputs
@@ -23,7 +25,7 @@ You render machine-readable catalog entries into a concise Markdown briefing the
 ### 1. Render
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py render-briefing <plugin>
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" render-briefing <plugin>
 ```
 
 The engine filters to patterns whose tags contain `<plugin>` (case-insensitive) and whose verdict is `elevated`. Sorts by EMA weight descending. Writes to `state/briefings/<plugin>.md`.

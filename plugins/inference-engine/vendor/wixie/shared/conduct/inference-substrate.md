@@ -18,6 +18,16 @@ Five file surfaces:
 | `state/catalog.json.corrupt-<stamp>`   | a corrupt catalog moved aside by reconcile            | kept for inspection; safe to delete once reviewed                 |
 | `shared/scripts/inference-engine.py`   | all subcommands (emit, reconcile, render-briefing, query, backfill, status) | edit only with a matching convergence + test cycle                |
 
+**Where `state/` is (WIX-SEC-WS-001).** The paths above are relative to the engine's resolved state
+directory, chosen by one precedence: `WIXIE_INFERENCE_STATE` (explicit override) ->
+`$CLAUDE_PLUGIN_DATA/state` (installed plugin; skills pass it as `--plugin-data`) ->
+`plugins/inference-engine/state/` (repository checkout, development mode). An installed plugin tree is
+immutable product content and is never written: its shipped `state/` is a read-only seed, copied once
+(and logged) into an empty plugin-data state dir on the first write; `status`/`query` read it in place
+before that. `WIXIE_INFERENCE_SEED=0` starts empty instead. A shipped `state/` that holds runtime
+residue from an earlier version is neither copied nor deleted (the data dir starts empty, with a
+one-line notice). With none of the three locations available, the engine refuses (exit 2).
+
 ## The rule
 
 **Every write to the substrate goes through the engine.** Never `echo >> catalog.json`. Never hand-edit a briefing. Never append to `artifacts.jsonl` without the engine's timestamp + fingerprint stamping.
@@ -354,6 +364,9 @@ When a pattern's LLR falls below `-2.25` over multiple reconciles, the engine ma
 - `reconcile` still runs (safe on empty state).
 - `render-briefing` still writes the placeholder briefing.
 - No plugin's skill is required to read any briefing.
+- The SessionStart model-freshness telemetry (F-006) persists nothing. When the gate is on it appends to
+  `$CLAUDE_PLUGIN_DATA/telemetry/model-usage.ndjson` (installed) or `plugins/inference-engine/state/model-usage.ndjson`
+  (repository checkout), never into the installed plugin tree.
 
 Flip the gate only after Phase 1 backfill has been validated locally — running on a clean machine with a fresh precedent.jsonl.
 

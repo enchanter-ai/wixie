@@ -308,11 +308,11 @@
       ],
       "destination": "vendor/wixie/shared/conduct/inference-substrate.md",
       "path": "wixie/shared/conduct/inference-substrate.md",
-      "sha1": "79790fd43290c5adf8180a39a1f38d1487e39ac3",
-      "sha256": "b3552747a671cbdcc88c374bc4bade6d6d2fbd46b65a2efab2f1958daf55d628",
+      "sha1": "53ef5b7cd6aecbaf9d348a118ac1d2685959145e",
+      "sha256": "4cdcb2d7409e87c6130f1e311153f652ca77d0550e3bcb85b51aa279c1ce27f6",
       "source": "wixie",
       "source_path": "shared/conduct/inference-substrate.md",
-      "source_revision": "git-blob:a970a38d6d9e878576e39526fa5aa0a412f1a601"
+      "source_revision": "git-blob:17f2cea4b1788952f86a760786a5721b7c9661cb"
     },
     {
       "consumers": [
@@ -337,15 +337,16 @@
       ],
       "destination": "vendor/wixie/shared/scripts/inference-engine.py",
       "path": "wixie/shared/scripts/inference-engine.py",
-      "sha1": "a1247404192d4ce3cef391efb478abada473a07e",
-      "sha256": "a9a9f98a57e6a2419508296bca0e571ee19d2f649e45adf83913c8a5706d0800",
+      "sha1": "6d853e48c5d940e844f87e0e86e523033ed15357",
+      "sha256": "32d0046096572dba12a3ad75f155706a1c94b34d4062e3bee47638890bf43f17",
       "source": "wixie",
       "source_path": "shared/scripts/inference-engine.py",
-      "source_revision": "git-blob:b11ff6c9f33ea791c9dfd953713e166693cb4321"
+      "source_revision": "git-blob:5fe3005161824233cccdba8f157fe7164f38864c"
     },
     {
       "consumers": [
-        "scripts/model-freshness.py"
+        "scripts/model-freshness.py",
+        "vendor/wixie/shared/scripts/inference-engine.py"
       ],
       "destination": "vendor/wixie/shared/scripts/plugin_state.py",
       "path": "wixie/shared/scripts/plugin_state.py",

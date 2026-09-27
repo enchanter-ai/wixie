@@ -13,6 +13,8 @@ allowed-tools: Bash(python *) Read Agent
 
 # Inference Reconcile
 
+**State location (WIX-SEC-WS-001).** The installed plugin tree is read-only. The engine keeps its state in `${CLAUDE_PLUGIN_DATA}/state/` (passed as `--plugin-data`), seeded once from the shipped `state/` on first write; `WIXIE_INFERENCE_STATE` overrides it, and in a repo checkout without plugin data it uses `plugins/inference-engine/state/`. `state/...` paths below are relative to that resolved directory (`status` prints it as `state_dir`).
+
 Re-derive `catalog.json` from the full artifact history. Fully autonomous.
 
 ## Usage
@@ -28,7 +30,8 @@ Delegate to the Sonnet-tier reconciler. The agent runs the engine, validates out
 ```
 Agent(subagent_type="general-purpose", model="sonnet",
       prompt="Run the reconciler agent defined at
-              ${CLAUDE_PLUGIN_ROOT}/agents/reconciler.md.")
+              ${CLAUDE_PLUGIN_ROOT}/agents/reconciler.md
+              with plugin_data='${CLAUDE_PLUGIN_DATA}'.")
 ```
 
 ### Step 2: Parse the agent's report
@@ -44,7 +47,7 @@ reconciled <N> artifacts -> <P> patterns (<E> elevated, <R> retired)
 If the agent reports that verdicts changed (the agent diffs against the prior catalog internally), a fresh `state/briefings/wixie.md` is already written. Otherwise re-render unconditionally — cheap and keeps the briefing timestamp current:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py render-briefing wixie
+python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" render-briefing wixie
 ```
 
 ### Step 4: Report to caller
