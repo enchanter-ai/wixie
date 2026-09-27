@@ -146,6 +146,8 @@ class InstallLayoutRuntime(unittest.TestCase):
         self.assert_ran(r, ok=(0,))
         self.assertIn("claude-opus-4-7", r.stdout)
         self.assert_ran(self.py(root, "convergence.py", prompt, "--max", "3"))
+        # WIX-SEC-WS-001: Claude Code gives the plugin a data dir; measurements are written there.
+        self.env["CLAUDE_PLUGIN_DATA"] = str(self.tmp / "data" / "convergence-engine-wixie")
         r = self.py(root, "efficacy-replay.py", "corpus", "deploy-bar", "--prompt", prompt, "-n", "1")
         self.assertNotIn("no corpus at", r.stderr)
         self.assertEqual(r.returncode, 3, r.stderr[-600:])  # NO_MEASUREMENT: the CLI override does not exist

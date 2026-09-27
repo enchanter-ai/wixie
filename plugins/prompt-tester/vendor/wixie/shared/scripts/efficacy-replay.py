@@ -10,12 +10,25 @@ Scoring still observes the tool_use vs. text trajectory across the assistant tur
 emitted by the CLI's internal agentic loop. Honest-numbers contract preserved: this
 script does not certify modules. It produces a rate-delta with a Wilson 95% CI and
 a seed count. The principal interprets.
+
+Outputs (WIX-SEC-WS-001). Inputs (the corpus / fixture) are read-only; the vendored copy in an
+installed plugin is never written. Every run writes a FRESH per-run directory
+    <out>/corpus/<corpus>/<run_id>/{verdict.json, runs/*.json}     (corpus mode)
+    <out>/fixture/<slug>/<run_id>/{verdict.json, runs/*.json}      (fixture mode)
+where run_id = <UTC stamp>-<prompt sha256[:12]>-<random>, and verdict.json records run_id and
+prompt_sha256, so an earlier run's verdict can never be read as the current one. <out> is
+resolved once (shared/scripts/plugin_state.py): --out DIR, else $CLAUDE_PLUGIN_DATA/efficacy
+(installed plugin), else <checkout>/state/efficacy-runs (full-checkout mode; gitignored, outside
+vendor/). With none of these (a vendored copy run by hand) the run is refused with exit 2.
 """
 from __future__ import annotations
 
 import argparse, hashlib, json, math, os, re, shutil, signal, subprocess, sys, tempfile, time
 from pathlib import Path
 from types import SimpleNamespace
+
+# WIX-SEC-WS-001: never write bytecode caches (e.g. for prompt_regions) into an installed plugin.
+sys.dont_write_bytecode = True
 
 
 def _prompt_view(path):
@@ -37,8 +50,27 @@ def _prompt_view(path):
         sys.exit(2)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"
-CORPUS_ROOT = REPO_ROOT / "shared" / "eval-corpus"
+EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"   # fixture INPUTS (repo checkout only)
+CORPUS_ROOT = REPO_ROOT / "shared" / "eval-corpus"  # corpus INPUTS (read-only)
+
+
+def resolve_out_root(explicit: str | None = None) -> tuple[Path | None, str]:
+    """--out > $CLAUDE_PLUGIN_DATA/efficacy > <checkout>/state/efficacy-runs; (None, 'unresolved') otherwise."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "wixie_plugin_state", os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugin_state.py"))
+    ps = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ps)
+    return ps.resolve(__file__, explicit=explicit, data_sub="efficacy", checkout_rel="state/efficacy-runs")
+
+
+def new_run_dir(out_root: Path, kind: str, name: str, digest: str) -> tuple[Path, str]:
+    """Create a fresh, never-reused run directory <out_root>/<kind>/<name>/<run_id>/."""
+    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{digest[:12]}-{os.urandom(3).hex()}"
+    run_dir = Path(out_root) / kind / name / run_id
+    run_dir.mkdir(parents=True, exist_ok=False)
+    (run_dir / "runs").mkdir()
+    return run_dir, run_id
 MAX_TURNS = 3
 MAX_TOKENS = 2048
 # Per-trial subprocess timeout (seconds). 180 fits the tiny generic deploy-bar cases,
@@ -419,7 +451,7 @@ def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
     return trace, meta
 
 
-def run_fixture(slug: str, n: int, model: str) -> dict:
+def run_fixture(slug: str, n: int, model: str, out_root: Path | None = None) -> dict:
     fdir = EFFICACY_ROOT / slug
     fixture = json.loads((fdir / "fixture.json").read_text(encoding="utf-8"))
     turns = json.loads((fdir / "scenario_turns.json").read_text(encoding="utf-8"))
@@ -427,8 +459,13 @@ def run_fixture(slug: str, n: int, model: str) -> dict:
     sys_ctrl  = fdir / "system_control.md"
     if sha1_file(sys_treat) == sha1_file(sys_ctrl):
         raise RuntimeError(f"system_treatment.md and system_control.md are byte-identical: {sys_treat} / {sys_ctrl}")
-    runs_dir = fdir / "runs"
-    runs_dir.mkdir(exist_ok=True)
+    if out_root is None:
+        out_root, _ = resolve_out_root()
+        if out_root is None:
+            raise RuntimeError("no output location (pass --out or set CLAUDE_PLUGIN_DATA)")
+    pair_digest = hashlib.sha256(sys_treat.read_bytes() + b"\0" + sys_ctrl.read_bytes()).hexdigest()
+    run_dir, run_id = new_run_dir(out_root, "fixture", slug, pair_digest)
+    runs_dir = run_dir / "runs"
     ts = time.strftime("%Y%m%dT%H%M%S")
 
     # tool universe is a fixture-side declaration kept for trace-comparability;
@@ -513,6 +550,7 @@ def run_fixture(slug: str, n: int, model: str) -> dict:
 
     verdict = {
         "fixture": slug, "module_under_test": fixture["module"],
+        "run_id": run_id, "prompt_sha256": pair_digest, "run_dir": str(run_dir),
         "harness_version": "v0.3-cli", "model": model,
         "n_per_arm": n, "ts": ts,
         "system_treatment_sha1": sha1_file(sys_treat),
@@ -529,7 +567,7 @@ def run_fixture(slug: str, n: int, model: str) -> dict:
     # both persisted AND returned — main()'s printed summary is built from this same (now
     # redacted) object, so stdout and verdict.json are covered by one call.
     verdict = _redact_deep(verdict)
-    (fdir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
+    (run_dir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
     return verdict
 
 
@@ -698,7 +736,8 @@ def accept_predicate(treatment: dict, control: dict | None, floor: float) -> dic
     }
 
 
-def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_control: bool) -> dict:
+def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_control: bool,
+               out_root: Path | None = None) -> dict:
     cdir = CORPUS_ROOT / corpus_name
     corpus = json.loads((cdir / "corpus.json").read_text(encoding="utf-8"))
     cases = corpus["cases"]
@@ -707,8 +746,14 @@ def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_con
             raise RuntimeError(f"corpus case malformed (needs id+input): {c}")
     prompt_text = _prompt_view(str(prompt_path))
     floor = float(corpus.get("accept", {}).get("rate_floor", 0.75))
-    runs_dir = cdir / "runs"
-    runs_dir.mkdir(exist_ok=True)
+    if out_root is None:
+        out_root, _ = resolve_out_root()
+        if out_root is None:
+            raise RuntimeError("no output location (pass --out or set CLAUDE_PLUGIN_DATA)")
+    # The measured bytes identify the run: hash the exact file under test.
+    prompt_sha256 = hashlib.sha256(Path(prompt_path).read_bytes()).hexdigest()
+    run_dir, run_id = new_run_dir(out_root, "corpus", corpus_name, prompt_sha256)
+    runs_dir = run_dir / "runs"
     ts = time.strftime("%Y%m%dT%H%M%S")
 
     treatment = _measure_arm(prompt_text, cases, n, model, runs_dir, ts, "treatment")
@@ -736,6 +781,7 @@ def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_con
         decision = accept_predicate(treatment, control, floor)
     verdict = {
         "corpus": corpus_name, "prompt": str(prompt_path),
+        "prompt_sha256": prompt_sha256, "run_id": run_id, "run_dir": str(run_dir),
         "harness_version": "v0.3-cli-corpus", "model": model,
         "n_per_case": n, "cases": len(cases), "ts": ts,
         "treatment": treatment, "control": control,
@@ -744,7 +790,7 @@ def run_corpus(corpus_name: str, prompt_path: Path, n: int, model: str, with_con
     # WIX-EFF-001 fix round 1 (C9): redact the whole verdict tree once, here, right before it is
     # both persisted AND returned — see the matching comment in run_fixture.
     verdict = _redact_deep(verdict)
-    (cdir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
+    (run_dir / "verdict.json").write_text(json.dumps(verdict, indent=2, default=str), encoding="utf-8")
     return verdict
 
 
@@ -768,7 +814,7 @@ def _print_corpus_summary(verdict: dict) -> None:
     if verdict["control"]:
         slim["control_summary"] = _summary(verdict["control"])
     print(json.dumps(slim, indent=2, default=str))
-    print(f"\nfull verdict: shared/eval-corpus/{verdict['corpus']}/verdict.json")
+    print(f"\nfull verdict: {Path(verdict['run_dir']) / 'verdict.json'}")
 
 
 # WIX-EFF-001. A run whose trials never reached the provider measured nothing — that is neither
@@ -776,6 +822,8 @@ def _print_corpus_summary(verdict: dict) -> None:
 # exists to avoid. It gets its own documented exit code (see converge SKILL.md) so a skill or CI
 # can tell "the prompt failed the measured bar" apart from "the bar was never applied".
 EXIT_NO_MEASUREMENT = 3
+_UNRESOLVED = ("no output location outside the installed plugin (not in a Wixie checkout and "
+               "CLAUDE_PLUGIN_DATA is unset)")
 
 
 def main() -> int:
@@ -788,6 +836,9 @@ def main() -> int:
         ap.add_argument("--model", default="claude-haiku-4-5-20251001")
         ap.add_argument("--with-control", action="store_true",
                         help="also run a baseline arm and require measured lift over it")
+        ap.add_argument("--out", default=None,
+                        help="output root; this run writes a fresh <out>/corpus/<corpus>/<run_id>/ "
+                             "(default: $CLAUDE_PLUGIN_DATA/efficacy, else <checkout>/state/efficacy-runs)")
         args = ap.parse_args(argv[1:])
         if not (CORPUS_ROOT / args.corpus_name).exists():
             print(f"no corpus at {CORPUS_ROOT / args.corpus_name}", file=sys.stderr)
@@ -796,7 +847,12 @@ def main() -> int:
         if not prompt_path.exists():
             print(f"no prompt file at {prompt_path}", file=sys.stderr)
             return 2
-        verdict = run_corpus(args.corpus_name, prompt_path, args.n, args.model, args.with_control)
+        out_root, _src = resolve_out_root(args.out)
+        if out_root is None:
+            print(f"efficacy-replay: refused: {_UNRESOLVED}; pass --out DIR", file=sys.stderr)
+            return 2
+        verdict = run_corpus(args.corpus_name, prompt_path, args.n, args.model, args.with_control,
+                             out_root=out_root)
         _print_corpus_summary(verdict)
         dverdict = verdict["decision"]["verdict"]
         if dverdict == "NO_MEASUREMENT":
@@ -809,11 +865,16 @@ def main() -> int:
     ap.add_argument("slug")
     ap.add_argument("-n", type=int, default=10)
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
+    ap.add_argument("--out", default=None, help="output root (see corpus mode)")
     args = ap.parse_args(argv)
     if not (EFFICACY_ROOT / args.slug).exists():
         print(f"no fixture at {EFFICACY_ROOT / args.slug}", file=sys.stderr)
         return 2
-    verdict = run_fixture(args.slug, args.n, args.model)
+    out_root, _src = resolve_out_root(args.out)
+    if out_root is None:
+        print(f"efficacy-replay: refused: {_UNRESOLVED}; pass --out DIR", file=sys.stderr)
+        return 2
+    verdict = run_fixture(args.slug, args.n, args.model, out_root=out_root)
     # summary["measurement_valid"] / summary["verdict"] (WIX-EFF-001) ride along automatically —
     # they're top-level verdict keys, not under "arms", so this dict comprehension keeps them.
     summary = {k: v for k, v in verdict.items() if k != "arms"}
@@ -824,7 +885,7 @@ def main() -> int:
         for arm, r in verdict["arms"].items()
     }
     print(json.dumps(summary, indent=2, default=str))
-    print(f"\nfull verdict: state/efficacy/{args.slug}/verdict.json")
+    print(f"\nfull verdict: {Path(verdict['run_dir']) / 'verdict.json'}")
     # Fixture-mode exit semantics are deliberately UNCHANGED by WIX-EFF-001 (always 0 — this is
     # an informational/diagnostic tool, not a gate; nothing in-repo branches on its exit code and
     # the BRIEF for this fix says not to touch it without a documented, justified reason). The

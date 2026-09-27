@@ -135,7 +135,11 @@ def fake_mixed(ok_response):
 
 def run_corpus_with(fake, n=2, with_control=False):
     mod.subprocess.Popen = fake
-    return mod.run_corpus("deploy-bar", prompt, n=n, model="fake-model", with_control=with_control)
+    # WIX-SEC-WS-001: outputs go to a fresh per-run dir under an explicit root, never next to the corpus.
+    return mod.run_corpus("deploy-bar", prompt, n=n, model="fake-model", with_control=with_control,
+                          out_root=OUT)
+
+OUT = tmp / "out"
 
 # ── 1. _run_trial_subprocess: unit-level transport classification ────────────
 mod.subprocess.Popen = fake_hang
@@ -202,7 +206,7 @@ for label, fake in (("auth", fake_auth_failure), ("empty", fake_empty_output),
     check(f"3 {label} transport_failures recorded with cause", len(v["treatment"]["transport_failures"]) == 6
           and all(tf.get("reason") for tf in v["treatment"]["transport_failures"]), v["treatment"]["transport_failures"])
     # verdict.json on disk carries the same NO_MEASUREMENT verdict, not a stale REJECT.
-    persisted = json.loads((tmp / "deploy-bar" / "verdict.json").read_text(encoding="utf-8"))
+    persisted = json.loads((pathlib.Path(v["run_dir"]) / "verdict.json").read_text(encoding="utf-8"))
     check(f"3 {label} verdict.json decision", persisted["decision"]["verdict"] == "NO_MEASUREMENT", persisted["decision"])
 
 # ── 4. corpus mode: genuine task rejection is still REJECT (not NO_MEASUREMENT) ──
@@ -244,7 +248,7 @@ check("7 treatment measured fine, control did not", v_ctrl["treatment"]["measure
 # ── 8. main() exit-code integration (WIX-EFF-001 residual: the test must exercise main()) ──
 def call_main(argv):
     old_argv = sys.argv
-    sys.argv = ["efficacy-replay.py"] + argv
+    sys.argv = ["efficacy-replay.py"] + argv + ["--out", str(OUT)]
     out = io.StringIO()
     try:
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
@@ -252,6 +256,11 @@ def call_main(argv):
     finally:
         sys.argv = old_argv
     return rc, out.getvalue()
+
+def printed_run_dir(text):
+    """The per-run directory main() printed as `full verdict: <path>` (WIX-SEC-WS-001)."""
+    line = [l for l in text.splitlines() if l.startswith("full verdict: ")][-1]
+    return pathlib.Path(line[len("full verdict: "):]).parent
 
 mod.subprocess.Popen = fake_auth_failure
 rc, _ = call_main(["corpus", "deploy-bar", "--prompt", str(prompt), "-n", "1"])
@@ -276,9 +285,9 @@ fake_leaky_auth_failure = fake_popen(
 mod.subprocess.Popen = fake_leaky_auth_failure
 rc9, out9 = call_main(["corpus", "deploy-bar", "--prompt", str(prompt), "-n", "1"])
 check("9 secret not in stdout", FAKE_KEY not in out9, out9)
-persisted9 = (tmp / "deploy-bar" / "verdict.json").read_text(encoding="utf-8")
+persisted9 = (printed_run_dir(out9) / "verdict.json").read_text(encoding="utf-8")
 check("9 secret not in verdict.json", FAKE_KEY not in persisted9, persisted9)
-runs9 = list((tmp / "deploy-bar" / "runs").glob("*.json"))
+runs9 = list((printed_run_dir(out9) / "runs").glob("*.json"))
 check("9 runs/*.json exist", len(runs9) > 0, runs9)
 leaked = [p.name for p in runs9 if FAKE_KEY in p.read_text(encoding="utf-8")]
 check("9 secret not in any runs/*.json", leaked == [], leaked)
@@ -290,9 +299,9 @@ mod.subprocess.Popen = fake_leaky_ok
 rc9b, out9b = call_main(["corpus", "deploy-bar", "--prompt", str(prompt), "-n", "5"])
 check("9b leaky-ok still ACCEPTs on the real content", rc9b == 0, rc9b)
 check("9b secret not in stdout", FAKE_KEY not in out9b, out9b)
-persisted9b = (tmp / "deploy-bar" / "verdict.json").read_text(encoding="utf-8")
+persisted9b = (printed_run_dir(out9b) / "verdict.json").read_text(encoding="utf-8")
 check("9b secret not in verdict.json", FAKE_KEY not in persisted9b, persisted9b)
-runs9b = list((tmp / "deploy-bar" / "runs").glob("*.json"))
+runs9b = list((printed_run_dir(out9b) / "runs").glob("*.json"))
 leaked9b = [p.name for p in runs9b if FAKE_KEY in p.read_text(encoding="utf-8")]
 check("9b secret not in any runs/*.json", leaked9b == [], leaked9b)
 

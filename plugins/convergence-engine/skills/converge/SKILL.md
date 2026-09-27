@@ -102,7 +102,7 @@ on the Wilson 95% CI. This is what turns DEPLOY from a self-satisfiable linter i
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
-  --prompt <shipped-prompt-file> -n 5 --with-control
+  --prompt <shipped-prompt-file> -n 5 --with-control --out "${CLAUDE_PLUGIN_DATA}/efficacy"
 ```
 
 Measure the **shipped** file (never the master), and first assert
@@ -110,6 +110,12 @@ Measure the **shipped** file (never the master), and first assert
 the converged bytes.
 
 - Reads `shared/eval-corpus/deploy-bar/corpus.json` (add per-domain corpora with the same schema).
+- Writes nothing next to the corpus or anywhere in the installed plugin (WIX-SEC-WS-001): each run
+  creates a fresh `${CLAUDE_PLUGIN_DATA}/efficacy/corpus/deploy-bar/<run_id>/` holding `verdict.json`
+  and `runs/*.json`, and prints its path as `full verdict: <path>`. `verdict.json` records `run_id`
+  and `prompt_sha256`; read ONLY the verdict this run printed, and check its `prompt_sha256`
+  equals the sha256 of the file you measured. Never read a `verdict.json` left by an earlier run as
+  the current result.
 - Each case scores PASS/FAIL on expect/reject regexes over real model output; pass rate gets a Wilson CI.
 - `--with-control` adds a baseline arm and additionally requires **measured lift** over it.
 
@@ -128,7 +134,7 @@ cause, attempt (case/seed), exit code and a truncated stderr excerpt.
 |------|---------|
 | `0` | **ACCEPT** — treatment CI lower bound ≥ `rate_floor` (and, with control, CI low > control CI high). |
 | `1` | **REJECT** — the bar was applied and not met → the verdict is **HOLD**, regardless of the heuristic score. Re-run convergence. |
-| `2` | Usage error — missing corpus or prompt file. Nothing was run. |
+| `2` | Usage error — missing corpus or prompt file, or no output location. Nothing was run. |
 | `3` | **NO_MEASUREMENT** — an arm had zero valid measurements (every trial in it failed transport). This is neither ACCEPT nor REJECT: the bar was never applied, so it must never be read as DEPLOY *or* as a measured HOLD. `decision.verdict` in `verdict.json` reads `"NO_MEASUREMENT"` (never `"REJECT"`) in this case. Treat like the CLI-unavailable case below — hold at the heuristic pre-check verdict and re-run once the transport issue (auth, network, rate limit) is fixed. |
 
 A **mixed** run (some trials fail transport, others measure) is not NO_MEASUREMENT as long as at
@@ -136,7 +142,7 @@ least one trial in every arm produced a real measurement — the accept/reject d
 only over the trials that actually measured something, and exit is 0 or 1 as usual.
 
 - Honest-numbers: if the `claude` CLI is unavailable, the measure step cannot run — report that and hold
-  at the heuristic pre-check verdict; do NOT claim a measured DEPLOY. Full artifact: `shared/eval-corpus/deploy-bar/verdict.json`.
+  at the heuristic pre-check verdict; do NOT claim a measured DEPLOY. Full artifact: the `verdict.json` path this run printed.
 
 ### Step 3: Update artifacts
 

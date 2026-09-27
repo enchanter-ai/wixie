@@ -142,11 +142,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/efficacy-replay.py",
       "path": "wixie/shared/scripts/efficacy-replay.py",
-      "sha1": "3fb700d3219d582339a101284d727f90aff55b4a",
-      "sha256": "844a689c2f07113ba0b7c40b93bce0347d8ae16211e8c392276561f654cc1acc",
+      "sha1": "cbb35e13ff9b27616854fb1bfda0c0aed0572a6f",
+      "sha256": "97a2b10237d7b408794ff4c67e3e2aee3b80280feb4993dfefeeb27d1570568a",
       "source": "wixie",
       "source_path": "shared/scripts/efficacy-replay.py",
-      "source_revision": "git-blob:517cd735d0b04e0793962485f3e5c51230557f62"
+      "source_revision": "git-blob:2265c217fa3a6d5214b5ffcd56441140e45d2118"
     },
     {
       "consumers": [
@@ -159,6 +159,18 @@
       "source": "wixie",
       "source_path": "shared/scripts/html-to-pdf.py",
       "source_revision": "git-blob:e91b0162b88cdec3ebd17416d7352c19e3ec4dc1"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/efficacy-replay.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/plugin_state.py",
+      "path": "wixie/shared/scripts/plugin_state.py",
+      "sha1": "4d4e1b34974aafb5dba95a5947f42ed970250905",
+      "sha256": "1692d3fbd98d40c850b2d57ba5d987e5a88c18da90a69a40a7045181898f5cb3",
+      "source": "wixie",
+      "source_path": "shared/scripts/plugin_state.py",
+      "source_revision": "git-blob:5a05687e7397bbd6ba80d766d4168b277374b6e4"
     },
     {
       "consumers": [

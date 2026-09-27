@@ -63,9 +63,15 @@ Wilson 95% CI — this is the measured result, not a self-simulation.
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
-  --prompt <prompt-file> -n 5
+  --prompt <prompt-file> -n 5 --out "${CLAUDE_PLUGIN_DATA}/efficacy"
 ```
 
+- Writes nothing next to the corpus or anywhere in the installed plugin (WIX-SEC-WS-001): each run
+  creates a fresh `${CLAUDE_PLUGIN_DATA}/efficacy/corpus/deploy-bar/<run_id>/` holding `verdict.json`
+  and `runs/*.json`, and prints its path as `full verdict: <path>`. `verdict.json` records `run_id`
+  and `prompt_sha256`; read ONLY the verdict this run printed, and check its `prompt_sha256`
+  equals the sha256 of the file you measured. Never read a `verdict.json` left by an earlier run as
+  the current result.
 - Reads `shared/eval-corpus/deploy-bar/corpus.json`. Each case scores PASS/FAIL on expect/reject
   regexes over real model output; pass rate gets a Wilson 95% CI, computed only over trials that
   actually measured something (see WIX-EFF-001 below) — never over transport failures.
@@ -91,7 +97,7 @@ bar was never applied," not as a failing/REJECT result** — do not report it as
 (some trials transport-fail, others measure) is NOT NO_MEASUREMENT as long as at least one trial
 per arm produced a real measurement — ACCEPT/REJECT is computed only over the trials that did.
 
-Full artifact: `shared/eval-corpus/deploy-bar/verdict.json`.
+Full artifact: the `verdict.json` path this run printed (`full verdict: <path>`), never an earlier run's.
 
 ### Step 4: Report Results
 

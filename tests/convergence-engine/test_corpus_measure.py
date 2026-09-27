@@ -110,7 +110,9 @@ def run_with_response(mod, tmp: Path, prompt_path: Path, response: str, with_con
     mod.subprocess.Popen = fake_run_factory(response)
     # n high enough that a 100%-pass arm's Wilson lower bound clears the 0.75 floor
     # (few trials => wide CI => honest REJECT even at rate 1.0).
-    return mod.run_corpus("deploy-bar", prompt_path, n=10, model="fake-model", with_control=with_control)
+    # WIX-SEC-WS-001: outputs go to an explicit per-run directory, never next to the corpus.
+    return mod.run_corpus("deploy-bar", prompt_path, n=10, model="fake-model", with_control=with_control,
+                          out_root=tmp / "out")
 
 
 def main() -> int:
@@ -153,6 +155,17 @@ def main() -> int:
         v_bad = run_with_response(mod, tmp, prompt, BAD_RESPONSE, with_control=False)
         assert v_bad["treatment"]["rate"] == 0.0, f"expected rate 0.0, got {v_bad['treatment']['rate']}"
         assert v_bad["decision"]["verdict"] == "REJECT", v_bad["decision"]
+
+        # WIX-SEC-WS-001: each run has its own verdict (per run, per prompt); the corpus dir is input only.
+        assert v_good["run_dir"] != v_bad["run_dir"], "two runs share one verdict location"
+        for v in (v_good, v_bad):
+            persisted = json.loads((Path(v["run_dir"]) / "verdict.json").read_text(encoding="utf-8"))
+            assert persisted["run_id"] == v["run_id"] and persisted["decision"] == v["decision"], persisted["run_id"]
+            assert Path(v["run_dir"]).parent == tmp / "out" / "corpus" / "deploy-bar", v["run_dir"]
+            assert list((Path(v["run_dir"]) / "runs").glob("*.json")), "no per-trial records"
+        import hashlib
+        assert v_good["prompt_sha256"] == hashlib.sha256(prompt.read_bytes()).hexdigest()
+        assert sorted(p.name for p in (tmp / "deploy-bar").iterdir()) == ["corpus.json"],             "efficacy-replay wrote next to its input corpus"
 
     # --- the real shipped corpus parses and every regex compiles ---
     real = json.loads((repo_root / "shared" / "eval-corpus" / "deploy-bar" / "corpus.json").read_text(encoding="utf-8"))
