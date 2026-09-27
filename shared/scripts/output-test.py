@@ -104,6 +104,8 @@ def _try_import(filename, module_name):
 
 # Import sub-engines — None if not yet built
 _self_eval     = _try_import("self-eval.py", "self_eval")
+# The one canonical DEPLOY bar (WIX-SEC-REPORT-VERDICT-001). None -> no preflight DEPLOY.
+_deploy_bar    = _try_import("deploy_bar.py", "deploy_bar")
 _output_eval   = _try_import("output-eval.py", "output_eval")
 _output_sim    = _try_import("output-sim.py", "output_sim")
 _output_schema = _try_import("output-schema.py", "output_schema")
@@ -636,6 +638,22 @@ def load_prompt_folder(folder):
 
 # ─── Phase 1: Pre-flight (FREE) ──────────────────────────────────────────────
 
+def _canonical_deploy_bar(prompt_text):
+    """The canonical DEPLOY-bar result for the scored view (a JSON-safe subset). deploy_bar.py
+    missing or failing -> UNVERIFIED, never DEPLOY."""
+    if _deploy_bar is None:
+        return {"verdict": "UNVERIFIED", "deploy": False,
+                "failed": ["missing evidence: deploy_bar.py (canonical DEPLOY bar) is not available"]}
+    try:
+        r = _deploy_bar.evaluate_text(prompt_text)
+    except Exception as e:
+        return {"verdict": "UNVERIFIED", "deploy": False,
+                "failed": [f"canonical scoring failed: {type(e).__name__}"]}
+    keep = ("verdict", "deploy", "sigma", "sigma_floor", "sigma_pass",
+            "assertions_passed", "assertions_total", "failed")
+    return {k: r.get(k) for k in keep}
+
+
 def run_preflight(prompt_text, meta, folder, verbose=False):
     """Run all free pre-flight checks. Returns (passed, results_dict)."""
     results = {
@@ -650,25 +668,35 @@ def run_preflight(prompt_text, meta, folder, verbose=False):
     config = meta.get("config", {})
     max_tokens = config.get("max_tokens", 32768)
 
-    # 1a. Prompt quality via self-eval
+    # 1a. Prompt quality via self-eval. The preflight GATE (spend API credits or not) is its own
+    # rule: overall >= 7.0 and no axis below 6 -> PASS, else NEEDS WORK. DEPLOY is never decided
+    # here: it is shown only when the canonical bar (deploy_bar.evaluate_text: overall >= 9.0,
+    # every axis >= 7.0, sigma <= floor, 8/8 SAT) says DEPLOY; without deploy_bar.py it is never
+    # shown (WIX-SEC-REPORT-VERDICT-001).
     if _self_eval:
         try:
             scores = {a: round(fn(prompt_text), 1)
                       for a, fn in zip(_self_eval.AXES, _self_eval.SCORERS)}
             overall = round(sum(scores.values()) / len(scores), 1)
             low_axes = [a for a, v in scores.items() if v < 6]
-            verdict = "DEPLOY" if overall >= 9.0 and not low_axes else (
-                "PASS" if overall >= 7.0 and not low_axes else "NEEDS WORK"
+            canon = _canonical_deploy_bar(prompt_text)
+            gate_ok = overall >= 7.0 and not low_axes
+            verdict = "DEPLOY" if gate_ok and canon["verdict"] == "DEPLOY" else (
+                "PASS" if gate_ok else "NEEDS WORK"
             )
             results["prompt_quality"] = {
                 "scores": scores,
                 "overall": overall,
                 "verdict": verdict,
                 "low_axes": low_axes,
+                "deploy_bar": canon,
             }
             ok = verdict != "NEEDS WORK"
+            bar_note = "" if verdict == "DEPLOY" else f"deploy bar: {canon['verdict']}" + (
+                f" ({'; '.join(canon['failed'])})" if canon.get("failed") else "")
             print_check("Prompt quality:", f"{overall}/10  {verdict}",
-                        f"low: {', '.join(low_axes)}" if low_axes else "", ok=ok)
+                        "; ".join(x for x in (f"low: {', '.join(low_axes)}" if low_axes else "", bar_note) if x),
+                        ok=ok)
             if verbose and low_axes:
                 for a in low_axes:
                     print(f"      {DIM}{a}: {scores[a]}/10{RESET}")
