@@ -7,7 +7,7 @@ description: >
   Auto-triggers on: "make this prompt better", "improve this prompt",
   "refine this prompt", "fix this prompt", "optimize this prompt",
   "what's wrong with this prompt", "/refine".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Wixie — Prompt Refiner
@@ -168,12 +168,12 @@ may propose ranges, the user confirms them, the tool writes them. Never type mar
 
 3. **Run token count on the refined prompt:**
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
 4. **Run self-eval on the refined prompt:**
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 
 5. **Save metadata.json** with before/after scores and `"mode": "refine"`:
@@ -213,7 +213,7 @@ python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-fi
 
 7. **Generate report.pdf** (do NOT write the report manually):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder-path>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder-path>
 ```
 Exit codes (WIX-G0-REPORT-001): `0` = `report.pdf` written and validated. `1` = PDF
 conversion failed; `report.html` was written as the documented fallback ("Done (HTML
@@ -244,7 +244,7 @@ Same pipeline as prompt-crafter. Run autonomously.
 
 1. Run convergence on the master (`prompts/<name>/editable/<file>`) if one exists, else on the
    prompt file (critique and proposals only; an unannotated prompt is never rewritten):
-   `python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>`
+   `python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>`
    Exit codes (WIX-EVAL-004): `0` DEPLOY, `1` HOLD, `2` usage/bad input, `3` internal error
    (distinct from HOLD). **Exit 0 / "VERDICT: DEPLOY" is a heuristic verdict only** — zero
    model API calls — NOT a measured DEPLOY; the measured step is converge SKILL.md's Step 2.5

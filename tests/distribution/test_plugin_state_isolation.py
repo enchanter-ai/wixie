@@ -13,6 +13,8 @@ CLAUDE_PROJECT_DIR; skills and agents hand the substituted ${CLAUDE_PLUGIN_DATA}
   C  efficacy-replay: runs/*.json + verdict.json in a fresh per-run dir under CLAUDE_PLUGIN_DATA
      (or --out), never under vendor/; no __pycache__ in the install.
   D  deep-research / cross-plugin reads: no runtime reference puts state inside the install.
+  E  every script step a skill/agent runs from the plugin (converge, create, refine, test, translate,
+     harden) runs with bytecode writes disabled: no __pycache__ lands in the install.
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -373,6 +376,80 @@ class NoStateInsideTheInstall(Installed):
         r = self.run_py(root / "vendor/wixie/shared/scripts/fetcher-normalize.py", "--sq", "SQ1", stdin="[]")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTreeUnchanged(root, before)
+
+
+PY_CMD = re.compile(r"(PYTHONDONTWRITEBYTECODE=1\s+)?\bpython3?((?:\s+-[A-Za-z]+)*)\s+\\?[\"']?"
+                    r"\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9._/-]+\.py)")
+
+
+def runtime_texts(plugin: Path):
+    for f in sorted(plugin.rglob("*")):
+        rel = f.relative_to(plugin)
+        if f.is_file() and rel.parts[0] not in ("vendor", "state") and f.suffix in (".md", ".json", ".sh"):
+            yield rel.as_posix(), f.read_text(encoding="utf-8")
+
+
+def script_commands(plugin: Path) -> dict:
+    """{script: guarded} from the plugin's own command text; guarded only if EVERY site is guarded."""
+    out: dict = {}
+    for _rel, text in runtime_texts(plugin):
+        for m in PY_CMD.finditer(text):
+            guarded = bool(m.group(1)) or any("B" in f for f in m.group(2).split())
+            out[m.group(3)] = out.get(m.group(3), True) and guarded
+    return out
+
+
+class ScriptStepsFromInstall(Installed):
+    """E: run the script steps of converge/create/refine/test/translate/harden from the install, with the
+    interpreter flags the skill/agent text uses; the install tree must stay byte-identical."""
+
+    PLUGINS = ("convergence-engine", "prompt-crafter", "prompt-refiner", "prompt-tester",
+               "prompt-translate", "prompt-harden")
+
+    def test_every_plugin_python_command_disables_bytecode(self):
+        bad = []
+        for p in sorted((REPO / "plugins").iterdir()):
+            for rel, text in runtime_texts(p):
+                for m in PY_CMD.finditer(text):
+                    if not m.group(1) and not any("B" in f for f in m.group(2).split()):
+                        bad.append(f"{p.name}/{rel}: {m.group(0)}")
+        self.assertEqual(bad, [])
+
+    def test_script_steps_leave_the_install_byte_identical(self):
+        prompt = self.proj / "prompts" / "demo" / "prompt.xml"
+        prompt.parent.mkdir(parents=True)
+        prompt.write_text("<role>You are a support triage engineer.</role>\n<task>Classify the report.</task>\n"
+                          "<constraints>- Output lowercase.</constraints>\n<output_format>JSON</output_format>\n",
+                          encoding="utf-8")
+        (self.proj / "empty-folder").mkdir()
+        args = {
+            "self-eval.py": [str(prompt)],
+            "token-count.py": [str(prompt), "--model", "claude-opus-4-7"],
+            "convergence.py": [str(prompt), "--max", "2"],
+            "report-gen.py": [str(self.proj / "empty-folder")],   # usage exit before any rendering
+            "prompt_regions.py": ["check", str(prompt)],
+            "efficacy-replay.py": ["corpus", "deploy-bar", "--prompt", str(prompt), "-n", "1",
+                                   "--out", str(self.tmp / "data" / "efficacy")],
+        }
+        ran = []
+        for name in self.PLUGINS:
+            root = self.install(name)
+            before = tree(root)
+            cmds = script_commands(root)
+            for rel, guarded in sorted(cmds.items()):
+                script = Path(rel).name
+                self.assertIn(script, args, f"{name}: no probe arguments for {rel}")
+                flags = ["-B"] if guarded else []
+                r = subprocess.run([sys.executable, *flags, str(root / rel), *args[script]], cwd=self.proj,
+                                   env=self.env, capture_output=True, text=True, timeout=600)
+                self.assertNotRegex(r.stdout + r.stderr, r"Traceback|No module named|can't open file",
+                                    f"{name} {rel}: {(r.stdout + r.stderr)[-600:]}")
+                ran.append(f"{name}:{script}")
+            with self.subTest(plugin=name):
+                self.assertTreeUnchanged(root, before)
+        for must in ("convergence-engine:convergence.py", "prompt-crafter:self-eval.py", "prompt-refiner:token-count.py",
+                     "prompt-tester:efficacy-replay.py", "prompt-translate:self-eval.py", "prompt-harden:prompt_regions.py"):
+            self.assertIn(must, ran)
 
 
 if __name__ == "__main__":

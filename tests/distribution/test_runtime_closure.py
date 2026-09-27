@@ -37,7 +37,8 @@ PLUGINS, REPO, git, run = _dist.PLUGINS, _dist.REPO, _dist.git, _dist.run
 
 ESCAPE = re.compile(r"\$\{CLAUDE_PLUGIN_(?:ROOT|DATA)\}/\.\.[^\s)`\"'\]|,;]*")
 CWD_WIXIE = re.compile(r"(?<![A-Za-z0-9_./-])wixie/(?:shared|plugins)/")
-PY_RUN = re.compile(r"python3?\s+\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9._/-]+\.py)")
+# WIX-SEC-WS-001: commands carry -B (no __pycache__ in the installed plugin); C6: the form changed.
+PY_RUN = re.compile(r"python3?(?:\s+-B)?\s+\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9._/-]+\.py)")
 VENDOR_REF = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/vendor/([A-Za-z0-9._/-]+\.[A-Za-z0-9]+)")
 # WIX-SEC-WS-001 (D17): cross-plugin state lives in the other plugin's data dir (installed) or the
 # repository state (checkout); both are declared optional reads.
@@ -289,6 +290,12 @@ class ClosureDrift(unittest.TestCase):
         self.write("plugins/prompt-harden/agents/red-team.md",
                    "\nRead ${CLAUDE_PLUGIN_DATA}/../convergence-engine-wixie/secret.json\n")
         self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_DATA}/../convergence-engine-wixie/secret.json")
+
+    def test_python_command_without_bytecode_guard(self):
+        # WIX-SEC-WS-001 (D17): a script run from the plugin must not write __pycache__ into it.
+        self.write("plugins/prompt-harden/agents/red-team.md",
+                   "\nRun python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py check x\n")
+        self.assert_both_fail("python command without -B writes __pycache__ into the installed plugin")
 
     def test_mutable_state_inside_the_installed_plugin(self):
         # WIX-SEC-WS-001 (D17): the installed plugin tree is read-only; state lives in ${CLAUDE_PLUGIN_DATA}.

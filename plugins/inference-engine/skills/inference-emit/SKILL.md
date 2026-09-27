@@ -102,7 +102,7 @@ If the caller gave you a JSON record, use it. If they gave structured text, buil
 ### Step 2: Emit
 
 ```bash
-WIXIE_INFERENCE_ENABLED=1 python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" emit <(cat <<'EOF'
+WIXIE_INFERENCE_ENABLED=1 python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" emit <(cat <<'EOF'
 <your JSON record>
 EOF
 )

@@ -37,7 +37,7 @@ their declared sunset_date, and the most recent SessionStart event.
 ## Step 1 — Run the aggregator
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/bin/model-freshness-report.py --plugin-data "${CLAUDE_PLUGIN_DATA}"
+python3 -B ${CLAUDE_PLUGIN_ROOT}/bin/model-freshness-report.py --plugin-data "${CLAUDE_PLUGIN_DATA}"
 ```
 
 Output is human-readable text. Pass `--json` for machine-readable form.
@@ -56,7 +56,7 @@ If the SessionStart hook didn't fire (manual session, debugging), emit
 a one-off event:
 
 ```bash
-WIXIE_INFERENCE_ENABLED=1 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py --plugin-data "${CLAUDE_PLUGIN_DATA}" --print
+WIXIE_INFERENCE_ENABLED=1 python3 -B ${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py --plugin-data "${CLAUDE_PLUGIN_DATA}" --print
 ```
 
 The `--print` flag echoes the emitted event to stdout. The default mode

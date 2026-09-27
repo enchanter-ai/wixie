@@ -6,7 +6,7 @@ description: >
   failure resilience until the prompt reaches DEPLOY quality.
   Auto-triggers on: "/converge", "converge this prompt", "optimize until perfect",
   "iterate until deploy", "run convergence".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Convergence Engine
@@ -63,7 +63,7 @@ Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/re
 ### Step 2: Run convergence
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file> --json \
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file> --json \
   [--proposal-out ${CLAUDE_PROJECT_DIR}/state/converge-proposals/<name>/<utc>.json]
 ```
 
@@ -105,7 +105,7 @@ Run the converged prompt against the fixed corpus with **real** `claude -p` call
 on the Wilson 95% CI. This is what turns DEPLOY from a self-satisfiable linter into a measurement.
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
   --prompt <shipped-prompt-file> -n 5 --with-control --out "${CLAUDE_PLUGIN_DATA}/efficacy"
 ```
 
@@ -154,19 +154,19 @@ After convergence:
 
 1. Run token count:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
 2. Run self-eval for final scores:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 
 3. Update `metadata.json` with new scores.
 
 4. Generate report:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder>
 ```
 Exit codes (WIX-G0-REPORT-001): `0` = `report.pdf` was produced and validated this run.
 `1` = PDF conversion failed; `report.html` was written as the documented fallback

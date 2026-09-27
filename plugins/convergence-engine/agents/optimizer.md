@@ -30,7 +30,7 @@ You receive:
 ### 1. Run the Convergence Engine
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <prompt-file> --max 100
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <prompt-file> --max 100
 ```
 
 The engine will:
@@ -50,7 +50,7 @@ to also write it to a file. See `shared/scripts/convergence.py`'s docstring and 
 ### 2. Capture Final Scores
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 
 Parse output to extract all 5 axis scores and overall.
@@ -58,7 +58,7 @@ Parse output to extract all 5 axis scores and overall.
 ### 3. Run Token Count
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
 Parse output to extract: estimated tokens, context window, usage percentage.
@@ -73,7 +73,7 @@ Read existing `metadata.json` from the prompt folder. Update:
 ### 5. Generate Report
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder>
 ```
 
 Generates `report.pdf` (dark theme, single page, full audit with findings and verdict).

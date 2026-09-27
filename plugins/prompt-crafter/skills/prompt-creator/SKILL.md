@@ -7,7 +7,7 @@ description: >
   "make this prompt better", "optimize this prompt", "help me prompt",
   "write a system prompt", "what prompting technique should I use",
   "how should I structure this prompt", "/create".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Wixie
@@ -256,12 +256,12 @@ convergence will only critique it. Record the `editability` object in metadata.j
 
 3. **Run token count:** Execute this command and note the output:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
 4. **Run self-eval:** Execute this command and note the scores:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 
 5. **Save metadata.json:** Write this file with real values from steps 3-4:
@@ -308,7 +308,7 @@ Cover: typical input, clean/no-issue input, and an edge case (empty, malformed).
 
 7. **Generate report.pdf:** Execute this command (do NOT write the report manually):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder-path>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder-path>
 ```
 This generates a dark-themed single-page PDF audit report. Do NOT create report.html, report.md, or report.pdf yourself — the script handles it.
 
@@ -371,7 +371,7 @@ Execute this pipeline fully autonomously:
 **Step 2 — Run convergence** on the master (`prompts/<name>/editable/prompt.<format>`) if 2b
 created one, else on the prompt file (critique only, nothing written):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>
 ```
 This loops up to 100 times, fixing hedge words, missing components, filler, format mismatches, and fallbacks. Exits on the **full** DEPLOY bar (overall ≥ 9.0, every axis ≥ 7.0, σ ≤ the dynamic floor, and 8/8 SAT assertions) or plateau.
 

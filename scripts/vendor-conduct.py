@@ -117,6 +117,10 @@ ESCAPE_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_(?:ROOT|DATA)\}/\.\.(?:/[^\s)`\"'\]|
 # WIX-SEC-WS-001 (D17): the installed plugin tree is immutable product content. Mutable runtime
 # state lives in ${CLAUDE_PLUGIN_DATA}; a runtime reference to ${CLAUDE_PLUGIN_ROOT}/state is drift.
 PLUGIN_STATE_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/state(?:/[^\s)`\"'\]|,;]*)?")
+# ...and a Python command that runs a script from the plugin must not write __pycache__ into it:
+# `python -B ${CLAUDE_PLUGIN_ROOT}/...` or `PYTHONDONTWRITEBYTECODE=1 python ${CLAUDE_PLUGIN_ROOT}/...`.
+PY_CMD_RE = re.compile(rb"(PYTHONDONTWRITEBYTECODE=1\s+)?\bpython3?((?:\s+-[A-Za-z]+)*)\s+\\?[\"']?"
+                       rb"\$\{CLAUDE_PLUGIN_ROOT\}/[^\s)`\"'\]|,;*]*")
 CWD_WIXIE_RE = re.compile(rb"(?<![A-Za-z0-9_./-])wixie/(?:shared|plugins)/[^\s)`\"'\]|,;]*")
 PLUGIN_PATH_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/([^\s)`\"'\]|,;*]*)")
 # Declared cross-plugin OPTIONAL state reads: another plugin's mutable runtime
@@ -416,6 +420,10 @@ def discover(plugin: Path) -> tuple[dict, list[str]]:
                 continue
             problems.append(f"{where}:{_line(data, m.start())}: external unresolved path {tok} "
                             "(${CLAUDE_PLUGIN_ROOT}/.. or ${CLAUDE_PLUGIN_DATA}/.. leaves the plugin)")
+        for m in PY_CMD_RE.finditer(data):
+            if not m.group(1) and not any(b"B" in f for f in m.group(2).split()):
+                problems.append(f"{where}:{_line(data, m.start())}: python command without -B writes __pycache__ "
+                                f"into the installed plugin: {m.group(0).decode()}")
         for m in PLUGIN_STATE_RE.finditer(data):
             problems.append(f"{where}:{_line(data, m.start())}: mutable state inside the installed plugin "
                             f"{m.group(0).decode()} (the plugin tree is read-only; use ${{CLAUDE_PLUGIN_DATA}})")

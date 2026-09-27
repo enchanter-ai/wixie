@@ -6,7 +6,7 @@ description: >
   pass/fail results. Use for regression testing after refinements.
   Auto-triggers on: "/test-prompt", "test this prompt", "run prompt tests",
   "check if the prompt works", "regression test".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
 ---
 
 # Prompt Test Runner
@@ -62,7 +62,7 @@ Run the prompt against the fixed corpus with **real** `claude -p` calls and acce
 Wilson 95% CI — this is the measured result, not a self-simulation.
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
   --prompt <prompt-file> -n 5 --out "${CLAUDE_PLUGIN_DATA}/efficacy"
 ```
 

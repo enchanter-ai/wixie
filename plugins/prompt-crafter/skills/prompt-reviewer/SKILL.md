@@ -58,7 +58,7 @@ Read `metadata.json` and verify:
 ### 4. Score Validation
 Run self-eval on the prompt and compare with metadata scores:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 - [ ] Scores from self-eval match metadata.scores (tolerance: ±1 per axis)
 - [ ] If scores diverged significantly, metadata is stale — flag for update

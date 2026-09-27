@@ -47,7 +47,7 @@ reconciled <N> artifacts -> <P> patterns (<E> elevated, <R> retired)
 If the agent reports that verdicts changed (the agent diffs against the prior catalog internally), a fresh `state/briefings/wixie.md` is already written. Otherwise re-render unconditionally — cheap and keeps the briefing timestamp current:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" render-briefing wixie
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" render-briefing wixie
 ```
 
 ### Step 4: Report to caller

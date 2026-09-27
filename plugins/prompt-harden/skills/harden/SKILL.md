@@ -6,7 +6,7 @@ description: >
   suggests specific defenses. Use on any user-facing or API-deployed prompt.
   Auto-triggers on: "/harden", "harden this prompt", "test for injection",
   "is this prompt safe", "security check prompt", "red team this prompt".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
 ---
 
 # Prompt Hardening

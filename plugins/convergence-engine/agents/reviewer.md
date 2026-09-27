@@ -49,7 +49,7 @@ Parse `metadata.json` and verify:
 
 Run self-eval on the actual prompt file:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 Compare each axis with metadata.scores. If any axis differs by more than 1 point, report STALE.
 
