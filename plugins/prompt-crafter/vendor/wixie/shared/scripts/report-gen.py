@@ -15,6 +15,17 @@ Exit codes (documented terminal states — see WIX-G0-REPORT-001):
        fallback was always written in this case — this is a controlled, documented
        outcome, never an unhandled exception.
     2  usage error (missing prompt-folder argument, or metadata.json not found).
+
+Verdict (WIX-SEC-REPORT-VERDICT-001): the report never keeps a DEPLOY rule of its own. It re-scores
+the shipped prompt.<ext> with deploy_bar.py -- the one canonical DEPLOY bar convergence.py uses
+(overall >= 9.0, every axis >= 7.0, sigma <= dynamic floor, 8/8 SAT) -- and only presents it:
+    DEPLOY      canonical DEPLOY and no critical report finding
+    REVIEW      canonical DEPLOY, but the report's own audit raised critical findings
+    HOLD        the canonical bar is not met
+    UNVERIFIED  no canonical evidence (no scorable prompt file, or deploy_bar.py unavailable)
+metadata.json's scores/status never produce DEPLOY. The header badge shows the same label, the
+HTML carries it as <meta name="wixie-report-verdict"> (JSON) plus data-verdict attributes, and
+stdout carries one "REPORT_VERDICT_JSON {...}" line with the identical payload.
 """
 import sys, os, json, subprocess, tempfile, shutil, html
 from datetime import datetime
@@ -252,19 +263,100 @@ def analyze_prompt(meta, registry, prompt_dir=None):
     return warnings, suggestions, strengths
 
 
-def generate_verdict(overall, warnings):
-    """Generate an honest verdict based on scores and warnings."""
+PROMPT_EXTS = ("xml", "md", "json", "txt")
+
+
+def _load_deploy_bar():
+    """The canonical DEPLOY bar module (deploy_bar.py next to this script), or None if it cannot
+    be loaded -- in which case nothing in this report may say DEPLOY (UNVERIFIED)."""
+    mod = sys.modules.get("deploy_bar")
+    if mod is not None:
+        return mod
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deploy_bar.py")
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("deploy_bar", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    except Exception as e:  # missing file, missing self-eval.py/prompt_regions.py, broken import
+        print(f"  canonical DEPLOY bar unavailable ({type(e).__name__}); verdict UNVERIFIED",
+              file=sys.stderr)
+        return None
+    sys.modules["deploy_bar"] = mod
+    return mod
+
+
+def canonical_verdict(prompt_dir):
+    """The canonical verdict for the shipped prompt file in prompt_dir, from deploy_bar.py.
+    Never DEPLOY without the full evidence: returns verdict UNVERIFIED when it is missing."""
+    db = _load_deploy_bar()
+    prompt_file = None
+    if prompt_dir:
+        for ext in PROMPT_EXTS:
+            if os.path.isfile(os.path.join(prompt_dir, f"prompt.{ext}")):
+                prompt_file = f"prompt.{ext}"
+                break
+    if db is None or prompt_file is None:
+        why = ("deploy_bar.py (canonical DEPLOY bar) is not available" if db is None
+               else "no prompt file (prompt.xml/.md/.json/.txt) to score")
+        return {"verdict": "UNVERIFIED", "deploy": False, "prompt_file": prompt_file,
+                "failed": [f"missing evidence: {why}"]}
+    try:
+        result = db.evaluate_file(os.path.join(prompt_dir, prompt_file))
+    except Exception as e:  # never let a scorer crash turn into a verdict
+        result = {"verdict": "UNVERIFIED", "deploy": False,
+                  "failed": [f"canonical scoring failed: {type(e).__name__}"]}
+    result["prompt_file"] = prompt_file
+    return result
+
+
+def metadata_score_mismatch(canon, s):
+    """Axes where metadata.json's (displayed) scores disagree with the canonical re-score."""
+    db = sys.modules.get("deploy_bar")
+    axes = canon.get("axes") if isinstance(canon.get("axes"), dict) else {}
+    if db is None or not axes:
+        return []
+    out = []
+    for key, name in list(db.METADATA_AXIS_KEYS.items()) + [("overall", None)]:
+        shown = s.get(key)
+        real = canon.get("overall") if name is None else axes.get(name)
+        if _numeric(shown) and _numeric(real) and abs(shown - real) > 0.05:
+            out.append(f"{key} {shown} vs {real}")
+    return out
+
+
+def generate_verdict(canon, warnings):
+    """Present the canonical verdict. The report may only downgrade it (DEPLOY -> REVIEW when
+    its own audit found critical issues); it can never upgrade HOLD/UNVERIFIED to DEPLOY."""
     critical_warnings = len(warnings)
-    if overall >= 9 and critical_warnings == 0:
-        return "DEPLOY", "#22c55e", "Production-ready. No critical issues found."
-    elif overall >= 9 and critical_warnings > 0:
-        return "REVIEW", "#eab308", f"High score but {critical_warnings} warning(s) need attention before deploying."
-    elif overall >= 7:
-        return "IMPROVE", "#f97316", "Functional but has weaknesses. Address flagged issues before production use."
-    elif overall >= 5:
-        return "REWORK", "#ef4444", "Significant gaps. Rework the prompt addressing all warnings and low-scoring axes."
-    else:
-        return "DO NOT DEPLOY", "#ef4444", "This prompt is not ready. Fundamental issues in multiple axes need resolution."
+    verdict = canon.get("verdict")
+    failed = "; ".join(str(f) for f in (canon.get("failed") or []))
+    if verdict == "DEPLOY" and canon.get("deploy") is True:
+        if critical_warnings == 0:
+            return ("DEPLOY", "#22c55e", "Canonical DEPLOY bar met (heuristic: overall >= 9.0, all axes >= 7.0, "
+                    "sigma <= floor, 8/8 SAT). No critical report findings. Not a model-measured result.")
+        return "REVIEW", "#eab308", (f"Canonical bar met, but {critical_warnings} critical finding(s) need "
+                                      "attention before deploying.")
+    if verdict == "HOLD":
+        return "HOLD", "#f97316", f"Canonical DEPLOY bar not met: {failed}."
+    return "UNVERIFIED", "#9ca3af", f"Canonical DEPLOY bar could not be evaluated ({failed}). Not DEPLOY."
+
+
+REPORT_VERDICT_SCHEMA = "wixie/report-verdict/v1"
+
+
+def verdict_payload(label, canon, warnings):
+    """The machine-readable twin of the verdict the HTML shows (same label, same inputs)."""
+    keep = ("verdict", "deploy", "overall", "axes", "sigma", "sigma_floor", "sigma_pass",
+            "assertions_passed", "assertions_total", "assertions", "failed", "prompt_file")
+    return {
+        "schema": REPORT_VERDICT_SCHEMA,
+        "verdict": label,
+        "deploy": label == "DEPLOY",
+        "canonical": {k: canon[k] for k in keep if k in canon},
+        "critical_findings": len(warnings),
+        "measured": False,
+    }
 
 
 # ─── HTML Generation ───────────────────────────────────────────────────────────
@@ -355,6 +447,11 @@ def get_test_summary(prompt_dir):
 
 
 def build_html(meta, prompt_dir):
+    return build_report(meta, prompt_dir)[0]
+
+
+def build_report(meta, prompt_dir):
+    """Returns (html, verdict_payload); the payload's verdict is the label the HTML shows."""
     registry = load_registry()
     name = os.path.basename(os.path.normpath(prompt_dir))
     mode = meta.get("mode", "create")
@@ -364,7 +461,6 @@ def build_html(meta, prompt_dir):
     domain = meta.get("task_domain", "unknown")
     version = meta.get("version", 1)
     task = meta.get("task", "No description.")
-    status = meta.get("status", "unknown")
     created_raw = meta.get("created", "?")
     created = created_raw[:10] if isinstance(created_raw, str) else str(created_raw)
     refined_raw = meta.get("refined", "")
@@ -405,13 +501,17 @@ def build_html(meta, prompt_dir):
     s = scores.get("after", scores) if has_ba else scores
     s = s if isinstance(s, dict) else {}
     overall = s.get("overall", 0)
-    # generate_verdict compares overall with >=, which raises TypeError on a non-numeric value
-    # (e.g. a string in metadata.json). The raw, possibly-non-numeric overall is still shown via
-    # score_bar's own placeholder path below; the verdict computation falls back to a safe,
-    # documented default instead of raising.
-    overall_for_verdict = overall if _numeric(overall) else 0
     axes = ["clarity", "completeness", "efficiency", "model_fit", "failure_resilience"]
-    verdict_label, verdict_color, verdict_text = generate_verdict(overall_for_verdict, warnings)
+    # WIX-SEC-REPORT-VERDICT-001: the verdict comes from the canonical bar (deploy_bar.py) applied
+    # to the shipped prompt, never from metadata.json's scores or status. Displayed scores that
+    # disagree with the canonical re-score are a critical finding (stale metadata).
+    canon = canonical_verdict(prompt_dir)
+    mismatch = metadata_score_mismatch(canon, s)
+    if mismatch:
+        warnings.append("metadata.json scores disagree with the canonical re-score of "
+                        f"{canon.get('prompt_file')} ({', '.join(mismatch)}). The verdict uses the re-score.")
+    verdict_label, verdict_color, verdict_text = generate_verdict(canon, warnings)
+    payload = verdict_payload(verdict_label, canon, warnings)
 
     def score_cell(value):
         """Text-cell rendering for a score value: raw (safe) if numeric, escaped otherwise."""
@@ -530,18 +630,19 @@ def build_html(meta, prompt_dir):
         next_steps = ["Prompt is ready for production use.", f"Deploy with {model} at the recommended config.", "Monitor output quality and iterate with /refine if needed."]
     elif verdict_label == "REVIEW":
         next_steps = [f"Address the {len(warnings)} warning(s) listed above.", "Run /refine to fix flagged issues.", "Re-evaluate after changes — target all axes above 8."]
-    elif verdict_label == "IMPROVE":
-        next_steps = ["Focus on the lowest-scoring axes first.", "Add missing components flagged in warnings.", "Run /refine with specific improvement goals.", "Re-score after each iteration."]
-    elif verdict_label in ("REWORK", "DO NOT DEPLOY"):
-        next_steps = ["Do not use this prompt in production.", "Address ALL critical findings before proceeding.", "Consider rewriting from scratch with /create for a fresh start.", "Verify technique and format match the target model."]
+    elif verdict_label == "HOLD":
+        next_steps = ["Do not deploy: the canonical DEPLOY bar is not met.", "Fix the failed criteria listed above (axis, sigma or SAT assertion).", "Run /converge, then regenerate this report."]
+    else:
+        next_steps = ["Do not deploy: no canonical verdict could be computed.", "Make sure the prompt file is in the folder and deploy_bar.py ships next to report-gen.py.", "Run convergence.py on the prompt, then regenerate this report."]
     # next_steps can embed the untrusted `model` value (e.g. "Deploy with {model} ..."); escape
     # each rendered line at this single HTML boundary rather than at each f-string above.
     ns_html = "".join(f'<div class="ns">{i+1}. {esc(step)}</div>' for i, step in enumerate(next_steps))
 
     return f"""<!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="en" class="theme-dark" data-wixie-verdict="{esc(verdict_label)}">
 <head>
 <meta charset="UTF-8">
+<meta name="wixie-report-verdict" content="{esc(json.dumps(payload, sort_keys=True))}">
 <title>{esc(title)}: {esc(name)}</title>
 <style>
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0;}}
@@ -620,7 +721,7 @@ td{{padding:5px 8px;border-bottom:1px solid var(--bd);}}
     <div>
       <h1>{esc(name)}</h1>
       <div class="meta">
-        <span class="badge {'b-ok' if status in ('pass','deploy') else 'b-no'}">{'DEPLOY' if status == 'deploy' else 'PASS' if status == 'pass' else 'NEEDS WORK'}</span>
+        <span class="badge {'b-ok' if verdict_label == 'DEPLOY' else 'b-no'}" data-verdict="{esc(verdict_label)}">{esc(verdict_label)}</span>
         &nbsp;v{esc(version)} &middot; {esc(model)} &middot; {esc(domain)} &middot; {esc(created)}{f' &rarr; {esc(refined)}' if refined else ''}
       </div>
     </div>
@@ -657,11 +758,11 @@ td{{padding:5px 8px;border-bottom:1px solid var(--bd);}}
   {findings_html}
 
   <div class="sl">Verdict &amp; Next Steps</div>
-  <div class="verdict">
+  <div class="verdict" data-verdict="{esc(verdict_label)}">
     <div class="v-dot" style="background:{verdict_color}"></div>
     <div style="flex:1">
       <div class="v-label" style="color:{verdict_color}">{verdict_label}</div>
-      <div class="v-text">{verdict_text}</div>
+      <div class="v-text">{esc(verdict_text)}</div>
       <div style="margin-top:4px">{ns_html}</div>
     </div>
   </div>
@@ -670,7 +771,7 @@ td{{padding:5px 8px;border-bottom:1px solid var(--bd);}}
   <div class="ft">Wixie Prompt Audit &middot; {datetime.now().strftime('%Y-%m-%d %H:%M')}{f' &middot; ~{monthly} at 1K calls' if monthly else ''}</div>
 </div>
 </body>
-</html>"""
+</html>""", payload
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
@@ -770,7 +871,9 @@ def generate_report(prompt_dir):
         # rather than raise.
         meta = {}
 
-    html_content = build_html(meta, prompt_dir)
+    html_content, payload = build_report(meta, prompt_dir)
+    # Machine-readable status, identical to the verdict the HTML/PDF shows.
+    print("REPORT_VERDICT_JSON " + json.dumps(payload, sort_keys=True))
 
     # Build and convert entirely inside a private temp directory OUTSIDE the prompt folder. The
     # prompt folder is a handoff surface: once this process returns, no artifact from this run

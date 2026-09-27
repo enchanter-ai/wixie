@@ -176,7 +176,8 @@
     },
     {
       "consumers": [
-        "vendor/wixie/shared/scripts/convergence.py"
+        "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/report-gen.py"
       ],
       "destination": "vendor/wixie/shared/scripts/deploy_bar.py",
       "path": "wixie/shared/scripts/deploy_bar.py",
@@ -220,11 +221,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/report-gen.py",
       "path": "wixie/shared/scripts/report-gen.py",
-      "sha1": "7dfe7e6cc09c147fd1cd962465e14cdfbb23aa41",
-      "sha256": "d419eb45f35302a14492d817993ea6c6c823eba0edb6a89ac39fb8a102d8427b",
+      "sha1": "c76b9baac1d7933d2407b3f1040271602aa13f18",
+      "sha256": "722a4119d90651ca56d31141e81549a85a191ae6715ed04227e384e5328d25a8",
       "source": "wixie",
       "source_path": "shared/scripts/report-gen.py",
-      "source_revision": "git-blob:cb533917497ec378b89684053f7f0440a6bf0551"
+      "source_revision": "git-blob:0f7d3333332579da7f868747def1314ea525c9a5"
     },
     {
       "consumers": [
