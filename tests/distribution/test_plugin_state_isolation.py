@@ -424,6 +424,7 @@ class ScriptStepsFromInstall(Installed):
         (self.proj / "empty-folder").mkdir()
         args = {
             "self-eval.py": [str(prompt)],
+            "deploy_bar.py": [str(prompt)],                        # read-only verdict CLI
             "token-count.py": [str(prompt), "--model", "claude-opus-4-7"],
             "convergence.py": [str(prompt), "--max", "2"],
             "report-gen.py": [str(self.proj / "empty-folder")],   # usage exit before any rendering

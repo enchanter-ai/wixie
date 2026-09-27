@@ -6,7 +6,7 @@ description: >
   Auto-triggers on: "/translate-prompt", "convert this prompt to GPT",
   "adapt for Claude", "port this prompt to Gemini",
   "make this work on o3", "translate prompt".
-allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/deploy_bar.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit
 ---
 
 # Prompt Translator
@@ -85,6 +85,13 @@ python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <transl
 ```
 
 If the translated prompt scores LOWER than the source, warn the user and explain which dimensions degraded (e.g., "Model Fit improved 5→9 but Completeness dropped 10→7 because examples were removed for o-series").
+
+Any DEPLOY / HOLD verdict you state for the translation comes from the canonical bar, never from
+the self-eval scores above (self-eval's STATUS ignores sigma and the 8 SAT assertions):
+```bash
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/deploy_bar.py <translated-prompt>
+```
+Copy its `verdict` (exit 0 DEPLOY, 1 HOLD, 3 UNVERIFIED); `score-delta.json` carries the same value.
 
 ## Step 6: Save
 

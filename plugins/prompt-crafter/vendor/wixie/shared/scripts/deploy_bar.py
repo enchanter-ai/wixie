@@ -21,6 +21,12 @@ that is not the 8 canonical results) is never DEPLOY: evaluate() returns UNVERIF
 
 This is a heuristic verdict (regex/structure scorers, zero model API calls), never a measured
 one -- see convergence.py MACHINE_VERDICT_NOTE and efficacy-replay.py.
+
+CLI (read-only; for agents and skills that must state a verdict, e.g. the translate adapter):
+    python -B deploy_bar.py <prompt-file>
+prints one JSON object (the evaluate() result plus "prompt_file") and exits
+    0 DEPLOY, 1 HOLD, 2 usage error, 3 UNVERIFIED (no scorable evidence).
+Copy its "verdict" field; never restate the bar.
 """
 import os
 import re
@@ -162,3 +168,18 @@ def evaluate_file(path):
         result["failed"] = [f"prompt not scorable: {type(e).__name__}: {e}"]
         return result
     return evaluate_text(text)
+
+
+def main(argv):
+    import json
+    if len(argv) != 1:
+        print("Usage: python -B deploy_bar.py <prompt-file>", file=sys.stderr)
+        return 2
+    result = evaluate_file(argv[0])
+    result["prompt_file"] = argv[0]
+    print(json.dumps(result, sort_keys=True))
+    return {DEPLOY: 0, HOLD: 1}.get(result["verdict"], 3)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

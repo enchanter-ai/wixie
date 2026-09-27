@@ -59,21 +59,37 @@ Return the converted prompt text and a list of changes applied.
 ## Score delta (honest-numbers contract)
 Every translation verdict **must** emit `score-delta.json` in the prompt folder alongside the translated prompt. The file records the 5-axis before/after scores so the translation can be verified as non-regressive.
 
+**The verdict is not yours to decide (WIX-SEC-REPORT-VERDICT-001).** There is exactly one DEPLOY
+rule: the canonical bar in `deploy_bar.py`. Evaluate the source and the translated prompt with it
+and copy its output; never apply your own thresholds:
+```bash
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/deploy_bar.py <source-prompt>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/deploy_bar.py <translated-prompt>
+```
+Each prints one JSON object (`verdict` DEPLOY | HOLD | UNVERIFIED, `axes`, `overall`, `sigma`,
+`sigma_floor`, `assertions_passed`, `failed`) and exits 0 DEPLOY / 1 HOLD / 3 UNVERIFIED.
+`axes`/`overall` below are those JSON values (before = source, after = translated), and
+`verdict` is the translated prompt's `verdict` field copied verbatim. You may only DOWNGRADE it
+to `FAIL` when the translation itself is defective (registry mismatch, stale technique, format
+drift for the target); never write DEPLOY unless that JSON says DEPLOY. If the command cannot
+run, write `UNVERIFIED`, not a verdict of your own.
+
 Required shape:
 ```json
 {
   "source_model": "<model-id>",
   "target_model": "<model-id>",
   "axes": {
-    "clarity":       { "before": 0.0, "after": 0.0 },
-    "specificity":   { "before": 0.0, "after": 0.0 },
-    "structure":     { "before": 0.0, "after": 0.0 },
-    "robustness":    { "before": 0.0, "after": 0.0 },
-    "completeness":  { "before": 0.0, "after": 0.0 }
+    "clarity":            { "before": 0.0, "after": 0.0 },
+    "completeness":       { "before": 0.0, "after": 0.0 },
+    "efficiency":         { "before": 0.0, "after": 0.0 },
+    "model_fit":          { "before": 0.0, "after": 0.0 },
+    "failure_resilience": { "before": 0.0, "after": 0.0 }
   },
   "overall_before": 0.0,
   "overall_after":  0.0,
-  "verdict": "DEPLOY | HOLD | FAIL"
+  "verdict": "<deploy_bar.py verdict of the translated prompt: DEPLOY | HOLD | UNVERIFIED, or FAIL (downgrade only)>",
+  "deploy_bar": "<the translated prompt's deploy_bar.py JSON object, verbatim>"
 }
 ```
 

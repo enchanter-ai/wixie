@@ -106,7 +106,21 @@
     },
     {
       "consumers": [
+        "agents/adapter.md",
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/deploy_bar.py",
+      "path": "wixie/shared/scripts/deploy_bar.py",
+      "sha1": "07af73e742affaf01d88b8b8681afc57cae56b11",
+      "sha256": "f46c7a988355da5d7c5e8ee9090b6383878e781f8874a4c5445300dc8072c0f4",
+      "source": "wixie",
+      "source_path": "shared/scripts/deploy_bar.py",
+      "source_revision": "git-blob:a60f0474cad99abe773dcb0a0eec2c85d7c4cc14"
+    },
+    {
+      "consumers": [
         "skills/translate/SKILL.md",
+        "vendor/wixie/shared/scripts/deploy_bar.py",
         "vendor/wixie/shared/scripts/self-eval.py"
       ],
       "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
@@ -119,7 +133,8 @@
     },
     {
       "consumers": [
-        "skills/translate/SKILL.md"
+        "skills/translate/SKILL.md",
+        "vendor/wixie/shared/scripts/deploy_bar.py"
       ],
       "destination": "vendor/wixie/shared/scripts/self-eval.py",
       "path": "wixie/shared/scripts/self-eval.py",
