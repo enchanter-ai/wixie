@@ -27,7 +27,7 @@ Audit and optionally refresh stale briefs.
 
 ### Step 1: Scan
 
-Glob `state/briefs/*/claims.json`. For each, read the `freshness` field. Compute age = today − freshness.
+Glob `${CLAUDE_PLUGIN_DATA}/briefs/*/claims.json` (the brief store; WIX-SEC-WS-001). For each, read the `freshness` field. Compute age = today − freshness.
 
 ### Step 2: Classify
 

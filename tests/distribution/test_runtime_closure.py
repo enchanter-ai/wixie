@@ -35,13 +35,18 @@ import test_plugin_distribution as _dist  # noqa: E402  (module import: do not r
 
 PLUGINS, REPO, git, run = _dist.PLUGINS, _dist.REPO, _dist.git, _dist.run
 
-ESCAPE = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/\.\.[^\s)`\"'\]|,;]*")
+ESCAPE = re.compile(r"\$\{CLAUDE_PLUGIN_(?:ROOT|DATA)\}/\.\.[^\s)`\"'\]|,;]*")
 CWD_WIXIE = re.compile(r"(?<![A-Za-z0-9_./-])wixie/(?:shared|plugins)/")
 PY_RUN = re.compile(r"python3?\s+\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9._/-]+\.py)")
 VENDOR_REF = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/vendor/([A-Za-z0-9._/-]+\.[A-Za-z0-9]+)")
+# WIX-SEC-WS-001 (D17): cross-plugin state lives in the other plugin's data dir (installed) or the
+# repository state (checkout); both are declared optional reads.
 DECLARED_OPTIONAL = {
-    ("convergence-engine", "skills/converge/SKILL.md"): "${CLAUDE_PLUGIN_ROOT}/../inference-engine/state/briefings/wixie.md",
-    ("prompt-crafter", "skills/prompt-creator/SKILL.md"): "${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/claims.json",
+    ("convergence-engine", "skills/converge/SKILL.md"): (
+        "${CLAUDE_PLUGIN_DATA}/../inference-engine-wixie/state/briefings/wixie.md",
+        "${CLAUDE_PLUGIN_ROOT}/../inference-engine/state/briefings/wixie.md"),
+    ("prompt-crafter", "skills/prompt-creator/SKILL.md"): (
+        "${CLAUDE_PLUGIN_DATA}/../deep-research-wixie/briefs/<slug>/claims.json",),
 }
 
 
@@ -61,8 +66,8 @@ class RuntimeClosureInRepo(unittest.TestCase):
                 text = f.read_text(encoding="utf-8")
                 with self.subTest(file=f"{p.name}/{rel}"):
                     escapes = [m.group(0) for m in ESCAPE.finditer(text)]
-                    allowed = DECLARED_OPTIONAL.get((p.name, rel))
-                    self.assertEqual([e for e in escapes if e != allowed], [], "path leaves the installed plugin")
+                    allowed = DECLARED_OPTIONAL.get((p.name, rel), ())
+                    self.assertEqual([e for e in escapes if e not in allowed], [], "path leaves the installed plugin")
                     self.assertIsNone(CWD_WIXIE.search(text), "cwd-relative path into a Wixie checkout")
                     for m in VENDOR_REF.finditer(text):
                         self.assertTrue((p / "vendor" / m.group(1)).is_file(), m.group(0))
@@ -275,9 +280,22 @@ class ClosureDrift(unittest.TestCase):
     def test_stale_cross_plugin_exemption(self):
         f = self.repo / "plugins/convergence-engine/skills/converge/SKILL.md"
         f.write_text(f.read_text(encoding="utf-8").replace(
-            "${CLAUDE_PLUGIN_ROOT}/../inference-engine/state/briefings/wixie.md", "state/briefings/wixie.md"),
+            "${CLAUDE_PLUGIN_DATA}/../inference-engine-wixie/state/briefings/wixie.md", "state/briefings/wixie.md"),
             encoding="utf-8", newline="\n")
         self.assert_both_fail("stale CROSS_PLUGIN_OPTIONAL entry")
+
+    def test_undeclared_plugin_data_escape(self):
+        # WIX-SEC-WS-001: ${CLAUDE_PLUGIN_DATA}/.. reaches another plugin's data; only declared reads may.
+        self.write("plugins/prompt-harden/agents/red-team.md",
+                   "\nRead ${CLAUDE_PLUGIN_DATA}/../convergence-engine-wixie/secret.json\n")
+        self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_DATA}/../convergence-engine-wixie/secret.json")
+
+    def test_mutable_state_inside_the_installed_plugin(self):
+        # WIX-SEC-WS-001 (D17): the installed plugin tree is read-only; state lives in ${CLAUDE_PLUGIN_DATA}.
+        self.write("plugins/deep-research/skills/research-render/SKILL.md",
+                   "\nWrite to ${CLAUDE_PLUGIN_ROOT}/state/briefs/<slug>/report.md\n")
+        self.assert_both_fail(
+            "mutable state inside the installed plugin ${CLAUDE_PLUGIN_ROOT}/state/briefs/<slug>/report.md")
 
     def test_contract_section_drift(self):
         f = self.repo / "CLAUDE.md"

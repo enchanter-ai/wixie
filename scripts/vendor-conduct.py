@@ -113,17 +113,26 @@ STALE_RES = [
      "shared/conduct path outside ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/"),
 ]
 # Runtime path tokens that resolve outside an installed plugin.
-ESCAPE_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/\.\.(?:/[^\s)`\"'\]|,;]*)?")
+ESCAPE_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_(?:ROOT|DATA)\}/\.\.(?:/[^\s)`\"'\]|,;]*)?")
+# WIX-SEC-WS-001 (D17): the installed plugin tree is immutable product content. Mutable runtime
+# state lives in ${CLAUDE_PLUGIN_DATA}; a runtime reference to ${CLAUDE_PLUGIN_ROOT}/state is drift.
+PLUGIN_STATE_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/state(?:/[^\s)`\"'\]|,;]*)?")
 CWD_WIXIE_RE = re.compile(rb"(?<![A-Za-z0-9_./-])wixie/(?:shared|plugins)/[^\s)`\"'\]|,;]*")
 PLUGIN_PATH_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/([^\s)`\"'\]|,;*]*)")
 # Declared cross-plugin OPTIONAL state reads: another plugin's mutable runtime
 # state (not an asset of this plugin, so not vendorable). Each consumer treats a
 # missing file as a normal branch. An entry that no longer occurs is itself drift.
+# WIX-SEC-WS-001: installed, that state is in the other plugin's data dir (a sibling
+# of ${CLAUDE_PLUGIN_DATA}, named <plugin>-<marketplace> by Claude Code); in a repo
+# checkout the converge read also falls back to the repository state.
 CROSS_PLUGIN_OPTIONAL = {
-    ("convergence-engine", "skills/converge/SKILL.md"):
+    ("convergence-engine", "skills/converge/SKILL.md"): (
+        "${CLAUDE_PLUGIN_DATA}/../inference-engine-wixie/state/briefings/wixie.md",
         "${CLAUDE_PLUGIN_ROOT}/../inference-engine/state/briefings/wixie.md",
-    ("prompt-crafter", "skills/prompt-creator/SKILL.md"):
-        "${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/claims.json",
+    ),
+    ("prompt-crafter", "skills/prompt-creator/SKILL.md"): (
+        "${CLAUDE_PLUGIN_DATA}/../deep-research-wixie/briefs/<slug>/claims.json",
+    ),
 }
 MD_LINK_RE = re.compile(rb"\]\(([^)\s#]+)(?:#[^)\s]*)?\)")
 FILE_SUFFIXES = (".py", ".json", ".jsonl", ".md", ".txt", ".yaml", ".yml", ".html", ".css", ".js", ".sh", ".csv")
@@ -399,14 +408,17 @@ def discover(plugin: Path) -> tuple[dict, list[str]]:
         if relf in DOC_ONLY:
             continue
         # External unresolved paths: anything that leaves the installed plugin.
-        exempt = CROSS_PLUGIN_OPTIONAL.get((name, relf))
+        exempt = CROSS_PLUGIN_OPTIONAL.get((name, relf), ())
         for m in ESCAPE_RE.finditer(data):
             tok = m.group(0).decode()
-            if exempt is not None and tok == exempt:
-                exempt_seen.add((name, relf))
+            if tok in exempt:
+                exempt_seen.add((name, relf, tok))
                 continue
             problems.append(f"{where}:{_line(data, m.start())}: external unresolved path {tok} "
-                            "(${CLAUDE_PLUGIN_ROOT}/.. leaves the installed plugin)")
+                            "(${CLAUDE_PLUGIN_ROOT}/.. or ${CLAUDE_PLUGIN_DATA}/.. leaves the plugin)")
+        for m in PLUGIN_STATE_RE.finditer(data):
+            problems.append(f"{where}:{_line(data, m.start())}: mutable state inside the installed plugin "
+                            f"{m.group(0).decode()} (the plugin tree is read-only; use ${{CLAUDE_PLUGIN_DATA}})")
         for m in CWD_WIXIE_RE.finditer(data):
             problems.append(f"{where}:{_line(data, m.start())}: external unresolved path {m.group(0).decode()} "
                             "(cwd-relative path into a Wixie checkout)")
@@ -417,10 +429,11 @@ def discover(plugin: Path) -> tuple[dict, list[str]]:
             if not (plugin / rest).exists():
                 problems.append(f"{where}:{_line(data, m.start())}: external unresolved path "
                                 f"${{CLAUDE_PLUGIN_ROOT}}/{rest} (does not exist in the plugin)")
-    for (pname, relf), tok in CROSS_PLUGIN_OPTIONAL.items():
-        if pname == name and (pname, relf) not in exempt_seen:
-            problems.append(f"plugins/{name}/{relf}: declared cross-plugin optional path {tok} no longer "
-                            "occurs (stale CROSS_PLUGIN_OPTIONAL entry)")
+    for (pname, relf), toks in CROSS_PLUGIN_OPTIONAL.items():
+        for tok in toks:
+            if pname == name and (pname, relf, tok) not in exempt_seen:
+                problems.append(f"plugins/{name}/{relf}: declared cross-plugin optional path {tok} no longer "
+                                "occurs (stale CROSS_PLUGIN_OPTIONAL entry)")
     return roots, problems
 
 

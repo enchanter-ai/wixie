@@ -26,8 +26,10 @@ Transform structured `claims.json` into a human-readable `report.md`.
 
 ## Preconditions
 
-- `${CLAUDE_PLUGIN_ROOT}/state/briefs/<slug>/claims.json` exists
-- `${CLAUDE_PLUGIN_ROOT}/state/briefs/<slug>/sources.jsonl` exists
+- `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/claims.json` exists
+- `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/sources.jsonl` exists
+
+(The brief store is the plugin data directory, never the installed plugin tree; WIX-SEC-WS-001.)
 
 If either is missing → FAIL with: *"No brief found for `<slug>`. Run `/deep-research <topic>` first."*
 
@@ -90,12 +92,12 @@ Rules for the render:
 - Every claim has an inline cite.
 - Single-source claims append `(confidence: low)`.
 - Contradictions are named, not smoothed. If a contradiction was narrowed by round-2 evidence, say so.
-- Write to `state/briefs/<slug>/report.md`.
+- Write to `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/report.md`.
 
 ### Step 3: Report
 
 ```
-rendered state/briefs/<slug>/report.md (<N> claims, <M> sources, verdict: <X>)
+rendered ${CLAUDE_PLUGIN_DATA}/briefs/<slug>/report.md (<N> claims, <M> sources, verdict: <X>)
 ```
 
 ## Rules

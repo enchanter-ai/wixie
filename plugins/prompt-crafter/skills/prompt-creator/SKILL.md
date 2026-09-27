@@ -149,12 +149,15 @@ Any hit → research needed. Otherwise → skip to Phase 3 and record `"research
 ### Reuse or regenerate
 
 1. Derive `<slug>` from the topic (kebab-case, ≤ 40 chars).
-2. Check if `${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/claims.json` exists.
+2. Check if `${CLAUDE_PLUGIN_DATA}/../deep-research-wixie/briefs/<slug>/claims.json` exists (the deep-research
+   plugin's brief store, next to this plugin's data directory when both come from the `wixie` marketplace;
+   WIX-SEC-WS-001). Declared optional: if it does not exist or cannot be read, treat the brief as absent and
+   regenerate (the next step); never look inside another plugin's install tree.
 3. If yes, read its `freshness` field. If `today - freshness < 30 days`, reuse. Otherwise regenerate.
 
 ### Invoke deep-research
 
-Invoke the `deep-research` skill with `<slug>`. Wait for `claims.json`. Do NOT proceed to Phase 3 until `verdict` is READY or PARTIAL. If FAIL, surface the failure to the user and ask how to proceed.
+Invoke the `deep-research` skill with `<slug>`. Wait for `claims.json` at the absolute brief path its report names. Do NOT proceed to Phase 3 until `verdict` is READY or PARTIAL. If FAIL, surface the failure to the user and ask how to proceed.
 
 ### Fold into the prompt
 
@@ -169,7 +172,7 @@ Claims with `confidence: low` (single-source) are NOT folded into `<context>` by
 Update `metadata.json` (Phase 3 delivery step 5) with:
 
 ```json
-"research_claims": "plugins/deep-research/state/briefs/<slug>/claims.json",
+"research_claims": "<absolute path of the brief's claims.json>",
 "research_freshness": "<YYYY-MM-DD>",
 "triangulation_score": <0..1>
 ```

@@ -25,8 +25,10 @@ Opus is the orchestrator — it runs Phase 1 (decompose) and Phase 5 (synthesize
 
 ## Artifacts per topic
 
+Briefs live in the plugin data directory, never in the installed plugin tree (WIX-SEC-WS-001):
+
 ```
-state/briefs/<slug>/
+${CLAUDE_PLUGIN_DATA}/briefs/<slug>/
 ├── claims.json       structured triangulated claims (machine-facing — /create reads this)
 ├── sources.jsonl     raw source-level findings
 ├── trace.json        per-phase execution trace + verdict

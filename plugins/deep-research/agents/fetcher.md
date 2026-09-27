@@ -27,11 +27,12 @@ Governed by:
 
 - `query` — the WebSearch query string
 - `sub_question` — the sub-question this query serves (relevance filter)
+- `data_dir` (with `mcp`) — the deep-research plugin data directory, passed through to `mcp-fetcher.md` unchanged.
 - `mcp` (optional) — when set to one of `brave-search | tavily | zotero | playwright`, this fetcher delegates to the sibling `mcp-fetcher.md` agent and returns whatever that agent returns. See "MCP dispatch" below.
 
 ## MCP dispatch (optional — orchestrator opt-in only)
 
-If the orchestrator passes `--mcp <name>` (any of `brave-search`, `tavily`, `zotero`, `playwright`), **stop and re-dispatch to `mcp-fetcher.md`** with the same `query` + `sub_question` + the chosen `mcp` value. Do not run Steps 1–7 below in that path. Return the `mcp-fetcher` output verbatim (the orchestrator's `fetcher-normalize.py` handles the `mcp` field).
+If the orchestrator passes `--mcp <name>` (any of `brave-search`, `tavily`, `zotero`, `playwright`), **stop and re-dispatch to `mcp-fetcher.md`** with the same `query` + `sub_question` + the chosen `mcp` value + `data_dir`. Do not run Steps 1–7 below in that path. Return the `mcp-fetcher` output verbatim (the orchestrator's `fetcher-normalize.py` handles the `mcp` field).
 
 Routing rules (which MCP for which query characteristic) live in `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md`. This agent does **not** re-decide routing — the orchestrator owns that decision.
 
