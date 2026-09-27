@@ -330,8 +330,10 @@ shared/scripts/
 |-------|------|------|
 | 1. Pre-flight | Prompt quality check, token budget forecast, schema generation | Free |
 | 2. Generate | Inject self-check, POST to target model, save output | ~$1.20 (Opus) |
-| 3. Evaluate | Heuristic scoring, schema validation, assertion tests, self-check extraction | Free |
+| 3. Evaluate | Heuristic scoring, schema validation, assertion tests (the target's own self-check block is recorded as diagnostic text only, never scored) | Free |
 | 4. Fix & Loop | Offline regex fixes first, Sonnet API for targeted one-shot fix (not a full re-convergence loop) | ~$0.10 |
+
+> **Self-reports carry no weight:** the target's `<self_check>` (or any PASS / DEPLOY / check-mark / status text it writes about itself) is a claim by the model under test. It never becomes a score axis, never changes the verdict, never stops the loop and never changes the exit code; the verdict comes only from evaluator-controlled checks (tests.json assertions, heuristic and schema checks, the independent evaluator model).
 
 > **Phase 4 limitation:** The Sonnet fix in Phase 4 is a single targeted string-replacement per iteration, not a full automated re-convergence sub-loop. If the fix target string is not found verbatim in the prompt, the fix is skipped and manual editing is required. A full Sonnet-driven convergence loop is planned but not yet implemented.
 
