@@ -342,6 +342,18 @@
       "source": "wixie",
       "source_path": "shared/scripts/inference-engine.py",
       "source_revision": "git-blob:b11ff6c9f33ea791c9dfd953713e166693cb4321"
+    },
+    {
+      "consumers": [
+        "scripts/model-freshness.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/plugin_state.py",
+      "path": "wixie/shared/scripts/plugin_state.py",
+      "sha1": "4d4e1b34974aafb5dba95a5947f42ed970250905",
+      "sha256": "1692d3fbd98d40c850b2d57ba5d987e5a88c18da90a69a40a7045181898f5cb3",
+      "source": "wixie",
+      "source_path": "shared/scripts/plugin_state.py",
+      "source_revision": "git-blob:5a05687e7397bbd6ba80d766d4168b277374b6e4"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",
