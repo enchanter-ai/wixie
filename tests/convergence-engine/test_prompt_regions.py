@@ -17,6 +17,7 @@ Test classes map 1:1 to D15's acceptance list (A1..A7) plus the review items (RC
     A7  structural failure never DEPLOY / 0              TestA7NeverDeployOnFailure
     +   EOL/BOM, determinism, round trip, annotate/check, install, view identity   TestLifecycle
     WIX-CONV-002: a CLI usage error never writes --json-out (prompt/master/shipped/aliases)   TestUsageErrorJsonOut
+    WIX-CONV-002 correction: nonexistent prompt/shipped vs prefixed/UNC --json-out   TestNonexistentProtectedAliases
 
 Offline only: no model, no network (the output-test model client is a stub). Usage:
     python test_prompt_regions.py <REPO_ROOT>        (exit 0 = all pass)
@@ -1127,6 +1128,55 @@ class TestUsageErrorJsonOut(unittest.TestCase):
         rc, out, payload = run_cli(folder / "missing.md", "--json", "--json-out", j)
         self.assertEqual(rc, 2, out)
         self.assertEqual(json.loads(j.read_text(encoding="utf-8")), payload)
+
+
+@unittest.skipUnless(os.name == "nt", "Win32 path prefixes / UNC admin shares")
+class TestNonexistentProtectedAliases(unittest.TestCase):
+    """WIX-CONV-002 correction (verifier CX-NE-1 / CX-NE-2): when a protected path does NOT exist,
+    samefile cannot help, so the alias check itself must unify the extended-length, UNC-extended,
+    device and loopback admin-share spellings, and refuse an unmappable UNC/device --json-out."""
+
+    @staticmethod
+    def _forms(p):
+        b = "\\"
+        drive, rest = os.path.splitdrive(os.path.abspath(str(p)))
+        p = drive + rest
+        return {
+            "extended": b * 2 + "?" + b + p,
+            "extended-lower": (b * 2 + "?" + b + p).lower(),
+            "device": b * 2 + "." + b + p,
+            "extended-unc-localhost": b * 2 + "?" + b + "UNC" + b + "localhost" + b + drive[0] + "$" + rest,
+            "unc-localhost": b * 2 + "localhost" + b + drive[0] + "$" + rest,
+            "unc-127.0.0.1": b * 2 + "127.0.0.1" + b + drive[0].lower() + "$" + rest,
+            "forward-slash-extended": "//?/" + p.replace(b, "/"),
+            "unmappable-loopback-share": b * 2 + "127.0.0.1" + b + "wixie-no-such-share" + b + "p.md",
+        }
+
+    def _assert_not_created(self, argv, target):
+        rc, out, payload = run_cli(*argv)
+        self.assertEqual(rc, 2, (argv, out))
+        self.assertFalse(target.exists(), (argv, out))
+        self.assertEqual((payload or {}).get("verdict"), "ERROR", (argv, out))
+
+    def test_cx_ne_1_missing_prompt_never_created(self):
+        for label in self._forms("x"):
+            p = scratch("c002-ne1-") / "prompt.md"
+            self._assert_not_created([p, "--json", "--json-out", self._forms(p)[label]], p)
+
+    def test_cx_ne_2_missing_shipped_never_created(self):
+        for label in self._forms("x"):
+            folder, master, shipped = make_pair(b"You are x.\nDo y.\n", [("r", 1, 2)])
+            shipped.unlink()
+            before = PR.file_state(master)
+            self._assert_not_created([master, "--json", "--json-out", self._forms(shipped)[label]], shipped)
+            self.assertEqual(PR.file_state(master), before, label)
+
+    def test_unmappable_unc_refused_only_while_a_prompt_file_is_missing(self):
+        p = scratch("c002-ne3-") / "prompt.md"
+        other = self._forms(p)["unmappable-loopback-share"]
+        self.assertTrue(any("cannot prove" in x for x in PR.aux_write_problems([str(p)], [other])))
+        p.write_bytes(b"You are x.\n")
+        self.assertEqual(PR.aux_write_problems([str(p)], [other]), [])
 
 
 if __name__ == "__main__":

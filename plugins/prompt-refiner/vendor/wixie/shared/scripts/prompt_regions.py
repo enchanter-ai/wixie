@@ -470,10 +470,46 @@ def _has_ads(path) -> bool:
     return ":" in rest
 
 
+_ADMIN_SHARE = re.compile(r"\\\\([^\\]+)\\([A-Za-z])\$(\\.*)?\Z", re.S)
+_DRIVE_ROOTED = re.compile(r"[A-Za-z]:(\\|\Z)")
+
+
+def _loopback_hosts() -> set:
+    hosts = {"localhost", "127.0.0.1", "::1", "[::1]", "0--1.ipv6-literal.net"}
+    for h in (os.environ.get("COMPUTERNAME"), os.environ.get("HOSTNAME")):
+        if h:
+            hosts.add(h.casefold())
+    return hosts
+
+
+def _win_plain_path(path: str) -> str:
+    """WIX-CONV-002: one spelling for the Win32 forms of a local path, so that the comparison does
+    not depend on the file existing. '\\\\?\\X:\\' and '\\\\.\\X:\\' -> 'X:\\'; '\\\\?\\UNC\\' and
+    '\\\\.\\UNC\\' -> '\\\\'; a loopback admin share '\\\\localhost\\X$\\rest' (also 127.0.0.1, ::1,
+    this machine's name) -> 'X:\\rest'. Anything else (other devices, other hosts, non-admin shares)
+    is left as a UNC/device path, which aux_write_problems treats fail-closed."""
+    if os.name != "nt":
+        return path
+    s = path.replace("/", "\\")
+    low = s.casefold()
+    if low.startswith("\\\\?\\unc\\") or low.startswith("\\\\.\\unc\\"):
+        s = "\\\\" + s[8:]
+    elif (low.startswith("\\\\?\\") or low.startswith("\\\\.\\")) and _DRIVE_ROOTED.match(s[4:]):
+        s = s[4:]
+    m = _ADMIN_SHARE.match(s)
+    if m and m.group(1).casefold() in _loopback_hosts():
+        s = m.group(2) + ":" + (m.group(3) or "\\")
+    return s
+
+
+def _is_unc_or_device(path) -> bool:
+    return os.name == "nt" and _win_plain_path(os.fspath(path)).startswith("\\\\")
+
+
 def canonical_path(path) -> str:
-    """abspath -> realpath (symlinks, junctions, 8.3 names of existing prefixes) -> normcase
-    (case-folding on Windows)."""
-    return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
+    """Win32 prefix / loopback admin-share normalisation -> abspath -> realpath (symlinks,
+    junctions, 8.3 names of existing prefixes) -> normcase (case-folding on Windows)."""
+    return os.path.normcase(os.path.realpath(os.path.abspath(_win_plain_path(os.fspath(path)))))
 
 
 def same_file(a, b) -> bool:
@@ -506,6 +542,13 @@ def aux_write_problems(protected, aux) -> list:
             continue
         if _has_ads(a):
             problems.append(f"auxiliary output {a} addresses an alternate data stream")
+            continue
+        missing = [p for p in protected if not os.path.exists(p)]
+        if missing and _is_unc_or_device(a):
+            # WIX-CONV-002: samefile cannot compare with a file that does not exist yet, so a
+            # UNC / device spelling that normalisation could not map is refused (fail-closed).
+            problems.append(f"auxiliary output {a} is a UNC/device path and the prompt file "
+                            f"{missing[0]} does not exist: cannot prove they differ")
             continue
         for p in protected:
             if same_file(a, p):

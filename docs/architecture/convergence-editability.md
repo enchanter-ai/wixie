@@ -731,7 +731,12 @@ a warning.
    `--proposal-out`, and in output-test `output-reference.md` and `output-test-results.json`.
    None of these may resolve to the input prompt, the master or the shipped file.
    - **How it is checked.** Paths are compared after realpath, normcase (case-folding on
-     Windows) and a samefile check (hard links, 8.3 names, junctions).
+     Windows) and a samefile check (hard links, 8.3 names, junctions). Before that, Win32 spellings
+     are unified so the comparison also holds for a file that does not exist yet (WIX-CONV-002):
+     the extended-length and device prefixes (`\\?\`, `\\?\UNC\`, `\\.\`, any case, either slash
+     direction) are removed, and a loopback admin share (`\\localhost\C$\...`, `127.0.0.1`, `::1`,
+     this machine's name) maps to `C:\...`. If a protected file is missing and an output is still a
+     UNC or device path after that, it is refused: nothing can prove that it is a different file.
    - **What is refused.** Any Windows alternate-data-stream path (`x:stream`) is refused. So is
      any prompt, master or shipped file whose name is reserved (`learnings.md`,
      `learnings.json`, `output-reference.md`, `output-test-results.json`).

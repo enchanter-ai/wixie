@@ -409,11 +409,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
       "path": "wixie/shared/scripts/prompt_regions.py",
-      "sha1": "44e6431bac9eac4b7c8cf263f752cdb749d0b6ba",
-      "sha256": "b073ed5adc8045da8729ae1254ceaaead5f118d4ccf5e9421951c2dc1ddee75a",
+      "sha1": "74f952c180bd329ab4cef120065da6117cb9460f",
+      "sha256": "522bb59a2f0850632926cf084f7431fcd29e522af22b4a595032bdd213dc3cfa",
       "source": "wixie",
       "source_path": "shared/scripts/prompt_regions.py",
-      "source_revision": "git-blob:39ce25dbd95f027117acab18bcc2ac322c231f60"
+      "source_revision": "git-blob:32ebe430fbeae7eb99f907c1a1835fcb7c6709d3"
     }
   ],
   "generated_by": "scripts/vendor-conduct.py",
