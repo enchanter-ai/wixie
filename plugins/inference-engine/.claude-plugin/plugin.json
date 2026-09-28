@@ -2,7 +2,7 @@
   "name": "wixie-inference-engine",
   "displayName": "Inference Engine",
   "description": "Evidence-accumulation substrate for the enchanter-ai ecosystem. Runs Wald SPRT + Beta-Binomial + EMA over an append-only artifact stream; elevates patterns that recur across sessions; renders per-plugin briefings consumed at session start. Complements — does not replace — existing per-plugin Gauss-Accumulation-class engines.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "enchanter-ai"
   },

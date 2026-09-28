@@ -441,8 +441,9 @@ The Phase 1 acceptance test is the 30-day success criterion: after 30 days of Wi
 
 ## Versioning & release cadence
 
-- Semantic versioning. `0.1.0` (current) = Phase 1 MVP, Wixie-only wiring.
-- `0.2.0` = U4 Bayesian Online Change-point. Automatic pattern retirement when distributions shift.
+- Semantic versioning. `0.1.0` = Phase 1 MVP, Wixie-only wiring.
+- `0.2.0` (current) = current release of the Phase 1 line; no roadmap milestone below is included.
+- `0.3.0` = U4 Bayesian Online Change-point. Automatic pattern retirement when distributions shift.
 - `0.3.0` = Phase 2 MCP integration. `inference.pattern.elevated` / `.retired` / `.drifted` events over the `enchanted-mcp` bus; file-based fallback preserved.
 - `1.0.0` = All seven plugins wired. 90-day cross-plugin recurrence data. Production DEPLOY bar on the substrate's own outputs.
 

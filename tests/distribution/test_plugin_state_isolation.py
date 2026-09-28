@@ -67,7 +67,7 @@ class Installed(unittest.TestCase):
         self.env["WIXIE_EFFICACY_CLAUDE_BIN"] = str(self.tmp / "no-such-claude")
 
     def install(self, name: str, cfg: str = "cfg") -> Path:
-        dest = self.tmp / cfg / "plugins" / "cache" / "wixie" / name / "0.1.0"
+        dest = self.tmp / cfg / "plugins" / "cache" / "wixie" / name / "0.2.0"
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(REPO / "plugins" / name, dest, ignore=shutil.ignore_patterns("__pycache__"))

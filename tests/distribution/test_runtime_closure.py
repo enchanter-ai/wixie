@@ -131,7 +131,7 @@ class InstallLayoutRuntime(unittest.TestCase):
         self.env.pop("WIXIE_INFERENCE_STATE", None)
 
     def install(self, name):
-        dest = self.tmp / "cache" / "wixie" / name / "0.1.0"
+        dest = self.tmp / "cache" / "wixie" / name / "0.2.0"
         shutil.copytree(REPO / "plugins" / name, dest, ignore=shutil.ignore_patterns("__pycache__"))
         return dest
 
