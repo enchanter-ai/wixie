@@ -202,6 +202,63 @@ class ClosureDrift(unittest.TestCase):
         self.write("plugins/prompt-harden/agents/red-team.md", "\npython ${CLAUDE_PLUGIN_ROOT}/scripts/nope.py\n")
         self.assert_both_fail("does not exist in the plugin")
 
+    # D28 (WIX-VIS-VERIFY-LINUX-CAND): a backslash ends the path token only where it escapes a closing quote
+    # (\"...\", as in hooks.json). The existing target of such a reference resolves clean and a missing one is
+    # flagged by its exact name (no trailing backslash) on every OS. Every other backslash stays in the token, so a
+    # missing reference is still flagged even when the text before the backslash is an existing directory or empty.
+    def test_json_escaped_quote_reference_to_existing_file_resolves(self):
+        self.write("plugins/prompt-harden/agents/red-team.md",
+                   '\n"command": "cat \\"${CLAUDE_PLUGIN_ROOT}/skills/harden/SKILL.md\\""\n')
+        for offline in (False, True):
+            r = self.check(offline=offline)
+            self.assertEqual(r.returncode, 0, f"offline={offline}: {r.stdout}{r.stderr}")
+
+    def test_json_escaped_quote_reference_to_missing_file_is_flagged(self):
+        self.write("plugins/prompt-harden/agents/red-team.md",
+                   '\n"command": "cat \\"${CLAUDE_PLUGIN_ROOT}/scripts/nope.py\\""\n')
+        self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_ROOT}/scripts/nope.py "
+                              "(does not exist in the plugin)")
+
+    def _existing_scripts_dir(self):
+        # The prefix before the backslash is an existing directory, so a token cut at the backslash would pass.
+        (self.repo / "plugins/prompt-harden/scripts").mkdir()
+
+    def test_backslash_separated_reference_to_missing_file_is_flagged(self):
+        self._existing_scripts_dir()
+        self.write("plugins/prompt-harden/agents/red-team.md", "\ncat ${CLAUDE_PLUGIN_ROOT}/scripts\\nope.py\n")
+        self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_ROOT}/scripts\\nope.py "
+                              "(does not exist in the plugin)")
+
+    def test_json_escaped_backslash_reference_to_missing_file_is_flagged(self):
+        self._existing_scripts_dir()
+        self.write("plugins/prompt-harden/agents/red-team.md",
+                   '\n"command": "cat ${CLAUDE_PLUGIN_ROOT}/scripts\\\\nope.py"\n')
+        self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_ROOT}/scripts\\\\nope.py "
+                              "(does not exist in the plugin)")
+
+    def test_leading_backslash_reference_to_missing_file_is_flagged(self):
+        self._existing_scripts_dir()
+        self.write("plugins/prompt-harden/agents/red-team.md", "\ncat ${CLAUDE_PLUGIN_ROOT}/\\scripts/nope.py\n")
+        self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_ROOT}/\\scripts/nope.py "
+                              "(does not exist in the plugin)")
+
+    def test_backslash_file_name_reference_to_missing_file_is_flagged(self):
+        # Every OS: on Windows this names scripts/q/z.py, on POSIX a file literally named q\z.py; neither exists.
+        self._existing_scripts_dir()
+        self.write("plugins/prompt-harden/agents/red-team.md", "\ncat ${CLAUDE_PLUGIN_ROOT}/scripts/q\\z.py\n")
+        self.assert_both_fail("external unresolved path ${CLAUDE_PLUGIN_ROOT}/scripts/q\\z.py "
+                              "(does not exist in the plugin)")
+
+    @unittest.skipIf(os.name == "nt", "a file name containing a backslash cannot exist on Windows "
+                                      "(the backslash is a path separator there); POSIX-only case")
+    def test_posix_file_name_with_backslash_resolves(self):
+        self._existing_scripts_dir()
+        (self.repo / "plugins/prompt-harden/scripts/a\\b.py").write_text("", encoding="utf-8")
+        self.write("plugins/prompt-harden/agents/red-team.md", "\ncat ${CLAUDE_PLUGIN_ROOT}/scripts/a\\b.py\n")
+        for offline in (False, True):
+            r = self.check(offline=offline)
+            self.assertEqual(r.returncode, 0, f"offline={offline}: {r.stdout}{r.stderr}")
+
     def test_missing_transitive_dependency(self):
         (self.repo / "plugins/convergence-engine/vendor/wixie/shared/scripts/html-to-pdf.py").unlink()
         self.assert_both_fail("missing vendored file: vendor/wixie/shared/scripts/html-to-pdf.py")

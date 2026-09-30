@@ -122,7 +122,11 @@ PLUGIN_STATE_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/state(?:/[^\s)`\"'\]|,;
 PY_CMD_RE = re.compile(rb"(PYTHONDONTWRITEBYTECODE=1\s+)?\bpython3?((?:\s+-[A-Za-z]+)*)\s+\\?[\"']?"
                        rb"\$\{CLAUDE_PLUGIN_ROOT\}/[^\s)`\"'\]|,;*]*")
 CWD_WIXIE_RE = re.compile(rb"(?<![A-Za-z0-9_./-])wixie/(?:shared|plugins)/[^\s)`\"'\]|,;]*")
-PLUGIN_PATH_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/([^\s)`\"'\]|,;*]*)")
+# D28 (WIX-VIS-VERIFY-LINUX-CAND): a backslash ends the token ONLY where it escapes a closing quote
+# (\"${CLAUDE_PLUGIN_ROOT}/x.py\" in hooks.json), so that escape is not read as part of the path on POSIX.
+# Any other backslash stays in the token, so a reference such as scripts\nope.py or \scripts/nope.py is
+# still checked as written (and flagged when missing), and a real POSIX file name with a backslash resolves.
+PLUGIN_PATH_RE = re.compile(rb"\$\{CLAUDE_PLUGIN_ROOT\}/((?:[^\s)`\"'\]|,;*\\]|\\(?![\"']))*)")
 # Declared cross-plugin OPTIONAL state reads: another plugin's mutable runtime
 # state (not an asset of this plugin, so not vendorable). Each consumer treats a
 # missing file as a normal branch. An entry that no longer occurs is itself drift.
