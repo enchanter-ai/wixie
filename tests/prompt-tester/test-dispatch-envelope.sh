@@ -4,6 +4,9 @@
 #
 # Deterministic fake provider: subprocess.run is replaced, so no CLI is launched, no model is
 # called and nothing is spent. Phase 4 requires these to pass before any further live call.
+# D27 (test-dispatch-envelope): shutil.which is faked too, so the result never depends on whether a
+# real `claude` happens to be on the developer's or runner's PATH; one case keeps it absent and
+# proves the product reports `blocked`.
 set -euo pipefail
 REPO_ROOT="${1:-.}"
 
@@ -34,10 +37,22 @@ def with_fake(stdout="", returncode=0, stderr="", raises=None):
     return fake_run
 
 
+FAKE_CLAUDE = "/nonexistent/wixie-test-fake-bin/claude"  # never launched: subprocess.run is faked
+
+
+def fake_which(on_path):
+    """Replace shutil.which so the capability probe sees `claude` on PATH (or not) deterministically."""
+    def which(cmd, *a, **kw):
+        return FAKE_CLAUDE if on_path and cmd == "claude" else None
+    return which
+
+
 def run_case(name, *, stdout="", returncode=0, stderr="", raises=None, expect_status=None,
-             expect_cause_contains=None, expect_result=None):
+             expect_cause_contains=None, expect_result=None, cli_on_path=True):
     orig = d.subprocess.run
+    orig_which = d.shutil.which
     d.subprocess.run = with_fake(stdout, returncode, stderr, raises)
+    d.shutil.which = fake_which(cli_on_path)
     try:
         env = d.dispatch_one(prompt="hello", model="haiku", timeout=5, max_retries=1)
     except Exception as exc:  # a terminal state must never escape as a traceback
@@ -45,6 +60,7 @@ def run_case(name, *, stdout="", returncode=0, stderr="", raises=None, expect_st
         return None
     finally:
         d.subprocess.run = orig
+        d.shutil.which = orig_which
 
     if expect_status and env.get("status") != expect_status:
         failures.append(f"{name}: status={env.get('status')!r}, expected {expect_status!r} "
@@ -87,6 +103,9 @@ run_case("spawn failure", raises=OSError("no such file"),
          expect_status="blocked")
 run_case("auth failure", returncode=1, stderr="401 unauthorized",
          expect_status="blocked")
+# the CLI is absent: even with a provider that would answer, the capability probe must block.
+run_case("claude CLI not on PATH", stdout='{"result":"the answer"}', cli_on_path=False,
+         expect_status="blocked", expect_cause_contains="not on PATH")
 
 # --- transport success must be recorded separately from task outcome ------------------------------
 #
@@ -143,6 +162,6 @@ if failures:
     for f in failures:
         print("FAIL:", f)
     sys.exit(1)
-print("PASS: 13 dispatch terminal states distinguishable; empty output is not success; "
+print("PASS: 14 dispatch terminal states distinguishable; empty output is not success; "
       "transport_ok is present on every envelope and False wherever transport failed")
 PY
