@@ -83,6 +83,12 @@ def scratch(prefix):
     return Path(tempfile.mkdtemp(prefix=prefix, dir=TEST_ROOT / "tmp"))
 
 
+def _same_existing_file(variant, target):
+    """True when the spelling `variant` resolves to the existing file `target` (runtime filesystem
+    probe, e.g. for case variants on a case-insensitive filesystem)."""
+    return os.path.exists(variant) and os.path.samefile(variant, target)
+
+
 def make_pair(content: bytes, ranges, fname="prompt.md", add_final_newline=True, folder=None):
     """<folder>/editable/<fname> (master) + <folder>/<fname> (= strip(master))."""
     folder = Path(folder) if folder else scratch("pair-")
@@ -965,13 +971,20 @@ class TestAuxiliaryWriteAliasing(unittest.TestCase):
         p.write_bytes(body)
         link = folder / "hard.md"
         os.link(p, link)
-        aliases = [p, folder / "PROMPT.MD", folder / "sub" / ".." / "prompt.md", link]
+        # D27 (test-prompt-regions): a case variant is an alias only on a case-insensitive filesystem,
+        # probed at runtime on the scratch dir itself; on a case-sensitive one it names a different
+        # file and is not an alias. Every other alias is checked on every filesystem.
+        case_variants = [v for v in (folder / "PROMPT.MD",) if _same_existing_file(v, p)]
+        aliases = [p, *case_variants, folder / "sub" / ".." / "prompt.md", link]
         for a in aliases:
             rc, out, _ = run_cli(p, "--json", "--json-out", a)
             self.assertEqual(rc, 2, (a, out))
             self.assertEqual(p.read_bytes(), body, a)
         master, shipped = self._pair("prompt.md")
-        for a in (master, shipped, str(shipped).upper()):
+        shipped_variants = [v for v in (str(shipped).upper(),) if _same_existing_file(v, shipped)]
+        if os.name == "nt":  # NTFS scratch dirs are case-insensitive: the case check must not go vacuous
+            self.assertEqual((len(case_variants), len(shipped_variants)), (1, 1))
+        for a in (master, shipped, *shipped_variants):
             before = (master.read_bytes(), shipped.read_bytes())
             rc, out, _ = run_cli(master, "--json", "--json-out", a)
             self.assertEqual(rc, 2, (a, out))
