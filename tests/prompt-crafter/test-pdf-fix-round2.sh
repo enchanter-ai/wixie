@@ -23,6 +23,9 @@ REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
 # Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
 # shellcheck source=../lib/test-root.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
+# D27: portable fake browsers (.bat on Windows, executable #!/bin/sh on POSIX).
+# shellcheck source=../lib/fake-browser.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/fake-browser.sh"
 SCRIPT="$REPO_ROOT/shared/scripts/html-to-pdf.py"
 
 WORK="$(wixie_mktemp_d pdf-fix-round2)" || exit 97
@@ -46,11 +49,7 @@ write_stub() {
   cat > "$dir/${stub_name}.py" <<PYEOF
 $py_body
 PYEOF
-  cat > "$dir/${stub_name}.bat" <<'BATEOF'
-@echo off
-python "%~dp0STUBNAME.py" %*
-BATEOF
-  sed -i "s/STUBNAME/${stub_name}/" "$dir/${stub_name}.bat"
+  wixie_fake_browser "$dir" "$stub_name"
 }
 
 # Exits 0 immediately, writing NOTHING itself -- but spawns a DETACHED process that writes a
@@ -138,7 +137,7 @@ scenario_late_write_within_bound_succeeds() {
 
   local before after out
   before="$(list_isolated_temp_wixie_items)"
-  out="$(python "$WORK/probe_convert_one.py" "$SCRIPT" "$d" "$d/bin/delayed.bat" "2" 2>&1)"
+  out="$(python "$WORK/probe_convert_one.py" "$SCRIPT" "$d" "$d/bin/delayed$WIXIE_FAKE_BROWSER_EXT" "2" 2>&1)"
   echo "$out"
   echo "$out" | grep -q "PROBE_DONE" || { fail "(a) probe did not complete"; return; }
 
@@ -161,7 +160,7 @@ scenario_never_writes_falls_through() {
   write_stub "$d/bin" "never" "$STUB_NEVER_WRITES"
 
   local out
-  out="$(python "$WORK/probe_convert_one.py" "$SCRIPT" "$d" "$d/bin/never.bat" "" 2>&1)"
+  out="$(python "$WORK/probe_convert_one.py" "$SCRIPT" "$d" "$d/bin/never$WIXIE_FAKE_BROWSER_EXT" "" 2>&1)"
   echo "$out"
   echo "$out" | grep -q "PROBE_DONE" || { fail "(b) probe did not complete"; return; }
 
@@ -182,7 +181,7 @@ scenario_late_write_after_bound_confined() {
   write_stub "$d/bin" "verylate" "$STUB_DELAYED_WRITER"
 
   local out
-  out="$(python "$WORK/probe_convert_one.py" "$SCRIPT" "$d" "$d/bin/verylate.bat" "8" 2>&1)"
+  out="$(python "$WORK/probe_convert_one.py" "$SCRIPT" "$d" "$d/bin/verylate$WIXIE_FAKE_BROWSER_EXT" "8" 2>&1)"
   echo "$out"
   echo "$out" | grep -q "PROBE_DONE" || { fail "(c) probe did not complete"; return; }
 

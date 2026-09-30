@@ -22,6 +22,9 @@ REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
 # Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
 # shellcheck source=../lib/test-root.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
+# D27: portable fake browsers (.bat on Windows, executable #!/bin/sh on POSIX).
+# shellcheck source=../lib/fake-browser.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/fake-browser.sh"
 SCRIPT="$REPO_ROOT/shared/scripts/html-to-pdf.py"
 
 WORK="$(wixie_mktemp_d pdf-fix-round1)" || exit 97
@@ -81,11 +84,7 @@ write_stub() {
   cat > "$dir/${stub_name}.py" <<PYEOF
 $py_body
 PYEOF
-  cat > "$dir/${stub_name}.bat" <<'BATEOF'
-@echo off
-python "%~dp0STUBNAME.py" %*
-BATEOF
-  sed -i "s/STUBNAME/${stub_name}/" "$dir/${stub_name}.bat"
+  wixie_fake_browser "$dir" "$stub_name"
 }
 
 write_hang_stub() {
@@ -94,7 +93,7 @@ write_hang_stub() {
   # .bat-calls-python chain is unsuitable for a timeout test on Windows).
   local dir="$1" stub_name="$2"
   mkdir -p "$dir"
-  printf '@echo off\r\nfor /L %%%%i in (1,1,2000000000) do rem\r\n' > "$dir/${stub_name}.bat"
+  wixie_fake_browser_hang "$dir" "$stub_name"
 }
 
 STUB_ALWAYS_OK='
@@ -155,7 +154,7 @@ assert 1.5 <= elapsed <= 5.0, f"expected ~2s (per-browser timeout) + a fast seco
 print("HANG_FALLBACK_OK", elapsed)
 PY
   local out
-  out="$(python "$d/probe.py" "$SCRIPT" "$d" "$d/bin/hang.bat" "$d/bin/ok.bat" 2>&1)"
+  out="$(python "$d/probe.py" "$SCRIPT" "$d" "$d/bin/hang$WIXIE_FAKE_BROWSER_EXT" "$d/bin/ok$WIXIE_FAKE_BROWSER_EXT" 2>&1)"
   echo "$out"
   echo "$out" | grep -q "HANG_FALLBACK_OK" || fail "(1) a hung first browser blocked (or over-delayed) the fallback to a working second browser"
 }
@@ -171,7 +170,7 @@ scenario_hang_then_good_real_cli() {
 
   local start end elapsed
   start=$(date +%s)
-  OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" -- "Hang" "$d/bin/hang.bat" "chromium" "Ok" "$d/bin/ok.bat" "chromium" 2>&1)"
+  OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" -- "Hang" "$d/bin/hang$WIXIE_FAKE_BROWSER_EXT" "chromium" "Ok" "$d/bin/ok$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   end=$(date +%s)
   elapsed=$((end - start))
@@ -212,7 +211,7 @@ scenario_stale_pdf_not_reported_as_success() {
   local before_hash
   before_hash="$(python -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$d/folder/report.pdf")"
 
-  OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/folder" -- "Nothing" "$d/bin/nothing.bat" "chromium" 2>&1)"
+  OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/folder" -- "Nothing" "$d/bin/nothing$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   echo "$OUT"
 
@@ -274,10 +273,7 @@ if target:
         fh.write(b"%PDF-1.4\n% stub\n")
 sys.exit(0)
 PYEOF
-  cat > "$d/bin/lingering.bat" <<'BATEOF'
-@echo off
-python "%~dp0lingering.py" %*
-BATEOF
+  wixie_fake_browser "$d/bin" lingering
 
   cat > "$d/probe.py" <<'PY'
 # argv: <html_to_pdf_script> <work_dir> <lingering_bat> <marker_path>
@@ -307,7 +303,7 @@ print("PROFILE_DIR_GONE", not (profile_dir and os.path.isdir(profile_dir)))
 print("PROBE_DONE")
 PY
   local out
-  out="$(python "$d/probe.py" "$SCRIPT" "$d" "$d/bin/lingering.bat" "$d/holder.pid" 2>&1)"
+  out="$(python "$d/probe.py" "$SCRIPT" "$d" "$d/bin/lingering$WIXIE_FAKE_BROWSER_EXT" "$d/holder.pid" 2>&1)"
   echo "$out"
   echo "$out" | grep -q "PROBE_DONE" || { fail "(5) probe did not complete"; return; }
 
@@ -350,7 +346,7 @@ scenario_test_seam_gated() {
   cat >> "$d/bin/ok.py" <<PY
 open(r"$marker", "w").write("invoked")
 PY
-  OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" --no-test-mode -- "Ok" "$d/bin/ok.bat" "chromium" 2>&1)"
+  OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" --no-test-mode -- "Ok" "$d/bin/ok$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   echo "--- without WIXIE_TEST_MODE ---"
   echo "$OUT"
@@ -360,7 +356,7 @@ PY
   # WITH the flag (both variables): the fake candidate must be honoured, proving the gate
   # isn't simply broken/inert in the other direction too.
   rm -f "$marker"
-  OUT2="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" -- "Ok" "$d/bin/ok.bat" "chromium" 2>&1)"
+  OUT2="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" -- "Ok" "$d/bin/ok$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE2=$?
   echo "--- with WIXIE_TEST_MODE=1 ---"
   echo "$OUT2"

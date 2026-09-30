@@ -28,6 +28,9 @@ REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
 # Private temp root (WIX-TEST-ENV-001): every scratch path below derives from WIXIE_TEST_ROOT.
 # shellcheck source=../lib/test-root.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/test-root.sh"
+# D27: portable fake browsers (.bat on Windows, executable #!/bin/sh on POSIX).
+# shellcheck source=../lib/fake-browser.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/fake-browser.sh"
 SCRIPT="$REPO_ROOT/shared/scripts/html-to-pdf.py"
 
 WORK="$(wixie_mktemp_d pdf-browser-fallback)" || exit 97
@@ -159,11 +162,7 @@ write_stub() {
   cat > "$dir/${stub_name}.py" <<PYEOF
 $py_body
 PYEOF
-  cat > "$dir/${stub_name}.bat" <<'BATEOF'
-@echo off
-python "%~dp0STUBNAME.py" %*
-BATEOF
-  sed -i "s/STUBNAME/${stub_name}/" "$dir/${stub_name}.bat"
+  wixie_fake_browser "$dir" "$stub_name"
 }
 
 STUB_ALWAYS_FAIL='
@@ -207,7 +206,7 @@ if target:
 write_hang_stub() {
   local dir="$1" stub_name="$2"
   mkdir -p "$dir"
-  printf '@echo off\r\nfor /L %%%%i in (1,1,2000000000) do rem\r\n' > "$dir/${stub_name}.bat"
+  wixie_fake_browser_hang "$dir" "$stub_name"
 }
 
 write_html() {
@@ -222,8 +221,8 @@ scenario_fallback_to_next() {
   write_html "$d/report.html"
 
   OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" \
-    "StubFail" "$d/bin/fail1.bat" "chromium" \
-    "StubOk" "$d/bin/ok2.bat" "chromium" 2>&1)"
+    "StubFail" "$d/bin/fail1$WIXIE_FAKE_BROWSER_EXT" "chromium" \
+    "StubOk" "$d/bin/ok2$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   echo "$OUT"
 
@@ -242,8 +241,8 @@ scenario_all_fail() {
   write_html "$d/report.html"
 
   OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" \
-    "StubFail1" "$d/bin/fail1.bat" "chromium" \
-    "StubFail2" "$d/bin/fail2.bat" "chromium" 2>&1)"
+    "StubFail1" "$d/bin/fail1$WIXIE_FAKE_BROWSER_EXT" "chromium" \
+    "StubFail2" "$d/bin/fail2$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   echo "$OUT"
 
@@ -262,7 +261,7 @@ scenario_output_surfaced() {
   write_html "$d/report.html"
 
   OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" \
-    "StubFail" "$d/bin/fail1.bat" "chromium" 2>&1)"
+    "StubFail" "$d/bin/fail1$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   echo "$OUT"
 
@@ -278,7 +277,7 @@ scenario_bad_pdf_rejected() {
   write_html "$d/report.html"
 
   OUT="$(python "$WORK/run_cli.py" "$SCRIPT" "$d/report.html" \
-    "StubBadPdf" "$d/bin/badpdf.bat" "chromium" 2>&1)"
+    "StubBadPdf" "$d/bin/badpdf$WIXIE_FAKE_BROWSER_EXT" "chromium" 2>&1)"
   CODE=$?
   echo "$OUT"
 
@@ -317,7 +316,7 @@ scenario_timeout_bounded() {
   local d="$WORK/g"
   write_hang_stub "$d/bin" "hang"
   local probe_out
-  probe_out="$(python "$WORK/probe_timeout.py" "$SCRIPT" "$d" "$d/bin/hang.bat" 2>&1)"
+  probe_out="$(python "$WORK/probe_timeout.py" "$SCRIPT" "$d" "$d/bin/hang$WIXIE_FAKE_BROWSER_EXT" 2>&1)"
   echo "$probe_out"
   echo "$probe_out" | grep -q "TIMEOUT_TEST_OK" || fail "(g) timeout-bounded conversion assertions failed"
 }
