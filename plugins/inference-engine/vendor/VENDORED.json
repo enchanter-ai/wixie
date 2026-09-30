@@ -329,6 +329,19 @@
     },
     {
       "consumers": [
+        "README.md",
+        "skills/inference-emit/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/inference-emit.sh",
+      "path": "wixie/shared/scripts/inference-emit.sh",
+      "sha1": "6ed17e2bac4ef547908d72bf858ba0b51402ecce",
+      "sha256": "8d1f2413fa21bbcb52b2cc03457801b4fc879985b173aa27cab7d20dd00a37a4",
+      "source": "wixie",
+      "source_path": "shared/scripts/inference-emit.sh",
+      "source_revision": "git-blob:3204699c9eb437e108634eb8e849177349a1b40a"
+    },
+    {
+      "consumers": [
         "agents/briefer.md",
         "agents/reconciler.md",
         "skills/inference-emit/SKILL.md",

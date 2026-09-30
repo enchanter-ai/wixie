@@ -120,7 +120,8 @@ nothing recorded); `2` the record was refused (reason on stderr); `1` the event 
 recorded or queued (reason on stderr). Report a non-zero exit verbatim; the event was NOT
 recorded.
 
-Hooks should call `shared/scripts/inference-emit.sh`, which exits `0` only when the event is
+Hooks should call `bash "${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-emit.sh"`
+(the JSON record on stdin with `-`, or flags), which exits `0` only when the event is
 durably recorded (`emitted`, `duplicate`, `queued`) or the gate is off, and `1` otherwise
 (never `2`, which Claude Code treats as a blocking hook error). It accepts `--event-id`.
 
