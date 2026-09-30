@@ -167,11 +167,11 @@
       ],
       "destination": "vendor/wixie/shared/scripts/html-to-pdf.py",
       "path": "wixie/shared/scripts/html-to-pdf.py",
-      "sha1": "210927fd93f464e1465048a14852b9dc869b50c1",
-      "sha256": "4eb1d03010c2c94ae2d328adc35bea24277a3358ac5c4c5164a805049bdb54c9",
+      "sha1": "cafbe42078a5d08af1aa41d795ede1de1b1851ae",
+      "sha256": "d0f3928a26a6d81015e4213e677c083f7e88a13c39f0250803ae40eac991865d",
       "source": "wixie",
       "source_path": "shared/scripts/html-to-pdf.py",
-      "source_revision": "git-blob:e91b0162b88cdec3ebd17416d7352c19e3ec4dc1"
+      "source_revision": "git-blob:672486b268c0cf329b2e8e9a139b84afd4c9013c"
     },
     {
       "consumers": [

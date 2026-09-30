@@ -16,6 +16,12 @@
 #                                   child, so a timeout has only the one tracked process to bound
 #                                   (a wrapper that runs `python hang.py` would leave a grandchild
 #                                   holding the output pipes open; see test-pdf-browser-fallback.sh).
+#   wixie_posix_pid_gone PID [TRIES]
+#                                   POSIX only. D28 (WIX-PDF-POSIX-TREEKILL-001): true once PID is no
+#                                   longer a live process, polling every 0.1s for at most TRIES
+#                                   (default 50, i.e. 5s) polls; false if it is still alive after that.
+#                                   A zombie (state Z in /proc/PID/stat: exited, only awaiting its
+#                                   reaper) counts as gone; without /proc the check is `kill -0`.
 
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) WIXIE_FAKE_BROWSER_EXT=.bat ;;
@@ -42,4 +48,20 @@ wixie_fake_browser_hang() {
     printf '#!/bin/sh\nwhile :; do :; done\n' > "$f"
     chmod +x "$f"
   fi
+}
+
+wixie_posix_pid_gone() {
+  local pid="$1" tries="${2:-50}" i=0 state
+  while [ "$i" -lt "$tries" ]; do
+    if [ -d /proc/self ]; then
+      # field 3 of /proc/PID/stat is the state; strip "PID (comm) " first (comm may contain spaces)
+      state="$(sed -E 's/^[0-9]+ \(.*\) ([A-Za-z]).*/\1/' "/proc/$pid/stat" 2>/dev/null)" || state=""
+      { [ -z "$state" ] || [ "$state" = Z ]; } && return 0
+    else
+      kill -0 "$pid" 2>/dev/null || return 0
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
 }

@@ -233,6 +233,12 @@ scenario_lingering_handle_killed_and_cleaned() {
   # The grandchild's PID is recorded via a marker file (path passed through an env var, since
   # convert_one's own argv construction is fixed) so the test can confirm it was actually
   # killed, not just that cleanup eventually raced past it.
+  # D28 (WIX-PDF-POSIX-TREEKILL-001): on POSIX the grandchild stays in the stub's own process group
+  # (it no longer calls setsid via start_new_session). That group, which _run_bounded() creates with
+  # start_new_session=True, IS the renderer's tree the product contract promises to terminate on
+  # POSIX; a process that deliberately leaves it (its own session) is outside that contract, and the
+  # product must not kill beyond its own group to reach it. On Windows the grandchild is still
+  # DETACHED, as before: taskkill /T follows the parent-pid tree, not process groups.
   cat > "$d/bin/lingering.py" <<'PYEOF'
 import sys, os, subprocess, time
 
@@ -259,8 +265,6 @@ holder_code = (
 kwargs = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
 if sys.platform == "win32":
     kwargs["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-else:
-    kwargs["start_new_session"] = True
 subprocess.Popen([sys.executable, "-c", holder_code, lock_path, marker], **kwargs)
 
 for _ in range(50):
@@ -323,11 +327,84 @@ PY
     fail "(5) no holder PID was recorded -- the lingering-process setup itself did not run as expected"
     return
   fi
-  if tasklist /FI "PID eq $holder_pid" 2>/dev/null | grep -q "$holder_pid"; then
-    fail "(5) the lingering handle-holding process (pid $holder_pid) is still running after convert_one returned -- process-tree kill did not reach it"
+  # D28 (WIX-PDF-POSIX-TREEKILL-001): `tasklist` exists only on Windows, so off Windows this check
+  # used to be vacuous (it could never fail). POSIX now gets a real liveness check instead.
+  if [ "$WIXIE_FAKE_BROWSER_EXT" = .bat ]; then
+    if tasklist /FI "PID eq $holder_pid" 2>/dev/null | grep -q "$holder_pid"; then
+      fail "(5) the lingering handle-holding process (pid $holder_pid) is still running after convert_one returned -- process-tree kill did not reach it"
+    fi
+  elif ! wixie_posix_pid_gone "$holder_pid"; then
+    fail "(5) the lingering handle-holding process (pid $holder_pid) is still running 5s after convert_one returned -- process-group kill on the normal-exit path did not reach it"
   fi
   echo "$out" | grep -q "PROFILE_DIR_GONE True" || \
     echo "(5) note: the profile directory was not removed within this run's own bounded retry (matches the real-host behavior documented above); the sweep backstop (scenario 7) is what eventually reclaims it"
+}
+
+# ── Scenario (5b): the TIMEOUT path still terminates the renderer's own tree/group ───────────
+# D28 (WIX-PDF-POSIX-TREEKILL-001): the fix touches the POSIX kill used by both the normal-exit
+# and the timeout path. A stub that never exits spawns a descendant in its own tree (POSIX: same
+# process group, no setsid; Windows: an ordinary child, which taskkill /T follows) and hangs; after
+# convert_one's timeout the descendant must be dead too, not only the direct child.
+scenario_timeout_kills_same_group_holder() {
+  local d="$WORK/5b"
+  mkdir -p "$d/bin"
+  cat > "$d/bin/hangholder.py" <<'PYEOF'
+import os, subprocess, sys, time
+
+marker = os.environ["WIXIE_TEST_MARKER"]
+holder_code = (
+    "import sys,time,os\n"
+    "with open(sys.argv[1], 'a') as mf: mf.write(str(os.getpid()) + chr(10))\n"
+    "time.sleep(30)\n"
+)
+subprocess.Popen([sys.executable, "-c", holder_code, marker],
+                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+time.sleep(60)
+PYEOF
+  wixie_fake_browser "$d/bin" hangholder
+
+  cat > "$d/probe.py" <<'PY'
+# argv: <html_to_pdf_script> <work_dir> <hangholder_stub> <marker_path>
+import importlib.util, os, sys, time
+
+script, work_dir, stub, marker = sys.argv[1:5]
+os.environ["WIXIE_TEST_MARKER"] = marker
+spec = importlib.util.spec_from_file_location("m5b", script)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+html = os.path.join(work_dir, "report.html")
+with open(html, "w") as f:
+    f.write("<html></html>")
+pdf = os.path.join(work_dir, "report.pdf")
+
+start = time.time()
+ok, detail = mod.convert_one(html, pdf, "HangHolder", stub, "chromium", timeout=4)
+elapsed = time.time() - start
+assert not ok, "expected the hanging stub to fail"
+assert "timed out after 4s" in detail, f"expected a timeout, got {detail!r}"
+lines = open(marker).read().splitlines() if os.path.isfile(marker) else []
+print("HOLDER_PID", lines[0] if lines else None)
+print("ELAPSED", round(elapsed, 2))
+print("PROBE_DONE")
+PY
+  local out
+  out="$(python "$d/probe.py" "$SCRIPT" "$d" "$d/bin/hangholder$WIXIE_FAKE_BROWSER_EXT" "$d/holder.pid" 2>&1)"
+  echo "$out"
+  echo "$out" | grep -q "PROBE_DONE" || { fail "(5b) probe did not complete (expected a 4s timeout)"; return; }
+  local holder_pid
+  holder_pid="$(echo "$out" | grep "HOLDER_PID" | awk '{print $2}')"
+  if [ -z "$holder_pid" ] || [ "$holder_pid" = "None" ]; then
+    fail "(5b) no holder PID was recorded -- the hanging stub did not start its descendant before the timeout"
+    return
+  fi
+  if [ "$WIXIE_FAKE_BROWSER_EXT" = .bat ]; then
+    if tasklist /FI "PID eq $holder_pid" 2>/dev/null | grep -q "$holder_pid"; then
+      fail "(5b) the hanging stub's descendant (pid $holder_pid) is still running after the timeout -- process-tree kill did not reach it"
+    fi
+  elif ! wixie_posix_pid_gone "$holder_pid"; then
+    fail "(5b) the hanging stub's same-group descendant (pid $holder_pid) is still running 5s after the timeout -- process-group kill did not reach it"
+  fi
 }
 
 # ── Scenario (6): WIXIE_TEST_PDF_BROWSERS alone (no WIXIE_TEST_MODE) is ignored ────────────
@@ -424,10 +501,11 @@ scenario_hang_then_good_real_cli
 scenario_outer_timeout_leaves_room
 scenario_stale_pdf_not_reported_as_success
 scenario_lingering_handle_killed_and_cleaned
+scenario_timeout_kills_same_group_holder
 scenario_test_seam_gated
 scenario_stale_profile_sweep
 
 if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
-echo "PASS: a hung converter no longer blocks the fallback chain (deadline-bounded per-attempt timeout, real CLI end to end, and a static guard that report-gen's outer timeout stays larger than html-to-pdf's own overall budget), a stale pre-existing report.pdf is never reported as this run's success, a lingering process still holding a profile-dir handle is killed and its directory cleaned up rather than leaked, the WIXIE_TEST_PDF_BROWSERS seam is inert without WIXIE_TEST_MODE=1, and the startup sweep removes only a stale exact-prefix profile directory"
+echo "PASS: a hung converter no longer blocks the fallback chain (deadline-bounded per-attempt timeout, real CLI end to end, and a static guard that report-gen's outer timeout stays larger than html-to-pdf's own overall budget), a stale pre-existing report.pdf is never reported as this run's success, a lingering process still holding a profile-dir handle is killed and its directory cleaned up rather than leaked, a timed-out converter's own descendants are killed with it, the WIXIE_TEST_PDF_BROWSERS seam is inert without WIXIE_TEST_MODE=1, and the startup sweep removes only a stale exact-prefix profile directory"

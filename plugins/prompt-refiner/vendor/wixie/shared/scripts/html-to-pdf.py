@@ -263,7 +263,16 @@ def _terminate_process_tree(pid):
     descendants running past the timeout, which is exactly how a real run's profile directory
     was observed to leak (the browser itself was gone, but something in its tree still held a
     file open inside its own --user-data-dir). Called both on a timeout AND after a normal
-    exit, unconditionally, before any profile-directory cleanup is attempted."""
+    exit, unconditionally, before any profile-directory cleanup is attempted.
+
+    POSIX contract: `pid` was started with start_new_session=True (_run_bounded), so it leads its
+    own session and process group and its pgid IS its pid; the tree reached is exactly that group.
+    WIX-PDF-POSIX-TREEKILL-001 (D28): the group is signalled by that known id, never looked up
+    with os.getpgid(pid) -- on the normal-exit path communicate() has already reaped the child, so
+    the lookup raised ProcessLookupError and the same-group descendants were never signalled.
+    Signalling the id cannot reach an unrelated group: Linux does not reuse a pid while a process
+    group with that id still exists, and once the group is empty killpg fails with ESRCH
+    (ProcessLookupError), which means nothing of the tree is left and is treated as success."""
     try:
         if sys.platform == "win32":
             subprocess.run(
@@ -273,9 +282,10 @@ def _terminate_process_tree(pid):
         else:
             import signal
             try:
-                pgid = os.getpgid(pid)
-                os.killpg(pgid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError, OSError):
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # ESRCH: the renderer's process group is empty -- nothing left to terminate
+            except (PermissionError, OSError):
                 try:
                     os.kill(pid, signal.SIGKILL)
                 except (ProcessLookupError, PermissionError, OSError):
