@@ -46,6 +46,9 @@ import sys
 import time
 from typing import Any
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import procsafe  # noqa: E402  owned-tree spawn/timeout; never kills by process name
+
 # ---------------------------------------------------------------------------
 # Model alias map. Keep in lockstep with the version returned by the CLI's
 # /model picker. Aliases (`haiku`/`sonnet`/`opus`) are accepted by claude -p
@@ -86,11 +89,12 @@ def _capability_probe() -> tuple[bool, str]:
     if not path:
         return False, "claude CLI not on PATH (shutil.which returned None)"
     try:
-        proc = subprocess.run(
-            [path, "--version"],
+        proc = procsafe.run(
+            [procsafe.resolve_real_claude()[0], "--version"],
             capture_output=True,
             text=True,
             timeout=10,
+            label="claude-version-probe",
         )
     except subprocess.TimeoutExpired:
         return False, "claude --version timed out after 10s"
@@ -180,7 +184,7 @@ def dispatch_one(
     prompt_text = _read_prompt(prompt)
 
     base_cmd: list[str] = [
-        shutil.which("claude") or "claude",
+        procsafe.resolve_real_claude()[0],  # real claude.exe, not the claude.CMD shim (incident 2026-10-01)
         "--print",
         "--output-format", "json",
         "--model", resolved,
@@ -197,13 +201,14 @@ def dispatch_one(
         attempts += 1
         started = time.time()
         try:
-            proc = subprocess.run(
+            proc = procsafe.run(
                 base_cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                label=f"dispatch-{resolved}",
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:  # procsafe.WorkerTimeout: own tree already terminated
             return {
                 "status": "error",
                 "model": resolved,
@@ -211,7 +216,8 @@ def dispatch_one(
                 "duration_ms": int((time.time() - started) * 1000),
                 "cost_usd": None,
                 "attempts": attempts,
-                "cause": f"wall-clock timeout after {timeout}s",
+                "cause": f"wall-clock timeout after {timeout}s; "
+                         f"{getattr(exc, 'termination', {}).get('result', 'termination unknown')}",
                 "raw": None,
             }
         except OSError as exc:

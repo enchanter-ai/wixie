@@ -13,8 +13,11 @@ a seed count. The principal interprets.
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, hashlib, json, math, os, re, sys, tempfile, time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import procsafe  # noqa: E402  owned-tree spawn/timeout; never kills by process name
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EFFICACY_ROOT = REPO_ROOT / "state" / "efficacy"
@@ -36,10 +39,9 @@ def resolve_claude_bin() -> str:
     burning tokens or requiring the network. In real runs the env var is unset and
     the real `claude` on PATH is used.
     """
-    override = os.environ.get("WIXIE_EFFICACY_CLAUDE_BIN")
-    if override:
-        return override
-    return shutil.which("claude") or "claude"
+    # procsafe prefers the real claude.exe over the npm claude.CMD shim, so a timeout terminates the
+    # worker itself instead of orphaning it behind a killed cmd.exe wrapper (incident 2026-10-01).
+    return procsafe.resolve_real_claude(os.environ.get("WIXIE_EFFICACY_CLAUDE_BIN"))[0]
 
 
 # Parent-session env vars that carry the Claude Code AUTH/IPC channel — NOT
@@ -180,16 +182,19 @@ def run_trial(system_path: Path, turns: list[str], restricted_tool: str,
             # --bare keeps the target clean while letting subscription OAuth authenticate.
             "--no-session-persistence",
             "--setting-sources", "",
+            # ...but keep this machine's global claude-kill-guard hook (incident 2026-10-01): a gate on
+            # name-based Claude kills only, no added context. [] when the guard is not installed.
+            *procsafe.guard_settings_args(),
             "--append-system-prompt-file", str(system_path),
             "--disallowed-tools", restricted_tool,
             "--model", model,
             "--output-format", "stream-json",
             "--verbose",
         ]
-        proc = subprocess.run(
+        proc = procsafe.run(
             cmd, capture_output=True, text=True,
             encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows locale (cp1252) would crash on non-cp1252 bytes
-            env=env, cwd=sandbox_cwd, timeout=TRIAL_TIMEOUT,
+            env=env, cwd=sandbox_cwd, timeout=TRIAL_TIMEOUT, label=f"efficacy-trial-{seed}",
         )
     trace = parse_stream_json(proc.stdout)
     meta = {
@@ -339,15 +344,18 @@ def run_corpus_trial(system_text: str, user_turn: str, model: str, seed: int) ->
             # --bare keeps the target clean while letting subscription OAuth authenticate.
             "--no-session-persistence",
             "--setting-sources", "",
+            # ...but keep this machine's global claude-kill-guard hook (incident 2026-10-01): a gate on
+            # name-based Claude kills only, no added context. [] when the guard is not installed.
+            *procsafe.guard_settings_args(),
             "--append-system-prompt-file", str(sys_file),
             "--disallowed-tools", "*",
             "--model", model,
             "--output-format", "stream-json",
             "--verbose",
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                               encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows cp1252 would crash on non-cp1252 bytes
-                               env=env, cwd=sandbox_cwd, timeout=TRIAL_TIMEOUT)
+        proc = procsafe.run(cmd, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace",  # CLI emits UTF-8; Windows cp1252 would crash on non-cp1252 bytes
+                            env=env, cwd=sandbox_cwd, timeout=TRIAL_TIMEOUT, label=f"corpus-trial-{seed}")
     trace = parse_stream_json(proc.stdout)
     meta = {"cmd": cmd, "returncode": proc.returncode, "stdout_raw": proc.stdout, "stderr_raw": proc.stderr}
     return trace, meta

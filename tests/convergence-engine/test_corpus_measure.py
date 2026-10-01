@@ -2,7 +2,7 @@
 """
 Offline test for efficacy-replay.py `corpus` mode — the measured DEPLOY bar.
 
-MOCKS THE MODEL CALL: monkeypatches the module's `subprocess.run` so NO real
+MOCKS THE MODEL CALL: monkeypatches the module's `procsafe.run` so NO real
 `claude -p` invocation, NO tokens, and NO network are required. This exercises the
 full real path otherwise: parse_stream_json -> classify_corpus -> wilson_ci ->
 accept_predicate -> exit-code decision. Runs hermetically against a temp corpus dir
@@ -74,7 +74,7 @@ def make_temp_corpus(tmp: Path) -> Path:
 
 
 def run_with_response(mod, tmp: Path, prompt_path: Path, response: str, with_control: bool):
-    mod.subprocess.run = fake_run_factory(response)
+    mod.procsafe.run = fake_run_factory(response)  # trials launch through procsafe.run
     # n high enough that a 100%-pass arm's Wilson lower bound clears the 0.75 floor
     # (few trials => wide CI => honest REJECT even at rate 1.0).
     return mod.run_corpus("deploy-bar", prompt_path, n=10, model="fake-model", with_control=with_control)
