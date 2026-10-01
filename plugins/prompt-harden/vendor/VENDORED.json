@@ -1,0 +1,85 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "consumers": [
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.artifacts-per-prompt.md",
+      "path": "wixie/claude-md.artifacts-per-prompt.md",
+      "sha1": "68bb4a95700a90229aeb82b35a775c6a75b1479d",
+      "sha256": "c6133b96981c7685744799cba059e70d1685ba56b43666eff1ed9dde3487c1a1",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Artifacts per prompt"
+    },
+    {
+      "consumers": [
+        "agents/red-team.md",
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.behavioral-contracts.md",
+      "path": "wixie/claude-md.behavioral-contracts.md",
+      "sha1": "afb728036d8026dda49d83b98df8ec0f6e184d56",
+      "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Behavioral contracts"
+    },
+    {
+      "consumers": [
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.deploy-bar.md",
+      "path": "wixie/claude-md.deploy-bar.md",
+      "sha1": "1f8794f65109dd9333dab0e1b083e54646604048",
+      "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## DEPLOY bar"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/claude-md.behavioral-contracts.md"
+      ],
+      "destination": "vendor/wixie/shared/references/direction-lock.md",
+      "path": "wixie/shared/references/direction-lock.md",
+      "sha1": "7087e69b013bcb4d05872ab2522670b088af2623",
+      "sha256": "5c4148efe30b0e8f5f9876634ca7184d716b6373f4e7a72e2b894a7efe8c0147",
+      "source": "wixie",
+      "source_path": "shared/references/direction-lock.md",
+      "source_revision": "git-blob:020bfb0b6c89bc84deeb8e7b523f7a45169a2861"
+    },
+    {
+      "consumers": [
+        "skills/harden/SKILL.md",
+        "vendor/wixie/claude-md.artifacts-per-prompt.md"
+      ],
+      "destination": "vendor/wixie/shared/references/editable-regions.md",
+      "path": "wixie/shared/references/editable-regions.md",
+      "sha1": "bebc6dafab83f8ded0bf6f8d92904b8933f9bb9f",
+      "sha256": "be1fc51879df1575d8db0b60ebd939068b08a525723b9fa6d3c7a7d370a88496",
+      "source": "wixie",
+      "source_path": "shared/references/editable-regions.md",
+      "source_revision": "git-blob:c426bf7897a3f10103014ba5fa83f0f32d7e5c66"
+    },
+    {
+      "consumers": [
+        "skills/harden/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
+      "path": "wixie/shared/scripts/prompt_regions.py",
+      "sha1": "74f952c180bd329ab4cef120065da6117cb9460f",
+      "sha256": "522bb59a2f0850632926cf084f7431fcd29e522af22b4a595032bdd213dc3cfa",
+      "source": "wixie",
+      "source_path": "shared/scripts/prompt_regions.py",
+      "source_revision": "git-blob:32ebe430fbeae7eb99f907c1a1835fcb7c6709d3"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": []
+}

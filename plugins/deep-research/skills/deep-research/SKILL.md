@@ -18,6 +18,8 @@ allowed-tools: Read, Write, Grep, Glob, Agent, Bash(mkdir *)
 
 # Deep Research (E0)
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Produces the factual ground truth that E1–E6 score against. Every load-bearing claim in `claims.json` has at least two independent sources, or is explicitly flagged.
 
 ## Inputs
@@ -25,12 +27,12 @@ Produces the factual ground truth that E1–E6 score against. Every load-bearing
 - `<topic>` — slug or free-text topic
 - Optional: `--depth quick` (alias `--depth shallow`) — single-round, no adversarial pass, no re-fetch sample
 - Optional: `--render` — also run `/research-render` at the end
-- Optional: `--mcp <name>` — route Phase 2 fetchers through a configured MCP server (one of `brave-search | tavily | zotero | playwright`). Requires `state/mcp-config.json` + a matching fingerprint file under `state/mcp-manifests/<name>.fingerprint.json`. See `@../vis/packages/web/conduct/mcp-research-discipline.md` for per-query-class routing and the three security gates (manifest audit, version pin, least-privilege creds). Per-fetcher routing is also valid — the orchestrator may pass `--mcp` on only some Phase 2 dispatches and leave the rest on the static `WebSearch` + `WebFetch` path. **MCP is opt-in**; omitting the flag preserves the existing default.
+- Optional: `--mcp <name>` — route Phase 2 fetchers through a configured MCP server (one of `brave-search | tavily | zotero | playwright`). Requires `${CLAUDE_PLUGIN_DATA}/mcp-config.json` + a matching fingerprint file under `${CLAUDE_PLUGIN_DATA}/mcp-manifests/<name>.fingerprint.json` (principal-maintained config in the plugin data directory, never in the installed plugin). See `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md` for per-query-class routing and the three security gates (manifest audit, version pin, least-privilege creds). Per-fetcher routing is also valid — the orchestrator may pass `--mcp` on only some Phase 2 dispatches and leave the rest on the static `WebSearch` + `WebFetch` path. **MCP is opt-in**; omitting the flag preserves the existing default.
 
 ## Output
 
 ```
-state/briefs/<slug>/
+${CLAUDE_PLUGIN_DATA}/briefs/<slug>/
 ├── claims.json       triangulated claims — machine-facing (/create reads this)
 ├── sources.jsonl     raw source-level findings
 └── trace.json        per-phase execution trace + verdict
@@ -38,14 +40,22 @@ state/briefs/<slug>/
 
 `report.md` is produced separately via `/research-render`.
 
+**Brief store (WIX-SEC-WS-001).** Briefs are mutable runtime state, so they live in this plugin's data
+directory `${CLAUDE_PLUGIN_DATA}/briefs/`, never in the installed plugin tree (`${CLAUDE_PLUGIN_ROOT}` is
+read-only product content). Briefs that an earlier version wrote elsewhere (a project-relative
+`state/briefs/`, or inside the plugin install) are not migrated or deleted; re-run `/deep-research`, or
+copy one into the store explicitly if you want it reused.
+The final report names the brief directory as an absolute path; consumers such as `/create` read
+`claims.json` from that path.
+
 ## Discipline — governed by vis conduct modules
 
 The work-budget floors, six-phase shape, adversarial-round contract, wall-clock floor, untrusted-source wrapping, independence checks, dissemination score, 4-class support taxonomy, re-fetch protocol, and Wayback fallback all live in vis. E0 is one implementation of that contract — read the modules first; they're authoritative:
 
-- `@../vis/packages/web/conduct/research-pipeline.md` — the 6-phase shape + work-budget floors + adversarial-round contract
-- `@../vis/packages/web/conduct/source-discipline.md` — untrusted-source wrapping + independence + τ + dissemination_score + confidence tiers
-- `@../vis/packages/web/conduct/citation-verification.md` — trace check + re-fetch + Wayback fallback + 4-class support_class
-- `@../vis/packages/web/conduct/web-fetch.md` — single-fetch hygiene (cache, dedup, budget)
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/research-pipeline.md` — the 6-phase shape + work-budget floors + adversarial-round contract
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — untrusted-source wrapping + independence + τ + dissemination_score + confidence tiers
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` — trace check + re-fetch + Wayback fallback + 4-class support_class
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/web-fetch.md` — single-fetch hygiene (cache, dedup, budget)
 
 E0-specific wiring follows below.
 
@@ -54,11 +64,11 @@ E0-specific wiring follows below.
 | Phase | Tier | E0 wiring |
 |-------|------|-----------|
 | 1 Decompose | Opus (inline) | The caller writes sub-questions + seed queries to `trace.json#phase1` |
-| 2 Cast | Haiku × N | `Agent(general-purpose, haiku, prompt="Run the fetcher at ${CLAUDE_PLUGIN_ROOT}/agents/fetcher.md with query=<q> sub_question=<sq>")` — parallel dispatch in one message. **MCP dispatch (optional, per-fetcher):** when an MCP is the right call for a given (`query`, `sub_question`) pair per the routing table in `@../vis/packages/web/conduct/mcp-research-discipline.md`, the orchestrator appends `mcp=<name>` to the prompt — the fetcher then delegates to `${CLAUDE_PLUGIN_ROOT}/agents/mcp-fetcher.md` which runs the three security gates (manifest audit, version pin, least-privilege creds) before any MCP tool call. Gate failures return `{"error": "<gate>-failed"}` and the orchestrator decides whether to re-dispatch on the static path. **Never let `mcp-fetcher.md` silently fall back to `WebSearch`** — that breaks the F22 capability-fidelity contract. **Inline / single-linear-flow dispatch (G-V8):** when a phase is run as a single sub-agent on one linear contract (e.g., one fetcher.md, one verifier.md, one ciber.md), the contract checklist *is* the work plan — todo lists add no signal. The dispatched agent may ignore harness-injected "consider using TodoWrite" reminders for that run; honest-numbers contract over performative bookkeeping. Append a one-line `# Note: single linear flow — TodoWrite reminders are advisory and may be ignored; follow the contract checklist.` to the inline-mode prompt template when dispatching such a run. |
+| 2 Cast | Haiku × N | `Agent(general-purpose, haiku, prompt="Run the fetcher at ${CLAUDE_PLUGIN_ROOT}/agents/fetcher.md with query=<q> sub_question=<sq>")` — parallel dispatch in one message. **MCP dispatch (optional, per-fetcher):** when an MCP is the right call for a given (`query`, `sub_question`) pair per the routing table in `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md`, the orchestrator appends `mcp=<name> data_dir=${CLAUDE_PLUGIN_DATA}` to the prompt — the fetcher then delegates to `${CLAUDE_PLUGIN_ROOT}/agents/mcp-fetcher.md` which runs the three security gates (manifest audit, version pin, least-privilege creds) before any MCP tool call. Gate failures return `{"error": "<gate>-failed"}` and the orchestrator decides whether to re-dispatch on the static path. **Never let `mcp-fetcher.md` silently fall back to `WebSearch`** — that breaks the F22 capability-fidelity contract. **Inline / single-linear-flow dispatch (G-V8):** when a phase is run as a single sub-agent on one linear contract (e.g., one fetcher.md, one verifier.md, one ciber.md), the contract checklist *is* the work plan — todo lists add no signal. The dispatched agent may ignore harness-injected "consider using TodoWrite" reminders for that run; honest-numbers contract over performative bookkeeping. Append a one-line `# Note: single linear flow — TodoWrite reminders are advisory and may be ignored; follow the contract checklist.` to the inline-mode prompt template when dispatching such a run. |
 | 3 Triangulate | Sonnet | `Agent(general-purpose, sonnet, prompt="Run the triangulator at ${CLAUDE_PLUGIN_ROOT}/agents/triangulator.md with sources_path=<path> round=<N> sub_questions=<json> prior_claim_count=<N>")` |
 | 4 Gap-fill + adversarial | Opus decides, Haiku fetches | Consume triangulator's `negation_queries` for the adversarial family; generate gap-fill from `coverage_gaps`; re-enter Phase 2 |
 | 5 Synthesize | Opus (inline) | Codify triangulator's final claim graph into `claims.json` (schema below) |
-| 5.5 Synthesis-prose shape-check | Orchestrator inline (no agent dispatch) | `Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/dossier-cite-validator.py --dossier <path> --sources <path> [--claims <path>])` — mechanical cite-to-source trace test on Phase 5 prose; **pre-flight check, advisory only**. Orchestrator rewrites flagged sentences (F02.4) before dispatching Phase 6. Phase 6 verifier remains the verdict gate. Per `@../vis/packages/web/conduct/citation-verification.md` § "Synthesis-prose validation (pre-Phase-6)". **Claims-trace variant (G-V5):** the same script also runs with `--mode claims --claims <path> --sources <path>` to walk `claims[].supporting[]` ↔ `sources.jsonl` mechanically. Use this when `claims.json` exists but `report.md` is not (yet) rendered — same Test A + Test B reduction over each (claim, S-id) pair. Exit code 1 = at least one (claim, S-id) violation; 0 = clean trace. The claims-mode is a stricter mirror of the verifier — keep treating it as advisory unless Phase 6 is also blocked. |
+| 5.5 Synthesis-prose shape-check | Orchestrator inline (no agent dispatch) | `Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/dossier-cite-validator.py --dossier <path> --sources <path> [--claims <path>])` — mechanical cite-to-source trace test on Phase 5 prose; **pre-flight check, advisory only**. Orchestrator rewrites flagged sentences (F02.4) before dispatching Phase 6. Phase 6 verifier remains the verdict gate. Per `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` § "Synthesis-prose validation (pre-Phase-6)". **Claims-trace variant (G-V5):** the same script also runs with `--mode claims --claims <path> --sources <path>` to walk `claims[].supporting[]` ↔ `sources.jsonl` mechanically. Use this when `claims.json` exists but `report.md` is not (yet) rendered — same Test A + Test B reduction over each (claim, S-id) pair. Exit code 1 = at least one (claim, S-id) violation; 0 = clean trace. The claims-mode is a stricter mirror of the verifier — keep treating it as advisory unless Phase 6 is also blocked. |
 | 6 Verify | Haiku | `Agent(general-purpose, haiku, prompt="Run the verifier at ${CLAUDE_PLUGIN_ROOT}/agents/verifier.md with target_path=<path> sources_path=<path> refetch_pct=<10\|0>")` |
 | 6c CIBER | Haiku | `Agent(general-purpose, haiku, prompt="Run the CIBER agent at ${CLAUDE_PLUGIN_ROOT}/agents/ciber.md with claims_path=<path> sources_path=<path> top_n=10 k_per_claim=3")` — full depth only; skipped at `--depth quick` |
 
@@ -66,7 +76,7 @@ All work-budget floors per `research-pipeline.md` — re-decompose / re-dispatch
 
 ## Phase 6c — Multi-aspect interrogation (CIBER)
 
-**Mandatory at full depth; skipped at `--depth quick` (matches the Phase 6b re-fetch carve-out).** Phase 6c runs *after* Phase 6 verifier returns `verify_passed: true` (`violations` empty, `refetch_pass_rate ≥ 0.9`), and *before* the verdict is finalized. Per `@../vis/packages/web/conduct/citation-verification.md` § "Multi-aspect interrogation (CIBER)" and `@../vis/packages/web/conduct/research-pipeline.md` § "The six-phase shape" (Phase 6c row).
+**Mandatory at full depth; skipped at `--depth quick` (matches the Phase 6b re-fetch carve-out).** Phase 6c runs *after* Phase 6 verifier returns `verify_passed: true` (`violations` empty, `refetch_pass_rate ≥ 0.9`), and *before* the verdict is finalized. Per `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` § "Multi-aspect interrogation (CIBER)" and `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/research-pipeline.md` § "The six-phase shape" (Phase 6c row).
 
 A full-depth brief that ships without a `ciber_passed` field is an F12.3 floor violation — the verdict is HOLD until Phase 6c is dispatched. The Phase 6c agent is read-only over the existing `sources.jsonl`, so a re-dispatch costs Haiku-tier inference and no new web fetches.
 
@@ -188,7 +198,7 @@ Mapping precedence (highest wins):
 
 Metadata passed forward:
 ```json
-"research_claims": "plugins/deep-research/state/briefs/<slug>/claims.json",
+"research_claims": "<absolute path: ${CLAUDE_PLUGIN_DATA}/briefs/<slug>/claims.json>",
 "research_freshness": "<YYYY-MM-DD>",
 "triangulation_score": 0.0,
 "refetch_pass_rate": 0.0,
@@ -207,11 +217,11 @@ Freshness rules:
 
 | Code | Signature | Counter |
 |------|-----------|---------|
-| F11.1 | Haiku fetcher schema-drift (non-canonical JSON shape) on round-3 dispatch | Orchestrator runs `wixie/shared/scripts/fetcher-normalize.py` on every fetcher return to coerce drift back to canonical |
+| F11.1 | Haiku fetcher schema-drift (non-canonical JSON shape) on round-3 dispatch | Orchestrator runs `python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/fetcher-normalize.py` on every fetcher return to coerce drift back to canonical |
 | F11.2 | Phase 6c CIBER surfaces negation-supported on a `high`-confidence claim | Orchestrator demotes to `medium-contested`, bumps `dissemination_score`, forces brief verdict → PARTIAL (see "CIBER override on the verdict") |
 | OP06 | Arxiv `/pdf/<id>` URL passed to WebFetch — returns binary | Fetcher Step 2 URL normalization rewrites `/pdf/<id>` → `/abs/<id>` before fetch |
 
-Log occurrences to `state/precedent-log.md` per `@../vis/packages/core/conduct/precedent.md`.
+Log occurrences to `state/precedent-log.md` per `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/precedent.md`.
 
 ## Wixie-specific anti-patterns
 

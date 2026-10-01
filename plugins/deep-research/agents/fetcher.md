@@ -12,26 +12,29 @@ allowed-tools: WebSearch, WebFetch, Read, Bash(curl:*)
 
 # Fetcher Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Fetch sources for one seed query and return structured findings. Every judgment step below is a boolean test. If you catch yourself interpreting, stop and re-read the step.
 
 Governed by:
-- `@../vis/packages/web/conduct/web-fetch.md` — caching, tier selection, cite hygiene
-- `@../vis/packages/web/conduct/source-discipline.md` — untrusted-source quote wrapping (Step 6 wraps every quote in `<untrusted_source url="...">...</untrusted_source>` — never strip)
-- `@../vis/packages/web/conduct/citation-verification.md` — Wayback Machine fallback when primary fetch fails (Step 3 below)
-- `@../vis/packages/web/conduct/mcp-research-discipline.md` — when the orchestrator passes `--mcp <name>`, this agent dispatches to `mcp-fetcher.md`; see "MCP dispatch" below
-- `@../vis/packages/core/conduct/tier-sizing.md` — this prompt's density is intentional, do not skim
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/web-fetch.md` — caching, tier selection, cite hygiene
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — untrusted-source quote wrapping (Step 6 wraps every quote in `<untrusted_source url="...">...</untrusted_source>` — never strip)
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` — Wayback Machine fallback when primary fetch fails (Step 3 below)
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md` — when the orchestrator passes `--mcp <name>`, this agent dispatches to `mcp-fetcher.md`; see "MCP dispatch" below
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/tier-sizing.md` — this prompt's density is intentional, do not skim
 
 ## Inputs
 
 - `query` — the WebSearch query string
 - `sub_question` — the sub-question this query serves (relevance filter)
+- `data_dir` (with `mcp`) — the deep-research plugin data directory, passed through to `mcp-fetcher.md` unchanged.
 - `mcp` (optional) — when set to one of `brave-search | tavily | zotero | playwright`, this fetcher delegates to the sibling `mcp-fetcher.md` agent and returns whatever that agent returns. See "MCP dispatch" below.
 
 ## MCP dispatch (optional — orchestrator opt-in only)
 
-If the orchestrator passes `--mcp <name>` (any of `brave-search`, `tavily`, `zotero`, `playwright`), **stop and re-dispatch to `mcp-fetcher.md`** with the same `query` + `sub_question` + the chosen `mcp` value. Do not run Steps 1–7 below in that path. Return the `mcp-fetcher` output verbatim (the orchestrator's `fetcher-normalize.py` handles the `mcp` field).
+If the orchestrator passes `--mcp <name>` (any of `brave-search`, `tavily`, `zotero`, `playwright`), **stop and re-dispatch to `mcp-fetcher.md`** with the same `query` + `sub_question` + the chosen `mcp` value + `data_dir`. Do not run Steps 1–7 below in that path. Return the `mcp-fetcher` output verbatim (the orchestrator's `fetcher-normalize.py` handles the `mcp` field).
 
-Routing rules (which MCP for which query characteristic) live in `@../vis/packages/web/conduct/mcp-research-discipline.md`. This agent does **not** re-decide routing — the orchestrator owns that decision.
+Routing rules (which MCP for which query characteristic) live in `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/mcp-research-discipline.md`. This agent does **not** re-decide routing — the orchestrator owns that decision.
 
 If `--mcp` is **not** set, run Steps 1–7 below (the static `WebSearch` + `WebFetch` path). This is the default; MCP is opt-in per dispatch.
 
@@ -254,7 +257,7 @@ If any check fails, fix the object before emitting. Do not emit and flag — fix
 Despite the schema clauses above, Haiku fetchers schema-drift in practice (round-3 dispatch on 2026-04-25 — 9 of 10 fetchers returned non-canonical shapes; see substrate F11.1). The orchestrator MUST therefore post-process every fetcher return through:
 
 ```
-python wixie/shared/scripts/fetcher-normalize.py [--sq <id>] [--start-id S<n>] < raw.json > sources_block.jsonl
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/fetcher-normalize.py [--sq <id>] [--start-id S<n>] < raw.json > sources_block.jsonl
 ```
 
 The normalizer coerces drift shapes (`{claim, source, confidence}`, `{study_id, failure_mode, prevalence}`, `{benchmark, primary_source, failure_modes:[...]}`, etc.) into the canonical `{url, date, source_type, findings:[{claim, quote}]}`. Returns lacking a URL are dropped — never fabricated.

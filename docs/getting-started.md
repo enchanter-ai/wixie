@@ -10,7 +10,7 @@ Wixie is prompt engineering for engineers who would rather ship than iterate by 
 /plugin list
 ```
 
-You should see six plugins: `prompt-crafter`, `prompt-refiner`, `convergence-engine`, `prompt-tester`, `prompt-harden`, `prompt-translate`. If any are missing, see [installation.md](installation.md).
+You should see seven plugins besides `full`: `prompt-crafter`, `prompt-refiner`, `convergence-engine`, `prompt-tester`, `prompt-harden`, `prompt-translate`, and `deep-research` (invoked by `/create`). If any are missing, see [installation.md](installation.md).
 
 ## 2. Craft a prompt (2 minutes)
 

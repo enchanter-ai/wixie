@@ -1,7 +1,7 @@
 ---
 name: freshness-check
 description: >
-  Runs the Wixie model-freshness aggregator over state/model-usage.ndjson
+  Runs the Wixie model-freshness aggregator over the model-usage telemetry
   and flags any models-registry.json entry whose sunset_date has elapsed.
   Use when the developer asks about model deprecation, registry staleness,
   retired models, sunset dates, F-006 closure, or wants a current
@@ -14,6 +14,8 @@ allowed-tools:
   - Read
   - Bash
 ---
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 
 <purpose>
 Operator-facing skill for the model-freshness telemetry pipeline.
@@ -23,8 +25,11 @@ their declared sunset_date, and the most recent SessionStart event.
 
 <preconditions>
 - shared/models-registry.json exists at wixie root.
-- state/model-usage.ndjson may be empty on a fresh install — the report
-  handles that case.
+- The telemetry (model-usage.ndjson) is persisted only when
+  WIXIE_INFERENCE_ENABLED=1 (WIX-SEC-WS-001), in the plugin data directory
+  (`${CLAUDE_PLUGIN_DATA}/telemetry/model-usage.ndjson`), never in the installed
+  plugin tree. It is empty on a fresh install or while the gate is off; the
+  report handles that case.
 </preconditions>
 
 <runbook>
@@ -32,7 +37,7 @@ their declared sunset_date, and the most recent SessionStart event.
 ## Step 1 — Run the aggregator
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/bin/model-freshness-report.py
+python3 -B ${CLAUDE_PLUGIN_ROOT}/bin/model-freshness-report.py --plugin-data "${CLAUDE_PLUGIN_DATA}"
 ```
 
 Output is human-readable text. Pass `--json` for machine-readable form.
@@ -41,7 +46,7 @@ Output is human-readable text. Pass `--json` for machine-readable form.
 
 | Signal | Meaning |
 |--------|---------|
-| `usage_rows: 0` | No SessionStart hook has fired yet. Verify hooks/hooks.json includes the SessionStart entry. |
+| `usage_rows: 0` | No telemetry recorded: the gate is off (WIXIE_INFERENCE_ENABLED unset; nothing is persisted then) or no SessionStart hook has fired since it was turned on. |
 | `registry_stale: true` | `last_updated` is older than `stale_threshold_days` (default 90). Refresh the registry. |
 | `flagged_today` non-empty | One or more models past their `sunset_date`. Replace in any active prompts. |
 
@@ -51,7 +56,7 @@ If the SessionStart hook didn't fire (manual session, debugging), emit
 a one-off event:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py --print
+WIXIE_INFERENCE_ENABLED=1 python3 -B ${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py --plugin-data "${CLAUDE_PLUGIN_DATA}" --print
 ```
 
 The `--print` flag echoes the emitted event to stdout. The default mode
@@ -91,7 +96,9 @@ pick it up; the daily report will flag it once today >= sunset_date.
 Advisory. Telemetry is observability, not a gate. The SessionStart hook
 fails open — a missing registry or a JSON parse error writes to stderr
 and exits 0, never blocking the session.
-F-006 closure: usage telemetry is captured per-session, sunset dates
+F-006 closure: usage telemetry is captured per-session while the
+inference feature is enabled (WIXIE_INFERENCE_ENABLED=1; with the gate off
+the hook persists nothing), sunset dates
 are flagged daily, registry staleness is computed against a configurable
 threshold.
 </contract>

@@ -11,6 +11,8 @@ allowed-tools: Bash(python *) Read
 
 # Reviewer Agent (Prompt Refiner)
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 You validate a refined prompt folder. Run after convergence. Be strict.
 
 ## Standard Checks
@@ -19,7 +21,7 @@ You validate a refined prompt folder. Run after convergence. Be strict.
 2. **Metadata Consistency** — target_model in registry, scores valid, tokens positive, config exists
 3. **Score Freshness** — re-run self-eval, compare with metadata.scores.after (tolerance +/-1):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 4. **Format-Model Alignment** — file extension matches model preference
 5. **Test Coverage** — at least 3 test cases

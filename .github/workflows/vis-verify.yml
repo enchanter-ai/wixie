@@ -54,6 +54,10 @@ jobs:
         working-directory: plugin
         run: ./scripts/bootstrap.sh --verify
 
+      - name: verify plugin-local vendored conduct (byte-identical to the pin; WIX-DIST-001)
+        working-directory: plugin
+        run: python3 scripts/vendor-conduct.py --check --vis-dir ../vis
+
       - name: fail if .vis-lock changed (lock must be committed in sync with .vis-versions)
         working-directory: plugin
         run: |

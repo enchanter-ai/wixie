@@ -11,4 +11,8 @@ SHARED="$REPO_ROOT/shared"
 [[ -f "$SHARED/references/prompt-anatomy.md" ]]   || exit 1
 [[ -f "$SHARED/scripts/self-eval.py" ]]           || exit 1
 [[ -f "$SHARED/models-registry.json" ]]           || exit 1
-[[ -d "$REPO_ROOT/prompts" ]]                     || exit 1
+
+# prompts/ is gitignored (.gitignore:8), so it exists only in a developer's working tree. Asserting
+# its presence made this test fail in every clean checkout and in CI, which is why it was red at the
+# audited revision. Its absence is normal; only a non-directory sitting at that path is wrong.
+[[ ! -e "$REPO_ROOT/prompts" || -d "$REPO_ROOT/prompts" ]] || exit 1

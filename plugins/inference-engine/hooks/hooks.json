@@ -1,5 +1,5 @@
 {
-  "description": "Wixie inference-engine hooks — advisory-only. Notify when an artifact lands; never auto-trigger reconcile. Emit model-freshness telemetry on SessionStart (F-006).",
+  "description": "Wixie inference-engine hooks — advisory-only. Notify when an artifact lands; never auto-trigger reconcile. Emit model-freshness telemetry on SessionStart (F-006) only when WIXIE_INFERENCE_ENABLED=1, into CLAUDE_PLUGIN_DATA; the installed plugin tree is never written (WIX-SEC-WS-001).",
   "hooks": {
     "PostToolUse": [
       {
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'if [ -n \"${CLAUDE_SUBAGENT:-}\" ]; then exit 0; fi; python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py\" >/dev/null 2>&1 || true; exit 0'",
+            "command": "bash -c 'if [ -n \"${CLAUDE_SUBAGENT:-}\" ] || [ \"${WIXIE_INFERENCE_ENABLED:-0}\" != \"1\" ]; then exit 0; fi; PYTHONDONTWRITEBYTECODE=1 python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/model-freshness.py\" >/dev/null 2>&1 || true; exit 0'",
             "timeout": 5
           }
         ]

@@ -1,0 +1,151 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "consumers": [
+        "agents/adapter.md",
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.anti-patterns.md",
+      "path": "wixie/claude-md.anti-patterns.md",
+      "sha1": "f2413c3230ffb091c6a496d15a7d047f56006edd",
+      "sha256": "caaadd3c6bf05368ba731d2bc79ea4ea63bf871bf21b558a91a065de9b3969f1",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Anti-patterns"
+    },
+    {
+      "consumers": [
+        "agents/adapter.md",
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.behavioral-contracts.md",
+      "path": "wixie/claude-md.behavioral-contracts.md",
+      "sha1": "afb728036d8026dda49d83b98df8ec0f6e184d56",
+      "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Behavioral contracts"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.deploy-bar.md",
+      "path": "wixie/claude-md.deploy-bar.md",
+      "sha1": "1f8794f65109dd9333dab0e1b083e54646604048",
+      "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## DEPLOY bar"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md",
+        "vendor/wixie/shared/references/model-profiles.md",
+        "vendor/wixie/shared/references/technique-engine.md"
+      ],
+      "destination": "vendor/wixie/shared/models-registry.json",
+      "path": "wixie/shared/models-registry.json",
+      "sha1": "b36c5e356e08da697b3b5f5a0063f9b58213b7a9",
+      "sha256": "94add8d46aca00ca47477b9b32b89212676deedd6e8936fb49cf0b48f46fa62e",
+      "source": "wixie",
+      "source_path": "shared/models-registry.json",
+      "source_revision": "git-blob:196bf2c80f4072791798006a9dbd3e43c58f3825"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/claude-md.behavioral-contracts.md"
+      ],
+      "destination": "vendor/wixie/shared/references/direction-lock.md",
+      "path": "wixie/shared/references/direction-lock.md",
+      "sha1": "7087e69b013bcb4d05872ab2522670b088af2623",
+      "sha256": "5c4148efe30b0e8f5f9876634ca7184d716b6373f4e7a72e2b894a7efe8c0147",
+      "source": "wixie",
+      "source_path": "shared/references/direction-lock.md",
+      "source_revision": "git-blob:020bfb0b6c89bc84deeb8e7b523f7a45169a2861"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/editable-regions.md",
+      "path": "wixie/shared/references/editable-regions.md",
+      "sha1": "bebc6dafab83f8ded0bf6f8d92904b8933f9bb9f",
+      "sha256": "be1fc51879df1575d8db0b60ebd939068b08a525723b9fa6d3c7a7d370a88496",
+      "source": "wixie",
+      "source_path": "shared/references/editable-regions.md",
+      "source_revision": "git-blob:c426bf7897a3f10103014ba5fa83f0f32d7e5c66"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/model-profiles.md",
+      "path": "wixie/shared/references/model-profiles.md",
+      "sha1": "f216cfc1371bd185b574cca8216aefa8c2c56f41",
+      "sha256": "1dd33c624cc7125b6a486937f7472cc13365d40f6f962dc992a350168d9dd065",
+      "source": "wixie",
+      "source_path": "shared/references/model-profiles.md",
+      "source_revision": "git-blob:5b08c16c5c576e5bbc0ea059ab05a9a2d1d535e4"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/technique-engine.md",
+      "path": "wixie/shared/references/technique-engine.md",
+      "sha1": "7f331b981822dd238de63f0909c3a29ef3d46496",
+      "sha256": "93ec9fe38fdd2e7216306d704816c1e4b6e37f3240b55ef7d984156287712e78",
+      "source": "wixie",
+      "source_path": "shared/references/technique-engine.md",
+      "source_revision": "git-blob:a4ee932f57240bc00c6672c1e5c4813016f40256"
+    },
+    {
+      "consumers": [
+        "agents/adapter.md",
+        "skills/translate/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/deploy_bar.py",
+      "path": "wixie/shared/scripts/deploy_bar.py",
+      "sha1": "07af73e742affaf01d88b8b8681afc57cae56b11",
+      "sha256": "f46c7a988355da5d7c5e8ee9090b6383878e781f8874a4c5445300dc8072c0f4",
+      "source": "wixie",
+      "source_path": "shared/scripts/deploy_bar.py",
+      "source_revision": "git-blob:a60f0474cad99abe773dcb0a0eec2c85d7c4cc14"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md",
+        "vendor/wixie/shared/scripts/deploy_bar.py",
+        "vendor/wixie/shared/scripts/self-eval.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
+      "path": "wixie/shared/scripts/prompt_regions.py",
+      "sha1": "74f952c180bd329ab4cef120065da6117cb9460f",
+      "sha256": "522bb59a2f0850632926cf084f7431fcd29e522af22b4a595032bdd213dc3cfa",
+      "source": "wixie",
+      "source_path": "shared/scripts/prompt_regions.py",
+      "source_revision": "git-blob:32ebe430fbeae7eb99f907c1a1835fcb7c6709d3"
+    },
+    {
+      "consumers": [
+        "skills/translate/SKILL.md",
+        "vendor/wixie/shared/scripts/deploy_bar.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/self-eval.py",
+      "path": "wixie/shared/scripts/self-eval.py",
+      "sha1": "4849cae25eae4398a044c685ba1c0be61756a502",
+      "sha256": "2197ec8c1610226a77180d4c293417a3098d25e27989446b92bc4922d12be86e",
+      "source": "wixie",
+      "source_path": "shared/scripts/self-eval.py",
+      "source_revision": "git-blob:1091e99feb0b40c1594ee96a2dcd7e65a3d481bd"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": []
+}

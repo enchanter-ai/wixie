@@ -1,0 +1,262 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.agent-tiers.md",
+      "path": "wixie/claude-md.agent-tiers.md",
+      "sha1": "7c7e6cca906d4c68c7567e77bc75d6f89fcbced7",
+      "sha256": "63ea59ea212ab238e131be933690897c26d75b614a9e4fe662cc0b4bf4a99eb2",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Agent tiers"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.anti-patterns.md",
+      "path": "wixie/claude-md.anti-patterns.md",
+      "sha1": "f2413c3230ffb091c6a496d15a7d047f56006edd",
+      "sha256": "caaadd3c6bf05368ba731d2bc79ea4ea63bf871bf21b558a91a065de9b3969f1",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Anti-patterns"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md",
+        "skills/prompt-reviewer/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.artifacts-per-prompt.md",
+      "path": "wixie/claude-md.artifacts-per-prompt.md",
+      "sha1": "68bb4a95700a90229aeb82b35a775c6a75b1479d",
+      "sha256": "c6133b96981c7685744799cba059e70d1685ba56b43666eff1ed9dde3487c1a1",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Artifacts per prompt"
+    },
+    {
+      "consumers": [
+        "agents/reviewer.md",
+        "skills/prompt-creator/SKILL.md",
+        "skills/prompt-reviewer/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.behavioral-contracts.md",
+      "path": "wixie/claude-md.behavioral-contracts.md",
+      "sha1": "afb728036d8026dda49d83b98df8ec0f6e184d56",
+      "sha256": "51dbcdb4c144771eacc5938e8d97a59faccd1934ce09089a5af88a235ac20924",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## Behavioral contracts"
+    },
+    {
+      "consumers": [
+        "agents/reviewer.md",
+        "skills/prompt-creator/SKILL.md",
+        "skills/prompt-reviewer/SKILL.md"
+      ],
+      "destination": "vendor/wixie/claude-md.deploy-bar.md",
+      "path": "wixie/claude-md.deploy-bar.md",
+      "sha1": "1f8794f65109dd9333dab0e1b083e54646604048",
+      "sha256": "e152df86bf24aaefb093db33940d730ee51a19194cc0ed38662bfe03fa07f318",
+      "source": "wixie",
+      "source_path": "CLAUDE.md",
+      "source_revision": "git-blob:9dd187aade3d0fa87dceeaed1aec1e3b8ebb59c1",
+      "source_section": "## DEPLOY bar"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md",
+        "skills/prompt-reviewer/SKILL.md",
+        "vendor/wixie/shared/references/model-profiles.md",
+        "vendor/wixie/shared/references/technique-engine.md",
+        "vendor/wixie/shared/scripts/report-gen.py",
+        "vendor/wixie/shared/scripts/token-count.py"
+      ],
+      "destination": "vendor/wixie/shared/models-registry.json",
+      "path": "wixie/shared/models-registry.json",
+      "sha1": "b36c5e356e08da697b3b5f5a0063f9b58213b7a9",
+      "sha256": "94add8d46aca00ca47477b9b32b89212676deedd6e8936fb49cf0b48f46fa62e",
+      "source": "wixie",
+      "source_path": "shared/models-registry.json",
+      "source_revision": "git-blob:196bf2c80f4072791798006a9dbd3e43c58f3825"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md",
+        "vendor/wixie/claude-md.behavioral-contracts.md"
+      ],
+      "destination": "vendor/wixie/shared/references/direction-lock.md",
+      "path": "wixie/shared/references/direction-lock.md",
+      "sha1": "7087e69b013bcb4d05872ab2522670b088af2623",
+      "sha256": "5c4148efe30b0e8f5f9876634ca7184d716b6373f4e7a72e2b894a7efe8c0147",
+      "source": "wixie",
+      "source_path": "shared/references/direction-lock.md",
+      "source_revision": "git-blob:020bfb0b6c89bc84deeb8e7b523f7a45169a2861"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md",
+        "vendor/wixie/claude-md.artifacts-per-prompt.md"
+      ],
+      "destination": "vendor/wixie/shared/references/editable-regions.md",
+      "path": "wixie/shared/references/editable-regions.md",
+      "sha1": "bebc6dafab83f8ded0bf6f8d92904b8933f9bb9f",
+      "sha256": "be1fc51879df1575d8db0b60ebd939068b08a525723b9fa6d3c7a7d370a88496",
+      "source": "wixie",
+      "source_path": "shared/references/editable-regions.md",
+      "source_revision": "git-blob:c426bf7897a3f10103014ba5fa83f0f32d7e5c66"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/model-profiles.md",
+      "path": "wixie/shared/references/model-profiles.md",
+      "sha1": "f216cfc1371bd185b574cca8216aefa8c2c56f41",
+      "sha256": "1dd33c624cc7125b6a486937f7472cc13365d40f6f962dc992a350168d9dd065",
+      "source": "wixie",
+      "source_path": "shared/references/model-profiles.md",
+      "source_revision": "git-blob:5b08c16c5c576e5bbc0ea059ab05a9a2d1d535e4"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/output-formats.md",
+      "path": "wixie/shared/references/output-formats.md",
+      "sha1": "d63c07f52a316c07ae27f9f60d7598f032cfe08b",
+      "sha256": "b2871aa421aaeafe0482ba675a3a6ff869dd70e3356cc945b4c83fe9a67583a1",
+      "source": "wixie",
+      "source_path": "shared/references/output-formats.md",
+      "source_revision": "git-blob:94b808daaa643ceaa9f1b21e73462a4641c026a9"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/prompt-anatomy.md",
+      "path": "wixie/shared/references/prompt-anatomy.md",
+      "sha1": "7f03a504d6c5f27bd22754ca987547e9b0320572",
+      "sha256": "57227f8ba02f416b5f9268c27379007e797b27a93a86d1178cd4983b3c6310f7",
+      "source": "wixie",
+      "source_path": "shared/references/prompt-anatomy.md",
+      "source_revision": "git-blob:70fa218eb419c76595e392700966ce72ce59a925"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/references/technique-engine.md",
+      "path": "wixie/shared/references/technique-engine.md",
+      "sha1": "7f331b981822dd238de63f0909c3a29ef3d46496",
+      "sha256": "93ec9fe38fdd2e7216306d704816c1e4b6e37f3240b55ef7d984156287712e78",
+      "source": "wixie",
+      "source_path": "shared/references/technique-engine.md",
+      "source_revision": "git-blob:a4ee932f57240bc00c6672c1e5c4813016f40256"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/convergence.py",
+      "path": "wixie/shared/scripts/convergence.py",
+      "sha1": "75f1320d980e11765bfa6fc9bdacc281a8b36d6f",
+      "sha256": "8c68dc551ebb57d47e8f1baa7c1b1015f0c631caea280f8a2ec50d63ea003990",
+      "source": "wixie",
+      "source_path": "shared/scripts/convergence.py",
+      "source_revision": "git-blob:af45ec10b1af488fea06258b5207deeb30aef6bf"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/report-gen.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/deploy_bar.py",
+      "path": "wixie/shared/scripts/deploy_bar.py",
+      "sha1": "07af73e742affaf01d88b8b8681afc57cae56b11",
+      "sha256": "f46c7a988355da5d7c5e8ee9090b6383878e781f8874a4c5445300dc8072c0f4",
+      "source": "wixie",
+      "source_path": "shared/scripts/deploy_bar.py",
+      "source_revision": "git-blob:a60f0474cad99abe773dcb0a0eec2c85d7c4cc14"
+    },
+    {
+      "consumers": [
+        "vendor/wixie/shared/scripts/report-gen.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/html-to-pdf.py",
+      "path": "wixie/shared/scripts/html-to-pdf.py",
+      "sha1": "cafbe42078a5d08af1aa41d795ede1de1b1851ae",
+      "sha256": "d0f3928a26a6d81015e4213e677c083f7e88a13c39f0250803ae40eac991865d",
+      "source": "wixie",
+      "source_path": "shared/scripts/html-to-pdf.py",
+      "source_revision": "git-blob:672486b268c0cf329b2e8e9a139b84afd4c9013c"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md",
+        "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/deploy_bar.py",
+        "vendor/wixie/shared/scripts/self-eval.py",
+        "vendor/wixie/shared/scripts/token-count.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/prompt_regions.py",
+      "path": "wixie/shared/scripts/prompt_regions.py",
+      "sha1": "74f952c180bd329ab4cef120065da6117cb9460f",
+      "sha256": "522bb59a2f0850632926cf084f7431fcd29e522af22b4a595032bdd213dc3cfa",
+      "source": "wixie",
+      "source_path": "shared/scripts/prompt_regions.py",
+      "source_revision": "git-blob:32ebe430fbeae7eb99f907c1a1835fcb7c6709d3"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/report-gen.py",
+      "path": "wixie/shared/scripts/report-gen.py",
+      "sha1": "c76b9baac1d7933d2407b3f1040271602aa13f18",
+      "sha256": "722a4119d90651ca56d31141e81549a85a191ae6715ed04227e384e5328d25a8",
+      "source": "wixie",
+      "source_path": "shared/scripts/report-gen.py",
+      "source_revision": "git-blob:0f7d3333332579da7f868747def1314ea525c9a5"
+    },
+    {
+      "consumers": [
+        "agents/reviewer.md",
+        "skills/prompt-creator/SKILL.md",
+        "skills/prompt-reviewer/SKILL.md",
+        "vendor/wixie/shared/scripts/convergence.py",
+        "vendor/wixie/shared/scripts/deploy_bar.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/self-eval.py",
+      "path": "wixie/shared/scripts/self-eval.py",
+      "sha1": "4849cae25eae4398a044c685ba1c0be61756a502",
+      "sha256": "2197ec8c1610226a77180d4c293417a3098d25e27989446b92bc4922d12be86e",
+      "source": "wixie",
+      "source_path": "shared/scripts/self-eval.py",
+      "source_revision": "git-blob:1091e99feb0b40c1594ee96a2dcd7e65a3d481bd"
+    },
+    {
+      "consumers": [
+        "skills/prompt-creator/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/token-count.py",
+      "path": "wixie/shared/scripts/token-count.py",
+      "sha1": "65f0a62b0fb66045d09916cb2effc5ff0efc0e2a",
+      "sha256": "c31230f85f7b7eee52491bf28acbe9b61b8fef5303e51a00cb6afdcb45d8f8f1",
+      "source": "wixie",
+      "source_path": "shared/scripts/token-count.py",
+      "source_revision": "git-blob:167a215941448c4131592756f450b0c125ba106d"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": []
+}

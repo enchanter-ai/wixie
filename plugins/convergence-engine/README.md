@@ -6,7 +6,7 @@ Like gradient descent for prompts. Each iteration scores the prompt, identifies 
 
 ## Install
 
-Part of the [Wixie](../..) bundle. The simplest install is the `full` meta-plugin, which pulls in all 6 Wixie plugins via dependency resolution:
+Part of the [Wixie](../..) bundle. The simplest install is the `full` meta-plugin, which pulls in the six core Wixie plugins plus `deep-research` (required by `/create`) via dependency resolution:
 
 ```
 /plugin marketplace add enchanter-ai/wixie
@@ -53,10 +53,10 @@ Output: optimized prompt (8.1/10) + updated metadata + fresh report.pdf
 
 ## Exit Conditions
 
-- **DEPLOY:** overall ≥ 9.0, all axes ≥ 7.0
+- **DEPLOY:** the canonical bar in `shared/scripts/deploy_bar.py`: overall ≥ 9.0, all axes ≥ 7.0, σ ≤ the dynamic floor, 8/8 SAT assertions (heuristic; the measured step still decides the product DEPLOY)
 - **PLATEAU:** score unchanged for 3 consecutive iterations
 - **MAX:** 100 iterations reached
 
 ## Behavioral modules
 
-Inherits the [shared behavioral modules](../../shared/) via root [CLAUDE.md](../../CLAUDE.md) — discipline, context, verification, delegation, failure-modes, tool-use, formatting, skill-authoring, hooks, precedent.
+In a full repository checkout, inherits the [shared behavioral modules](../../shared/) via root [CLAUDE.md](../../CLAUDE.md) — discipline, context, verification, delegation, failure-modes, tool-use, formatting, skill-authoring, hooks, precedent. A marketplace install of this plugin does not receive the root `CLAUDE.md`; the scripts, model registry, references, shared-conduct modules and `CLAUDE.md` sections this plugin's own files use ship inside it under `vendor/` (see [What an installed plugin carries](../../docs/installation.md#what-an-installed-plugin-carries)).

@@ -137,13 +137,13 @@ Five stages from failure to countermeasure:
 
 1. **Observation.** A plugin catches a failure (Wixie notices reactive iteration, Crow flags a silent revert, Hydra classifies a new attack pattern). The plugin composes a JSON artifact with `code`, `category`, `title`, `cause`, `counter`, `signal`, `tags`, and `evidence`.
 
-2. **Emission.** The plugin calls `inference-engine.py emit` (or the `inference-emit.sh` bash wrapper). The engine stamps `ts`, `session_id`, `plugin`, appends to `state/artifacts.jsonl`. Opt-in gate `WIXIE_INFERENCE_ENABLED=1` required; otherwise silent no-op.
+2. **Emission.** The plugin calls `inference-engine.py emit` (or, from a hook, the bash wrapper `bash "${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-emit.sh"`, shipped inside the plugin). The engine stamps `ts`, `session_id`, `plugin` and an event identity, and appends to `state/artifacts.jsonl` (or, if the state lock stays busy past the emit wait, queues the event in `state/pending/` to be folded in exactly once). Opt-in gate `WIXIE_INFERENCE_ENABLED=1` required; otherwise silent no-op. Identity, session precedence and exit codes: `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md`.
 
-3. **Reconciliation.** Triggered manually, on schedule, or after an artifact write. The engine loads every artifact, fingerprints, runs SPRT + Beta-Binomial + EMA + Reservoir, writes `catalog.json` atomically. Idempotent on identical streams.
+3. **Reconciliation.** Triggered manually, on schedule, or after an artifact write. The engine loads every artifact, fingerprints, runs SPRT + Beta-Binomial + EMA + Reservoir, writes `catalog.json` atomically. Idempotent on identical streams. Exits 3 when some log lines were rejected (listed with file:line), 75 when another process holds the state lock.
 
 4. **Briefing.** The briefer agent renders `state/briefings/<plugin>.md` — filtered to that plugin's tags, sorted by weight, formatted for human + machine reading.
 
-5. **Consumption.** At session start the target plugin's primary skill (Phase 1: `/converge` in Wixie) reads the briefing at top-of-context. The U-curve top-200-tokens slot (`../vis/packages/core/conduct/context.md`) means the learned patterns are the first thing Claude sees.
+5. **Consumption.** At session start the target plugin's primary skill (Phase 1: `/converge` in Wixie) reads the briefing at top-of-context. The U-curve top-200-tokens slot (`${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/context.md`) means the learned patterns are the first thing Claude sees.
 
 ## Install
 
@@ -159,6 +159,18 @@ Standalone:
 ```
 /plugin install inference-engine@wixie
 ```
+
+**State location (WIX-SEC-WS-001).** An installed plugin never writes into its own install directory.
+The engine keeps its state in `$CLAUDE_PLUGIN_DATA/state/` (Claude Code's per-plugin data directory,
+`~/.claude/plugins/data/inference-engine-wixie/` by default), seeded once from the shipped `state/` on
+the first write and logged; `WIXIE_INFERENCE_STATE` overrides it; in a repository checkout it is
+`plugins/inference-engine/state/` as before. The shipped seed is read-only. `plugin uninstall` asks
+whether to delete the data directory (`--keep-data` keeps it); a reinstall starts from the kept data or,
+if it was deleted, from the pristine seed; nothing depends on files left in the plugin cache. An install
+of an earlier version that wrote runtime files into its cache is left as-is: a new data directory is not
+seeded from it (one-line notice), and reinstalling gives a pristine seed.
+Model-freshness telemetry is written only while `WIXIE_INFERENCE_ENABLED=1`, to
+`$CLAUDE_PLUGIN_DATA/telemetry/model-usage.ndjson`.
 
 ## Quickstart
 
@@ -342,9 +354,9 @@ wixie/plugins/inference-engine/
     └── briefings/
         └── wixie.md                      top-of-context briefing for /converge
 
-wixie/shared/scripts/
-├── inference-engine.py                  ≈ 350 LOC stdlib Python, 6 subcommands
-└── inference-emit.sh                    ≈ 50 LOC bash wrapper for hook callers
+wixie/shared/scripts/                    source; shipped in the plugin as vendor/wixie/shared/scripts/ (VENDORED.json)
+├── inference-engine.py                  stdlib Python, 6 subcommands
+└── inference-emit.sh                    bash wrapper for hook callers (installed: vendor/wixie/shared/scripts/inference-emit.sh)
 
 wixie/shared/conduct/
 └── inference-substrate.md               brand-standard module — how to write/read honestly
@@ -352,12 +364,13 @@ wixie/shared/conduct/
 
 ## Opt-in + Graceful Degradation
 
-The substrate is **off by default**. `emit` is a no-op unless `WIXIE_INFERENCE_ENABLED=1`. `reconcile` and `render-briefing` run regardless but are safe on empty state (reconcile over zero artifacts yields an empty catalog; render-briefing writes a placeholder *"no elevated patterns yet"*).
+The substrate is **off by default**. `emit` is a no-op unless `WIXIE_INFERENCE_ENABLED=1`, and the SessionStart telemetry hook persists nothing unless it is set. `reconcile` and `render-briefing` run regardless but are safe on empty state (reconcile over zero artifacts yields an empty catalog; render-briefing writes a placeholder *"no elevated patterns yet"*).
 
 When enabled and later unreachable — filesystem error, missing script, permission problem:
 
-- `emit` from a hook logs to stderr and exits 0 (fail-open; brand contract `hooks.md`).
-- `reconcile` aborts with a non-zero exit; the caller reports honestly and does not proceed with stale briefings.
+- `emit` from a hook (`bash "${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-emit.sh"`) exits 0 only when the event is durably recorded (appended, already recorded, or queued in `state/pending/`). When it was NOT recorded it logs the reason to stderr and exits 1. Exit 1 is non-blocking for Claude Code hooks (only 2 blocks), so the hook still fails open without claiming success. The hook's timeout must exceed `WIXIE_INFERENCE_EMIT_WAIT` (default 1 s) + 2 s.
+- `reconcile` aborts with a non-zero exit (75 lock busy, 1 operational failure) and reports partial success with exit 3; the caller reports honestly and does not proceed with stale briefings.
+- A corrupt `catalog.json` makes `status`, `query` and `render-briefing` exit 74; `reconcile` quarantines it to `catalog.json.corrupt-<stamp>` and rebuilds it from the log.
 - `render-briefing` on a missing catalog writes the placeholder.
 - Any consuming plugin that reads `briefings/wixie.md` tolerates a missing or stale file — the briefing is advisory, never load-bearing.
 
@@ -393,7 +406,7 @@ The closest production analog is **Sentry's fingerprint-and-elevate** model, but
 
 ## Agent Conduct Modules
 
-Inherits all conduct modules from `shared/vis/conduct/*.md` (vendored from vis) plus wixie-specific `shared/conduct/inference-substrate.md`:
+In a full repository checkout the modules below come from the repo-level `CLAUDE.md` (pinned vis conduct materialized into `.vis-cache/vis/` by `scripts/bootstrap.sh`), plus the wixie-specific `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md`. An installed copy of this plugin does not receive `CLAUDE.md`; it ships the conduct files its own files reference, generated byte-identical from the pin into this plugin's own `vendor/` directory (inventory: `vendor/VENDORED.json`; regenerate with `python scripts/vendor-conduct.py`):
 
 1. `discipline.md` — think-first, simplicity, surgical edits.
 2. `context.md` — U-curve placement; the briefing *is* the top-of-context slot.
@@ -408,7 +421,7 @@ Inherits all conduct modules from `shared/vis/conduct/*.md` (vendored from vis) 
 
 Plus one new module shipped with this plugin:
 
-- `shared/conduct/inference-substrate.md` — emission contract, mutation discipline, recursion bound.
+- `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md` — emission contract, mutation discipline, recursion bound.
 
 ## Testing
 
@@ -428,8 +441,9 @@ The Phase 1 acceptance test is the 30-day success criterion: after 30 days of Wi
 
 ## Versioning & release cadence
 
-- Semantic versioning. `0.1.0` (current) = Phase 1 MVP, Wixie-only wiring.
-- `0.2.0` = U4 Bayesian Online Change-point. Automatic pattern retirement when distributions shift.
+- Semantic versioning. `0.1.0` = Phase 1 MVP, Wixie-only wiring.
+- `0.2.0` (current) = current release of the Phase 1 line; no roadmap milestone below is included.
+- `0.3.0` = U4 Bayesian Online Change-point. Automatic pattern retirement when distributions shift.
 - `0.3.0` = Phase 2 MCP integration. `inference.pattern.elevated` / `.retired` / `.drifted` events over the `enchanted-mcp` bus; file-based fallback preserved.
 - `1.0.0` = All seven plugins wired. 90-day cross-plugin recurrence data. Production DEPLOY bar on the substrate's own outputs.
 

@@ -10,6 +10,8 @@ user-invocable: false
 
 # Prompt Reviewer
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Validate a completed prompt folder for production-readiness. This skill runs automatically after convergence — do not wait for user input.
 
 ## Input
@@ -30,9 +32,16 @@ Execute ALL checks. Report results as PASS/FAIL with details.
 - [ ] `tests.json` exists and has >= 3 test cases
 - [ ] `report.pdf` exists and is > 0 bytes
 
+### 1b. Editability (WIX-CONV-001)
+- [ ] If `editable/<shipped filename>` exists: the shipped file is byte-equal to `strip(master)`
+      (`prompt_regions.py strip --check <master> <shipped>`) and `metadata.editability.shipped_sha256`
+      matches the shipped file
+- [ ] No shipped file that has a master contains the text `wixie-editable`
+- [ ] No `editable/` file is referenced as a model-facing prompt anywhere in the folder
+
 ### 2. Metadata Consistency
 Read `metadata.json` and verify:
-- [ ] `target_model` exists in `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`
+- [ ] `target_model` exists in `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`
 - [ ] `scores.overall` matches the average of the 5 axis scores
 - [ ] `tokens.estimated` is a positive number
 - [ ] `tokens.context_window` matches the registry value for the target model
@@ -49,13 +58,13 @@ Read `metadata.json` and verify:
 ### 4. Score Validation
 Run self-eval on the prompt and compare with metadata scores:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 - [ ] Scores from self-eval match metadata.scores (tolerance: ±1 per axis)
 - [ ] If scores diverged significantly, metadata is stale — flag for update
 
 ### 5. Registry Cross-Reference
-Read the model entry from `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`:
+Read the model entry from `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`:
 - [ ] If model has `reasoning: "reasoning-native"`, verify no CoT in prompt
 - [ ] If model has `few_shot: "REQUIRED"`, verify examples exist in prompt
 - [ ] If model has `few_shot: "AVOID"`, verify no examples in prompt

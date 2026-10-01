@@ -6,10 +6,12 @@ description: >
   pass/fail results. Use for regression testing after refinements.
   Auto-triggers on: "/test-prompt", "test this prompt", "run prompt tests",
   "check if the prompt works", "regression test".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py *) Read Write
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write
 ---
 
 # Prompt Test Runner
+
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
 
 Execute a prompt's test suite in **two layers**: (1) a fast self-simulation over `tests.json`
 `expected_contains` assertions as a cheap pre-check, then (2) a **measured** run against a fixed eval
@@ -27,12 +29,14 @@ result to trust. When a pass/fail claim needs to be real, it comes from Layer 2,
 
 If the user provides:
 - A prompt folder path → read `tests.json` from it
-- A prompt name → look in `${CLAUDE_PLUGIN_ROOT}/../../prompts/<name>/tests.json`
-- Nothing → list available prompts from `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json` and ask
+- A prompt name → look in `${CLAUDE_PROJECT_DIR}/prompts/<name>/tests.json`
+- Nothing → list available prompts from `${CLAUDE_PROJECT_DIR}/prompts/index.json` and ask
 
 ### Step 2: Load the Prompt
 
-Read `prompt.*` from the same folder. Read `metadata.json` for target model and config.
+Read the shipped `prompt.*` from the same folder (top level only; never a file under
+`editable/`, which is the annotated master and must never reach a model; WIX-CONV-001). Read
+`metadata.json` for target model and config.
 
 ### Step 3: Execute Each Test Case
 
@@ -58,19 +62,42 @@ Run the prompt against the fixed corpus with **real** `claude -p` calls and acce
 Wilson 95% CI — this is the measured result, not a self-simulation.
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/efficacy-replay.py corpus deploy-bar \
-  --prompt <prompt-file> -n 5
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/efficacy-replay.py corpus deploy-bar \
+  --prompt <prompt-file> -n 5 --out "${CLAUDE_PLUGIN_DATA}/efficacy"
 ```
 
+- Writes nothing next to the corpus or anywhere in the installed plugin (WIX-SEC-WS-001): each run
+  creates a fresh `${CLAUDE_PLUGIN_DATA}/efficacy/corpus/deploy-bar/<run_id>/` holding `verdict.json`
+  and `runs/*.json`, and prints its path as `full verdict: <path>`. `verdict.json` records `run_id`
+  and `prompt_sha256`; read ONLY the verdict this run printed, and check its `prompt_sha256`
+  equals the sha256 of the file you measured. Never read a `verdict.json` left by an earlier run as
+  the current result.
 - Reads `shared/eval-corpus/deploy-bar/corpus.json`. Each case scores PASS/FAIL on expect/reject
-  regexes over real model output; pass rate gets a Wilson 95% CI.
-- **ACCEPT** (exit 0) = treatment CI lower bound ≥ `rate_floor` (0.75). **REJECT** (exit 1) otherwise.
+  regexes over real model output; pass rate gets a Wilson 95% CI, computed only over trials that
+  actually measured something (see WIX-EFF-001 below) — never over transport failures.
+- **ACCEPT** (exit 0) = treatment CI lower bound ≥ `rate_floor` (0.75). **REJECT** (exit 1) = the
+  bar was applied and not met. **NO_MEASUREMENT** (exit 3) = the bar was never applied — see below.
 - Fold the measured verdict into the report below (see the "Measured" line). In `--ci` mode, the
-  overall exit code must reflect the **measured** ACCEPT/REJECT, not only the Layer-1 assertions.
+  overall exit code must reflect the **measured** ACCEPT/REJECT/NO_MEASUREMENT, not only the
+  Layer-1 assertions.
 - Honest-numbers: if the `claude` CLI is unavailable, say the measure step could not run and report
   only the Layer-1 self-simulation as a proxy — do NOT present it as a measured pass.
 
-Full artifact: `shared/eval-corpus/deploy-bar/verdict.json`.
+**WIX-EFF-001 — transport failure is never a measured rejection.** `efficacy-replay.py` records
+each trial's TRANSPORT outcome (did `claude -p` reach the provider and return a parseable
+envelope — auth failure, empty output, an invalid/garbled envelope, a hung trial, a rate-limit or
+provider error) separately from its TASK outcome (did the model do what the corpus case expects).
+A trial whose transport failed is excluded from the Wilson counts entirely — it is never scored
+as a rejection. When an arm ends up with **zero valid measurements** (every trial in it failed
+transport), the run reports `decision.verdict == "NO_MEASUREMENT"` in both stdout and
+`verdict.json` and `efficacy-replay.py corpus` exits **3**, not 1. **Read NO_MEASUREMENT as "the
+bar was never applied," not as a failing/REJECT result** — do not report it as `RESULT: FAIL` or
+`OVERALL: FAIL` in Step 4; report it as measure-unavailable (the same honest-numbers treatment as
+"the `claude` CLI is unavailable" above) and fall back to the Layer-1 result. A **mixed** run
+(some trials transport-fail, others measure) is NOT NO_MEASUREMENT as long as at least one trial
+per arm produced a real measurement — ACCEPT/REJECT is computed only over the trials that did.
+
+Full artifact: the `verdict.json` path this run printed (`full verdict: <path>`), never an earlier run's.
 
 ### Step 4: Report Results
 
@@ -88,12 +115,14 @@ Target model: claude-opus-4-6
 RESULT (Layer 1, self-sim proxy): 4/5 passed (80%)
 FAILED TAGS: edge-case
 
-Measured (Layer 2, deploy-bar corpus, real claude -p, n=5): ACCEPT / REJECT
+Measured (Layer 2, deploy-bar corpus, real claude -p, n=5): ACCEPT / REJECT / NO_MEASUREMENT
   treatment pass rate 0.90, Wilson CI [0.78, 0.96], floor 0.75
-OVERALL: PASS (measured ACCEPT) / FAIL (measured REJECT) / Layer-1-only (measure unavailable)
+OVERALL: PASS (measured ACCEPT) / FAIL (measured REJECT) / Layer-1-only (measure unavailable or NO_MEASUREMENT)
 ```
 
 The measured Layer-2 verdict is the authoritative pass/fail. Layer 1 is a proxy pre-check.
+NO_MEASUREMENT (exit 3) is not a measured FAIL — it means the measure step ran but every trial
+failed transport, so the bar was never actually applied; report `Layer-1-only`, not `FAIL`.
 
 ### Step 5: Save Test Results
 
@@ -121,8 +150,12 @@ Run tests, show results, ask user if they want to fix failing tests.
 
 ### CI Mode (`--ci` flag or when run non-interactively)
 Run both layers, output results as JSON to stdout. Exit code follows the **measured** Layer-2
-ACCEPT/REJECT (0 = ACCEPT, 1 = REJECT). If the `claude` CLI is unavailable, fall back to the Layer-1
-assertion result for the exit code and mark the run `layer1_only: true` in the JSON. No prompts, no color.
+verdict: `0` = ACCEPT, `1` = REJECT, `3` = NO_MEASUREMENT (every trial in an arm failed transport —
+see WIX-EFF-001 above; this is `efficacy-replay.py corpus`'s own exit 3, passed through unchanged,
+never remapped to 1). If the `claude` CLI is unavailable, or the measured verdict is
+NO_MEASUREMENT, fall back to the Layer-1 assertion result for the exit code and mark the run
+`layer1_only: true` in the JSON (NO_MEASUREMENT additionally sets `no_measurement: true`). No
+prompts, no color.
 
 ## Rules
 

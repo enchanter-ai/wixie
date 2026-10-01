@@ -15,6 +15,8 @@ allowed-tools: Read, Grep, Glob
 
 # Research Query
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Search existing briefs without regenerating.
 
 ## Inputs
@@ -27,8 +29,8 @@ Search existing briefs without regenerating.
 
 ### Step 1: Scope
 
-If `--slug` given → read only `state/briefs/<slug>/claims.json`.
-Else → glob `state/briefs/*/claims.json`.
+If `--slug` given → read only `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/claims.json`.
+Else → glob `${CLAUDE_PLUGIN_DATA}/briefs/*/claims.json` (the brief store; WIX-SEC-WS-001).
 
 ### Step 2: Match
 

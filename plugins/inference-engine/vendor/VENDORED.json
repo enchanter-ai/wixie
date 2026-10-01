@@ -1,0 +1,392 @@
+{
+  "do_not_edit": "generated; regenerate with `python scripts/vendor-conduct.py`, verify with --check",
+  "files": [
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md",
+        "vendor/vis/packages/core/conduct/prior-art-discovery.md",
+        "vendor/vis/packages/core/conduct/reversibility-foresight.md",
+        "vendor/vis/packages/core/conduct/substrate-consumption.md",
+        "vendor/vis/packages/core/conduct/verdict-calibration.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/capability-fidelity.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/capability-fidelity.md",
+      "sha1": "5f2e24ec559cc6f23c6eb98d2c7c6a59d39ef5ee",
+      "sha256": "efce816301af180d07218ac0464a4987158a7aaabba54eb3a9d81dd568b53572",
+      "source": "vis",
+      "source_path": "packages/core/conduct/capability-fidelity.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "README.md",
+        "vendor/vis/packages/core/conduct/failure-modes.md",
+        "vendor/vis/packages/core/conduct/precedent-freshness.md",
+        "vendor/vis/packages/core/conduct/substrate-consumption.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/context.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/context.md",
+      "sha1": "a4aa5663f85ed4af31e8c794ba27582aaf9906b8",
+      "sha256": "fb6f46e9139eaaaef33d3d38244819d074e8679b5bdd1b8bd24cc2bbca2476cd",
+      "source": "vis",
+      "source_path": "packages/core/conduct/context.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/capability-fidelity.md",
+        "vendor/vis/packages/core/conduct/context.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/delegation.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/delegation.md",
+      "sha1": "79cd1f6d3ae19b868c209d73813b9633e1a7377c",
+      "sha256": "910593def6a378fce2f1f7a6e8102fa9173efbdf281cdbdf1cdc585f395973c4",
+      "source": "vis",
+      "source_path": "packages/core/conduct/delegation.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/doubt-engine.md",
+        "vendor/vis/packages/core/conduct/failure-modes.md",
+        "vendor/vis/packages/core/conduct/prior-art-discovery.md",
+        "vendor/vis/packages/core/conduct/reversibility-foresight.md",
+        "vendor/vis/packages/core/conduct/sunk-cost-iteration.md",
+        "vendor/vis/packages/core/conduct/verification.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/discipline.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/discipline.md",
+      "sha1": "a4cfe6f1476d40a7b755863f65ceee57da63a2a7",
+      "sha256": "8b932b51e19a4eb1a00b2043d624eba7d922ccc824a08829511075f55172af03",
+      "source": "vis",
+      "source_path": "packages/core/conduct/discipline.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md",
+        "vendor/vis/packages/core/conduct/sunk-cost-iteration.md",
+        "vendor/vis/packages/core/conduct/verdict-calibration.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/doubt-engine.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/doubt-engine.md",
+      "sha1": "49da3822d7da014af94d813f3db759f049128640",
+      "sha256": "6de24880dd822f06b8fbe05da002d149bab1c551c5a9f03f8c6b07ce3583c29c",
+      "source": "vis",
+      "source_path": "packages/core/conduct/doubt-engine.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "skills/freshness-check/SKILL.md",
+        "skills/inference-emit/SKILL.md",
+        "skills/inference-query/SKILL.md",
+        "vendor/vis/packages/core/conduct/capability-fidelity.md",
+        "vendor/vis/packages/core/conduct/discipline.md",
+        "vendor/vis/packages/core/conduct/doubt-engine.md",
+        "vendor/vis/packages/core/conduct/precedent-freshness.md",
+        "vendor/vis/packages/core/conduct/precedent.md",
+        "vendor/vis/packages/core/conduct/prior-art-discovery.md",
+        "vendor/vis/packages/core/conduct/reversibility-foresight.md",
+        "vendor/vis/packages/core/conduct/substrate-consumption.md",
+        "vendor/vis/packages/core/conduct/sunk-cost-iteration.md",
+        "vendor/vis/packages/core/conduct/tool-use.md",
+        "vendor/vis/packages/core/conduct/verdict-calibration.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/failure-modes.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/failure-modes.md",
+      "sha1": "fc493dbfed709e8f469b3b159c817113dcf58935",
+      "sha256": "f39c6831f4202d5ce70388e7b88f918845745731b0799f37eb20c344624f05d2",
+      "source": "vis",
+      "source_path": "packages/core/conduct/failure-modes.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/precedent-freshness.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/precedent-freshness.md",
+      "sha1": "b516d86ec393eb090cb542ea92c4c2971585d127",
+      "sha256": "e66ea6151c40ff49708ea3e7729ad9c4ea21ef0ae5904383121ff82fee5db5bf",
+      "source": "vis",
+      "source_path": "packages/core/conduct/precedent-freshness.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/capability-fidelity.md",
+        "vendor/vis/packages/core/conduct/doubt-engine.md",
+        "vendor/vis/packages/core/conduct/precedent-freshness.md",
+        "vendor/vis/packages/core/conduct/reversibility-foresight.md",
+        "vendor/vis/packages/core/conduct/substrate-consumption.md",
+        "vendor/vis/packages/core/conduct/sunk-cost-iteration.md",
+        "vendor/vis/packages/core/conduct/verdict-calibration.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/precedent.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/precedent.md",
+      "sha1": "9515a2059fd9c44c35ffb36dd619c47cc5ca99fc",
+      "sha256": "2c37ab13868f3d44cd956d443d6a39f50d4f9f15a504ae033b02a67b9179d48e",
+      "source": "vis",
+      "source_path": "packages/core/conduct/precedent.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/doubt-engine.md",
+        "vendor/vis/packages/core/conduct/failure-modes.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/prior-art-discovery.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/prior-art-discovery.md",
+      "sha1": "b3d7ad328f2ad548adf2b1a07d66228340074f30",
+      "sha256": "e045b665fae54361321b66ccd38b2810c046576f08e17a1d8a386a0ef44cb50d",
+      "source": "vis",
+      "source_path": "packages/core/conduct/prior-art-discovery.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/reversibility-foresight.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/reversibility-foresight.md",
+      "sha1": "f94c4337f0d5033d35420474a2bd38a917004dd3",
+      "sha256": "1131582cbcbba5b6996465ce74fc5c2e0c8ace907b0de7a30f306e2e8f47d2d0",
+      "source": "vis",
+      "source_path": "packages/core/conduct/reversibility-foresight.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/substrate-consumption.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/substrate-consumption.md",
+      "sha1": "4a4dc63c2866e1e49e636572309937f077348309",
+      "sha256": "850a42759dc36f6698a614172584d5d8dd4da578a89c5b484fb684747c806186",
+      "source": "vis",
+      "source_path": "packages/core/conduct/substrate-consumption.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/sunk-cost-iteration.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/sunk-cost-iteration.md",
+      "sha1": "34afd8a3beb165267d1ec4179956db650c524acb",
+      "sha256": "f08efd82c50d440c2ae9364b64051779b54ed6dc4c40dfdcd7e24bd65833fe94",
+      "source": "vis",
+      "source_path": "packages/core/conduct/sunk-cost-iteration.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/delegation.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/tier-sizing.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/tier-sizing.md",
+      "sha1": "744ac38129969e7e2399a9271f271a37a1aecd5d",
+      "sha256": "e5e6a4e1eb0adc78b06902317f82e870483a3128f01c49c6fcc28e099eea9591",
+      "source": "vis",
+      "source_path": "packages/core/conduct/tier-sizing.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/capability-fidelity.md",
+        "vendor/vis/packages/core/conduct/failure-modes.md",
+        "vendor/vis/packages/core/conduct/prior-art-discovery.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/tool-use.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/tool-use.md",
+      "sha1": "714246bb4436d340f8a8909bb61f37df2fc9200d",
+      "sha256": "15b6baf9af9654a3481801699dc78bffc0c735663b07899780dd8c7528be39c0",
+      "source": "vis",
+      "source_path": "packages/core/conduct/tool-use.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/failure-modes.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/verdict-calibration.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/verdict-calibration.md",
+      "sha1": "59ce7825a080164dba001efb624ca290797ca353",
+      "sha256": "444f082bde40e6a84d88ba40f5edc41124a5078e6770531030f6b3c6dd2d5f58",
+      "source": "vis",
+      "source_path": "packages/core/conduct/verdict-calibration.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "vendor/vis/packages/core/conduct/capability-fidelity.md",
+        "vendor/vis/packages/core/conduct/doubt-engine.md",
+        "vendor/vis/packages/core/conduct/failure-modes.md",
+        "vendor/vis/packages/core/conduct/precedent-freshness.md",
+        "vendor/vis/packages/core/conduct/reversibility-foresight.md",
+        "vendor/vis/packages/core/conduct/sunk-cost-iteration.md",
+        "vendor/vis/packages/core/conduct/verdict-calibration.md"
+      ],
+      "destination": "vendor/vis/packages/core/conduct/verification.md",
+      "package": "core",
+      "path": "vis/packages/core/conduct/verification.md",
+      "sha1": "918d57929843f86e0ba31e5d6692cc3fdf226743",
+      "sha256": "7d8e11f2aa1df5426d427c83be234804ff0bae90e8ede1e0b9691eceb60b754e",
+      "source": "vis",
+      "source_path": "packages/core/conduct/verification.md",
+      "source_revision": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "tag": "enchanter-core--v0.7.0",
+      "tag_commit": "ab19d8fbb1164465a446d68c7ddcc294313132b4",
+      "version": "v0.7.0"
+    },
+    {
+      "consumers": [
+        "README.md",
+        "skills/inference-emit/SKILL.md",
+        "skills/inference-reconcile/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/conduct/inference-substrate.md",
+      "path": "wixie/shared/conduct/inference-substrate.md",
+      "sha1": "53ef5b7cd6aecbaf9d348a118ac1d2685959145e",
+      "sha256": "4cdcb2d7409e87c6130f1e311153f652ca77d0550e3bcb85b51aa279c1ce27f6",
+      "source": "wixie",
+      "source_path": "shared/conduct/inference-substrate.md",
+      "source_revision": "git-blob:17f2cea4b1788952f86a760786a5721b7c9661cb"
+    },
+    {
+      "consumers": [
+        "bin/model-freshness-report.py",
+        "scripts/model-freshness.py"
+      ],
+      "destination": "vendor/wixie/shared/models-registry.json",
+      "path": "wixie/shared/models-registry.json",
+      "sha1": "b36c5e356e08da697b3b5f5a0063f9b58213b7a9",
+      "sha256": "94add8d46aca00ca47477b9b32b89212676deedd6e8936fb49cf0b48f46fa62e",
+      "source": "wixie",
+      "source_path": "shared/models-registry.json",
+      "source_revision": "git-blob:196bf2c80f4072791798006a9dbd3e43c58f3825"
+    },
+    {
+      "consumers": [
+        "README.md",
+        "skills/inference-emit/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/inference-emit.sh",
+      "path": "wixie/shared/scripts/inference-emit.sh",
+      "sha1": "6ed17e2bac4ef547908d72bf858ba0b51402ecce",
+      "sha256": "8d1f2413fa21bbcb52b2cc03457801b4fc879985b173aa27cab7d20dd00a37a4",
+      "source": "wixie",
+      "source_path": "shared/scripts/inference-emit.sh",
+      "source_revision": "git-blob:3204699c9eb437e108634eb8e849177349a1b40a"
+    },
+    {
+      "consumers": [
+        "agents/briefer.md",
+        "agents/reconciler.md",
+        "skills/inference-emit/SKILL.md",
+        "skills/inference-query/SKILL.md",
+        "skills/inference-reconcile/SKILL.md"
+      ],
+      "destination": "vendor/wixie/shared/scripts/inference-engine.py",
+      "path": "wixie/shared/scripts/inference-engine.py",
+      "sha1": "6d853e48c5d940e844f87e0e86e523033ed15357",
+      "sha256": "32d0046096572dba12a3ad75f155706a1c94b34d4062e3bee47638890bf43f17",
+      "source": "wixie",
+      "source_path": "shared/scripts/inference-engine.py",
+      "source_revision": "git-blob:5fe3005161824233cccdba8f157fe7164f38864c"
+    },
+    {
+      "consumers": [
+        "scripts/model-freshness.py",
+        "vendor/wixie/shared/scripts/inference-engine.py"
+      ],
+      "destination": "vendor/wixie/shared/scripts/plugin_state.py",
+      "path": "wixie/shared/scripts/plugin_state.py",
+      "sha1": "4d4e1b34974aafb5dba95a5947f42ed970250905",
+      "sha256": "1692d3fbd98d40c850b2d57ba5d987e5a88c18da90a69a40a7045181898f5cb3",
+      "source": "wixie",
+      "source_path": "shared/scripts/plugin_state.py",
+      "source_revision": "git-blob:5a05687e7397bbd6ba80d766d4168b277374b6e4"
+    }
+  ],
+  "generated_by": "scripts/vendor-conduct.py",
+  "schema": "wixie/vendored-closure/v2",
+  "unresolved_upstream_links": [
+    {
+      "from": "vendor/vis/packages/core/conduct/context.md",
+      "link": "./memory-hygiene.md",
+      "reason": "absent at the pinned vis commit"
+    },
+    {
+      "from": "vendor/vis/packages/core/conduct/substrate-consumption.md",
+      "link": "../../shared/conduct/inference-substrate.md",
+      "reason": "outside the pinned source tree"
+    },
+    {
+      "from": "vendor/vis/packages/core/conduct/tier-sizing.md",
+      "link": "./cost-accounting.md",
+      "reason": "absent at the pinned vis commit"
+    }
+  ]
+}

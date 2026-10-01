@@ -2,21 +2,39 @@
 """
 Offline test for efficacy-replay.py `corpus` mode — the measured DEPLOY bar.
 
-MOCKS THE MODEL CALL: monkeypatches the module's `subprocess.run` so NO real
-`claude -p` invocation, NO tokens, and NO network are required. This exercises the
-full real path otherwise: parse_stream_json -> classify_corpus -> wilson_ci ->
-accept_predicate -> exit-code decision. Runs hermetically against a temp corpus dir
-so the repo's shared/eval-corpus/ is never written to.
+MOCKS THE MODEL CALL: monkeypatches the module's `subprocess.Popen` (WIX-EFF-001 fix round 1
+moved the real invocation from `subprocess.run` to `subprocess.Popen` + `communicate()`, so a
+timeout can kill the whole process tree instead of just the direct child — see
+_kill_process_tree in efficacy-replay.py) so NO real `claude -p` invocation, NO tokens, and NO
+network are required. Also sets WIXIE_EFFICACY_CLAUDE_BIN to a guaranteed-nonexistent path as a
+second, independent safety net: if the Popen mock is ever incomplete or bypassed, resolve to a
+binary that cannot exist rather than silently falling through to a real `claude` on PATH. This
+exercises the full real path otherwise: parse_stream_json -> classify_corpus -> wilson_ci ->
+accept_predicate -> exit-code decision. Runs hermetically against a temp corpus dir so the
+repo's shared/eval-corpus/ is never written to.
 
 Usage: python test_corpus_measure.py <REPO_ROOT>   (exit 0 = pass)
 """
 import importlib.util
 import json
+import os
 import re
 import sys
 import tempfile
 from pathlib import Path
-from types import SimpleNamespace
+
+# Private temp root (WIX-TEST-ENV-001, tests/_test_root.py): scratch never lands in shared temp.
+_root_spec = importlib.util.spec_from_file_location(
+    "wixie_test_root", Path(__file__).resolve().parents[1] / "_test_root.py")
+_root_mod = importlib.util.module_from_spec(_root_spec)
+_root_spec.loader.exec_module(_root_mod)
+_root_mod.ensure_test_root()
+
+# Safety net (see module docstring): must be set before efficacy-replay.py is loaded, since
+# resolve_claude_bin() reads this env var at call time, not at import time — but setting it
+# early means every path in this test benefits, including ones that forget to mock.
+os.environ.setdefault("WIXIE_EFFICACY_CLAUDE_BIN",
+                       "__wix_eff001_test_no_such_binary_do_not_create__")
 
 
 def load_module(repo_root: Path):
@@ -43,10 +61,25 @@ GOOD_RESPONSE = (
 BAD_RESPONSE = "As an AI, it depends. I'm not sure. The date is 2024-01-01."
 
 
+class FakePopen:
+    """Stands in for subprocess.Popen: communicate() returns instantly, no process is spawned."""
+    def __init__(self, returncode: int, stdout: str, stderr: str, pid: int = 4242):
+        self.returncode = returncode
+        self._stdout = stdout
+        self._stderr = stderr
+        self.pid = pid
+
+    def communicate(self, timeout=None):
+        return self._stdout, self._stderr
+
+    def kill(self):
+        pass
+
+
 def fake_run_factory(response_text: str):
-    def fake_run(cmd, *args, **kwargs):
-        return SimpleNamespace(returncode=0, stdout=stream_json_for(response_text), stderr="")
-    return fake_run
+    def fake_popen_ctor(cmd, *args, **kwargs):
+        return FakePopen(returncode=0, stdout=stream_json_for(response_text), stderr="")
+    return fake_popen_ctor
 
 
 def make_temp_corpus(tmp: Path) -> Path:
@@ -74,10 +107,12 @@ def make_temp_corpus(tmp: Path) -> Path:
 
 
 def run_with_response(mod, tmp: Path, prompt_path: Path, response: str, with_control: bool):
-    mod.subprocess.run = fake_run_factory(response)
+    mod.subprocess.Popen = fake_run_factory(response)
     # n high enough that a 100%-pass arm's Wilson lower bound clears the 0.75 floor
     # (few trials => wide CI => honest REJECT even at rate 1.0).
-    return mod.run_corpus("deploy-bar", prompt_path, n=10, model="fake-model", with_control=with_control)
+    # WIX-SEC-WS-001: outputs go to an explicit per-run directory, never next to the corpus.
+    return mod.run_corpus("deploy-bar", prompt_path, n=10, model="fake-model", with_control=with_control,
+                          out_root=tmp / "out")
 
 
 def main() -> int:
@@ -120,6 +155,17 @@ def main() -> int:
         v_bad = run_with_response(mod, tmp, prompt, BAD_RESPONSE, with_control=False)
         assert v_bad["treatment"]["rate"] == 0.0, f"expected rate 0.0, got {v_bad['treatment']['rate']}"
         assert v_bad["decision"]["verdict"] == "REJECT", v_bad["decision"]
+
+        # WIX-SEC-WS-001: each run has its own verdict (per run, per prompt); the corpus dir is input only.
+        assert v_good["run_dir"] != v_bad["run_dir"], "two runs share one verdict location"
+        for v in (v_good, v_bad):
+            persisted = json.loads((Path(v["run_dir"]) / "verdict.json").read_text(encoding="utf-8"))
+            assert persisted["run_id"] == v["run_id"] and persisted["decision"] == v["decision"], persisted["run_id"]
+            assert Path(v["run_dir"]).parent == tmp / "out" / "corpus" / "deploy-bar", v["run_dir"]
+            assert list((Path(v["run_dir"]) / "runs").glob("*.json")), "no per-trial records"
+        import hashlib
+        assert v_good["prompt_sha256"] == hashlib.sha256(prompt.read_bytes()).hexdigest()
+        assert sorted(p.name for p in (tmp / "deploy-bar").iterdir()) == ["corpus.json"],             "efficacy-replay wrote next to its input corpus"
 
     # --- the real shipped corpus parses and every regex compiles ---
     real = json.loads((repo_root / "shared" / "eval-corpus" / "deploy-bar" / "corpus.json").read_text(encoding="utf-8"))

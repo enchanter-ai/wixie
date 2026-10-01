@@ -6,10 +6,12 @@ description: >
   Auto-triggers on: "/translate-prompt", "convert this prompt to GPT",
   "adapt for Claude", "port this prompt to Gemini",
   "make this work on o3", "translate prompt".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py *) Read Write Edit
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/deploy_bar.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit
 ---
 
 # Prompt Translator
+
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md` (anti-patterns). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
 
 Convert a prompt optimized for one model into the optimal format for a different model. Preserve all intent and domain content — only change structure, techniques, and formatting.
 
@@ -24,7 +26,7 @@ If loading from a saved prompt folder, read `metadata.json` to get the source mo
 - **Source model**: detected from metadata, format cues (XML → Claude, Markdown → GPT), or ask the user
 - **Target model**: the user specifies which model to translate to. If not specified, ask.
 
-Read both model entries from `${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json`.
+Read both model entries from `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json`.
 
 ## Step 3: Diff the Models
 
@@ -44,8 +46,8 @@ Compare source and target across these dimensions:
 ## Step 4: Apply Translation
 
 Read reference files for the target model:
-- [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/model-profiles.md)
-- [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/technique-engine.md)
+- [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/model-profiles.md)
+- [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/technique-engine.md)
 
 Apply these transformations in order:
 
@@ -79,14 +81,30 @@ Apply these transformations in order:
 
 Run self-eval on the translated prompt:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <translated-prompt>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <translated-prompt>
 ```
 
 If the translated prompt scores LOWER than the source, warn the user and explain which dimensions degraded (e.g., "Model Fit improved 5→9 but Completeness dropped 10→7 because examples were removed for o-series").
 
+Any DEPLOY / HOLD verdict you state for the translation comes from the canonical bar, never from
+the self-eval scores above (self-eval's STATUS ignores sigma and the 8 SAT assertions):
+```bash
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/deploy_bar.py <translated-prompt>
+```
+Copy its `verdict` (exit 0 DEPLOY, 1 HOLD, 3 UNVERIFIED); `score-delta.json` carries the same value.
+
 ## Step 6: Save
 
 Save the translated prompt as a new folder: `prompts/<name>-<target-model>/`
+
+**Editable regions (WIX-CONV-001):** follow [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md) (section "Translating"). Output
+the translation unannotated plus (a) a mapping source region id -> translated line range and (b) the
+line ranges of content you ADDED (examples, sandwich repeats). Save the master header-only
+(`prompt_regions.py annotate <shipped> <folder>/editable/<file>` with no `--region`) until the user
+confirms the side-by-side mapping in one Direction Lock question; then annotate with
+`--exclude-nonce <source nonce>` and require
+`prompt_regions.py check <master> --translated-from <source master> --added <ranges>` to exit 0.
+Never place added examples inside a region; never type marker lines.
 
 Run the full delivery pipeline (token count, metadata, tests, report).
 

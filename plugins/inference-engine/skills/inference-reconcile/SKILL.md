@@ -13,6 +13,8 @@ allowed-tools: Bash(python *) Read Agent
 
 # Inference Reconcile
 
+**State location (WIX-SEC-WS-001).** The installed plugin tree is read-only. The engine keeps its state in `${CLAUDE_PLUGIN_DATA}/state/` (passed as `--plugin-data`), seeded once from the shipped `state/` on first write; `WIXIE_INFERENCE_STATE` overrides it, and in a repo checkout without plugin data it uses `plugins/inference-engine/state/`. `state/...` paths below are relative to that resolved directory (`status` prints it as `state_dir`).
+
 Re-derive `catalog.json` from the full artifact history. Fully autonomous.
 
 ## Usage
@@ -28,7 +30,8 @@ Delegate to the Sonnet-tier reconciler. The agent runs the engine, validates out
 ```
 Agent(subagent_type="general-purpose", model="sonnet",
       prompt="Run the reconciler agent defined at
-              wixie/plugins/inference-engine/agents/reconciler.md.")
+              ${CLAUDE_PLUGIN_ROOT}/agents/reconciler.md
+              with plugin_data='${CLAUDE_PLUGIN_DATA}'.")
 ```
 
 ### Step 2: Parse the agent's report
@@ -44,7 +47,7 @@ reconciled <N> artifacts -> <P> patterns (<E> elevated, <R> retired)
 If the agent reports that verdicts changed (the agent diffs against the prior catalog internally), a fresh `state/briefings/wixie.md` is already written. Otherwise re-render unconditionally — cheap and keeps the briefing timestamp current:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py render-briefing wixie
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" render-briefing wixie
 ```
 
 ### Step 4: Report to caller
@@ -54,6 +57,55 @@ Reconcile complete: <N> artifacts, <P> patterns (<E> elevated, <R> retired)
 Briefing: state/briefings/wixie.md
 ```
 
+## Exit codes and outcomes
+
+| Exit | Meaning | What to tell the caller |
+|------|---------|-------------------------|
+| 0    | clean: every non-empty log line is counted (or is a repeat of a counted event). Also the no-op when the log is empty. | the summary line |
+| 3    | partial: the catalog was rebuilt from every usable line, but some lines were rejected. The summary line ends `[partial: N rejected line(s), M new]`. stderr lists the M lines rejected for the first time (not in the previous catalog) as `<file>:<line>: <reason>`, then only a count of the older ones; `catalog.json` has `outcome: "partial"`, `accounting` (incl. `new_rejected_lines`) and the full `rejected` list, each entry marked `new: true/false`. | the summary line; if M > 0 say that NEW records were rejected and quote them; do not call it clean |
+| 75   | busy: another inference-engine process held `state/.lock` for `WIXIE_INFERENCE_LOCK_TIMEOUT` seconds (default 30). Nothing was changed. | retry later |
+| 1    | operational failure (one-line reason on stderr, no traceback) | the error verbatim |
+
+`catalog.json` accounting always satisfies `nonempty_lines == events + duplicate_lines +
+rejected_lines`. A rejected line stays in the append-only log, so later reconciles keep
+reporting it (exit 3) until an operator deals with it; it is never silently dropped. Because
+exit 3 persists, `new_rejected_lines` is the signal that something new went wrong: it counts
+lines not listed by the previous catalog (all of them after a catalog recovery).
+
+### Corrupt catalog: quarantine and recovery
+
+`catalog.json` is derived state. If it cannot be read or does not have the catalog shape
+(truncated or invalid JSON, not UTF-8, wrong top-level type, a wrongly typed top-level field
+such as `accounting` or `rejected`, a pattern entry that is not an object or has a wrongly
+typed field), reconcile moves it to `state/catalog.json.corrupt-<UTC
+stamp>` (never deleted), rebuilds the catalog from the artifact log, keeps the first-crossing
+stamps (`elevated_at` / `retired_at`) of prior entries that were still well-formed, records
+`last_recovery` (`at`, `reason`, `quarantined_as`, `stamps_carried_from`) in the new catalog, and
+exits 0 (or 3 if lines were also rejected). While the catalog is corrupt, `status`, `query` and
+`render-briefing` exit 74 and point here. When the artifact log is empty or missing,
+reconcile still quarantines a corrupt catalog (and writes none, the normal empty state), so
+the 74 loop always ends. A catalog write is atomic (unique temp file, fsync,
+rename): an interrupted write leaves the previous catalog, and stale temp files are removed by
+the next reconcile.
+
+### Concurrency
+
+Reconcile, backfill and emit serialize on `state/.lock`. Queued emits in `state/pending/` are
+folded into the log at the start of every reconcile.
+
+### Legacy log migration (optional, operator action — not part of this skill's autonomous flow)
+
+`state/artifacts.jsonl`'s pre-identity historical records (committed before this engine version)
+have no persisted `_identity`; reconcile still accounts for them correctly today via a per-file
+content+ordinal identity, but they lack the copy/concatenation-safe guarantee newly written
+records get automatically (see `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md` § "Known limits of the
+identity rule"). An optional, one-time, explicitly operator-run migration closes that gap by
+re-emitting the legacy records through `backfill` into a fresh log, unchanged except for added
+identity metadata. Full procedure, pre/post hashing, backup, idempotency proof and rollback:
+`${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/conduct/inference-substrate.md` § "Legacy log migration". Never run this automatically
+from this skill or the reconciler agent; it changes no engine code and is never a substitute for
+a normal reconcile.
+
 If `WIXIE_INFERENCE_ENABLED=0` the reconcile still runs (it's safe) but the emit pipeline is a no-op, so the catalog may not reflect recent sessions. Tell the caller honestly.
 
 ## Rules
@@ -62,3 +114,4 @@ If `WIXIE_INFERENCE_ENABLED=0` the reconcile still runs (it's safe) but the emit
 - Do NOT claim elevation for patterns that did not cross SPRT. Honest numbers are the product.
 - Do NOT skip the briefing refresh when verdicts change — stale briefings erode the substrate's value.
 - If the engine script is missing or errors, report the error verbatim and stop. Do not invent a result.
+- Do NOT report exit 3 as a clean reconcile, and do NOT treat exit 75 as a failure of the data: it means "busy, retry".

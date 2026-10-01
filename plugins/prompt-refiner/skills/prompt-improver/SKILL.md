@@ -7,10 +7,12 @@ description: >
   Auto-triggers on: "make this prompt better", "improve this prompt",
   "refine this prompt", "fix this prompt", "optimize this prompt",
   "what's wrong with this prompt", "/refine".
-allowed-tools: Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py *) Bash(python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py *) Bash(mkdir *) Read Write Edit Agent
+allowed-tools: Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py *) Bash(mkdir *) Bash(python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/prompt_regions.py *) Read Write Edit Agent
 ---
 
 # Wixie — Prompt Refiner
+
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.deploy-bar.md` (DEPLOY bar and scoring provenance); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.artifacts-per-prompt.md` (prompt-folder artifacts and folder hygiene); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.agent-tiers.md` (agent tiers); `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.anti-patterns.md` (anti-patterns). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
 
 Improve an existing prompt by diagnosing weaknesses, re-selecting techniques, and adapting format to the target model.
 
@@ -26,9 +28,9 @@ Determine the source of the prompt to refine:
 
 **Option A — User provides a prompt directly:** Use it as-is. Skip to Phase 1.
 
-**Option B — User references a saved prompt:** Browse `${CLAUDE_PLUGIN_ROOT}/../../prompts/` for existing prompt folders. Each folder contains `prompt.<format>`, `report.html`, and `metadata.json`.
+**Option B — User references a saved prompt:** Browse `${CLAUDE_PROJECT_DIR}/prompts/` for existing prompt folders. Each folder contains `prompt.<format>`, `report.html`, and `metadata.json`.
 
-**Option C — User says "refine" or "improve" without specifying:** List available prompts from the `${CLAUDE_PLUGIN_ROOT}/../../prompts/` folder. Show each prompt's name, target model, overall score, and creation date (from `metadata.json`). Ask the user to pick one.
+**Option C — User says "refine" or "improve" without specifying:** List available prompts from the `${CLAUDE_PROJECT_DIR}/prompts/` folder. Show each prompt's name, target model, overall score, and creation date (from `metadata.json`). Ask the user to pick one.
 
 When loading a saved prompt:
 1. Read `metadata.json` for context (model, domain, techniques, scores)
@@ -41,7 +43,7 @@ When loading a saved prompt:
 
 ### 1A: Score the Original
 
-Run `${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py` on the user's original prompt. Record scores for all 5 axes.
+Run `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py` on the user's original prompt. Record scores for all 5 axes.
 
 If the script is unavailable, score manually using the same 5 axes:
 1. **Clarity** — Are instructions unambiguous?
@@ -60,7 +62,7 @@ If the script is unavailable, score manually using the same 5 axes:
 
 ### 1B.5: Model Fit Check
 
-After detecting the model and domain, read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json) and validate the model fits the task:
+After detecting the model and domain, read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json) and validate the model fits the task:
 
 | Task Domain | Poor Fit Models |
 |---|---|
@@ -101,7 +103,7 @@ Proceeding with refinement...
 
 A refine can change a prompt's direction as much as a create. Before applying fixes, confirm the refinement **direction** with the developer — grill-me style, one decision at a time. Default-on.
 
-Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/direction-lock.md). Reflect the diagnosis in one line, then ask **one question per call** — which diagnosed weaknesses to fix (from 1C), which axes to move, keep-or-switch the target model (post 1B.5), and any assumption behind the planned fix — each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). Do NOT enter Phase 2 until the direction is confirmed.
+Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/direction-lock.md). Reflect the diagnosis in one line, then ask **one question per call** — which diagnosed weaknesses to fix (from 1C), which axes to move, keep-or-switch the target model (post 1B.5), and any assumption behind the planned fix — each carrying one decisive recommendation from the orchestrator (**Opus-5 by default**, overridable). Do NOT enter Phase 2 until the direction is confirmed.
 
 ---
 
@@ -109,7 +111,7 @@ Read and follow [direction-lock.md](${CLAUDE_PLUGIN_ROOT}/../../shared/reference
 
 ### 2A: Re-select Techniques
 
-Read [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/technique-engine.md). Based on the diagnosed weaknesses and target model:
+Read [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/technique-engine.md). Based on the diagnosed weaknesses and target model:
 
 1. Identify which techniques the original prompt uses (implicitly or explicitly)
 2. Check if any are anti-patterns for the target model
@@ -118,15 +120,15 @@ Read [technique-engine.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/techniq
 
 ### 2B: Re-format and Restructure
 
-Read [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/model-profiles.md) for the target model's format requirements.
-Read [output-formats.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/output-formats.md) for the task type's optimal structure.
+Read [model-profiles.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/model-profiles.md) for the target model's format requirements.
+Read [output-formats.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/output-formats.md) for the task type's optimal structure.
 
-**Registry check:** Read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/../../shared/models-registry.json) for context window and capabilities.
+**Registry check:** Read [models-registry.json](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/models-registry.json) for context window and capabilities.
 
 Apply fixes:
 - **Format layer**: Convert to the target model's preferred format (XML for Claude, Markdown for GPT, minimal for o-series)
 - **Technique layer**: Add missing techniques, remove harmful ones
-- **Component layer**: Add missing mandatory components (fallbacks, expected output, success criteria) per [prompt-anatomy.md](${CLAUDE_PLUGIN_ROOT}/../../shared/references/prompt-anatomy.md)
+- **Component layer**: Add missing mandatory components (fallbacks, expected output, success criteria) per [prompt-anatomy.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/prompt-anatomy.md)
 - **Efficiency layer**: Remove filler phrases, redundant instructions, conflicting directives
 
 **What NOT to change:**
@@ -141,7 +143,7 @@ Apply fixes:
 
 ### 3A: Score the Refined Prompt
 
-Run `${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py` on the refined prompt. Compare before/after scores.
+Run `${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py` on the refined prompt. Compare before/after scores.
 
 ### 3B: Present the Refined Prompt
 
@@ -149,22 +151,29 @@ Always present the refined prompt inside a fenced code block (` ``` `).
 
 ### 3C: Save as a Folder
 
-Save the refined prompt as a folder inside `${CLAUDE_PLUGIN_ROOT}/../../prompts/`. Append `-v<N>` to the folder name if a previous version exists (e.g., `invoice-extractor-v2`).
+Save the refined prompt as a folder inside `${CLAUDE_PROJECT_DIR}/prompts/`. Append `-v<N>` to the folder name if a previous version exists (e.g., `invoice-extractor-v2`).
 
 #### Delivery steps (execute ALL in order — do NOT skip any step)
 
-1. **Create/reuse the folder:** `mkdir -p ${CLAUDE_PLUGIN_ROOT}/../../prompts/<prompt-name>`
+1. **Create/reuse the folder:** `mkdir -p ${CLAUDE_PROJECT_DIR}/prompts/<prompt-name>`
 
 2. **Save the refined prompt file:** Write `prompt.<format>` into the folder.
 
+2b. **Mark editable regions (WIX-CONV-001):** follow [editable-regions.md](${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/references/editable-regions.md). Write the refined prompt
+unannotated, propose ranges over instruction prose only, confirm them in one Direction Lock
+question showing each range's full text, and apply them only with `prompt_regions.py annotate`.
+If a previous master exists, run `prompt_regions.py check <new master> --against <old master>` and
+re-confirm every added or grown region. Legacy (unannotated) prompts get the same treatment: you
+may propose ranges, the user confirms them, the tool writes them. Never type marker lines.
+
 3. **Run token count on the refined prompt:**
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/token-count.py <prompt-file> --model <target-model>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/token-count.py <prompt-file> --model <target-model>
 ```
 
 4. **Run self-eval on the refined prompt:**
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/self-eval.py <prompt-file>
 ```
 
 5. **Save metadata.json** with before/after scores and `"mode": "refine"`:
@@ -204,10 +213,14 @@ python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/self-eval.py <prompt-file>
 
 7. **Generate report.pdf** (do NOT write the report manually):
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/report-gen.py <prompt-folder-path>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/report-gen.py <prompt-folder-path>
 ```
+Exit codes (WIX-G0-REPORT-001): `0` = `report.pdf` written and validated. `1` = PDF
+conversion failed; `report.html` was written as the documented fallback ("Done (HTML
+fallback)."), a degraded-but-valid outcome — not an error to retry blindly. `2` = usage
+error (missing prompt-folder or `metadata.json`).
 
-8. **Update index.json:** Read `${CLAUDE_PLUGIN_ROOT}/../../prompts/index.json`, update the entry for this prompt, write it back.
+8. **Update index.json:** Read `${CLAUDE_PROJECT_DIR}/prompts/index.json`, update the entry for this prompt, write it back.
 
 #### Final folder contents
 
@@ -229,7 +242,13 @@ Same pipeline as prompt-crafter. Run autonomously.
 
 ### Mode A: Text Prompts
 
-1. Run convergence: `python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/convergence.py <prompt-file>`
+1. Run convergence on the master (`prompts/<name>/editable/<file>`) if one exists, else on the
+   prompt file (critique and proposals only; an unannotated prompt is never rewritten):
+   `python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/convergence.py <master-or-prompt-file>`
+   Exit codes (WIX-EVAL-004): `0` DEPLOY, `1` HOLD, `2` usage/bad input, `3` internal error
+   (distinct from HOLD). **Exit 0 / "VERDICT: DEPLOY" is a heuristic verdict only** — zero
+   model API calls — NOT a measured DEPLOY; the measured step is converge SKILL.md's Step 2.5
+   (`efficacy-replay.py`). Pass `--json`/`--json-out <path>` for a machine-readable verdict.
 2. Save all artifacts (delivery steps 3-8).
 3. Review: check self-eval output for criticals. If any, fix and re-converge (max 3 review cycles).
 4. Deliver with convergence history.

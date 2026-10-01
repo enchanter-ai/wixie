@@ -167,6 +167,7 @@ def dispatch_one(
     if not ok:
         return {
             "status": "blocked",
+            "transport_ok": False,
             "model": model,
             "result": None,
             "duration_ms": 0,
@@ -206,6 +207,7 @@ def dispatch_one(
         except subprocess.TimeoutExpired:
             return {
                 "status": "error",
+                "transport_ok": False,
                 "model": resolved,
                 "result": None,
                 "duration_ms": int((time.time() - started) * 1000),
@@ -217,6 +219,7 @@ def dispatch_one(
         except OSError as exc:
             return {
                 "status": "blocked",
+                "transport_ok": False,
                 "model": resolved,
                 "result": None,
                 "duration_ms": 0,
@@ -237,6 +240,7 @@ def dispatch_one(
             if kind == "auth-fail":
                 return {
                     "status": "blocked",
+                    "transport_ok": False,
                     "model": resolved,
                     "result": None,
                     "duration_ms": duration_ms,
@@ -253,6 +257,7 @@ def dispatch_one(
                 continue
             return {
                 "status": "error",
+                "transport_ok": False,
                 "model": resolved,
                 "result": None,
                 "duration_ms": duration_ms,
@@ -267,9 +272,16 @@ def dispatch_one(
         # broken SessionEnd hook) are tolerated and not fatal.
         try:
             payload = json.loads(proc.stdout.strip().splitlines()[-1])
-        except (json.JSONDecodeError, IndexError) as exc:
+            # WIX-DISPATCH-001: the last stdout line can be valid JSON that is not an object
+            # ("text", 5, []). payload.get() below would then raise AttributeError and escape as a
+            # traceback from this entry point, while dispatch_batch() caught the same input and
+            # reported a structured envelope. Same input, two behaviours. Normalise here.
+            if not isinstance(payload, dict):
+                raise TypeError(f"expected a JSON object, got {type(payload).__name__}")
+        except (json.JSONDecodeError, IndexError, TypeError) as exc:
             return {
                 "status": "error",
+                "transport_ok": False,
                 "model": resolved,
                 "result": None,
                 "duration_ms": duration_ms,
@@ -284,6 +296,7 @@ def dispatch_one(
         if payload.get("is_error"):
             return {
                 "status": "error",
+                "transport_ok": True,
                 "model": resolved,
                 "result": payload.get("result"),
                 "duration_ms": duration_ms,
@@ -293,19 +306,44 @@ def dispatch_one(
                 "raw": payload,
             }
 
+        # WIX-DISPATCH-001: transport success is not task success. Exit 0 plus a parseable envelope
+        # only tells us the CLI ran and answered; it says nothing about whether a model produced
+        # anything. A missing or empty "result" used to be returned as status "ok" with result
+        # None/"" and mapped to process exit 0, so a consumer keying on status == "ok" treated a
+        # silent run as a completed dispatch. Absence of output is an error, not a success.
+        result = payload.get("result")
+        if result is None or (isinstance(result, str) and not result.strip()):
+            return {
+                "status": "error",
+                "model": resolved,
+                "result": result,
+                "duration_ms": duration_ms,
+                "cost_usd": payload.get("total_cost_usd"),
+                "attempts": attempts,
+                "cause": (
+                    "empty model output: the CLI exited 0 and returned a valid envelope, but "
+                    f"'result' was {'absent' if result is None else 'blank'}. Transport succeeded; "
+                    "the task did not produce output."
+                ),
+                "transport_ok": True,
+                "raw": payload,
+            }
+
         return {
             "status": "ok",
             "model": resolved,
-            "result": payload.get("result"),
+            "result": result,
             "duration_ms": duration_ms,
             "cost_usd": payload.get("total_cost_usd"),
             "attempts": attempts,
             "cause": None,
+            "transport_ok": True,
             "raw": payload,
         }
 
     return {
         "status": "error",
+        "transport_ok": False,
         "model": resolved,
         "result": None,
         "duration_ms": 0,
@@ -357,6 +395,7 @@ def dispatch_batch(
             except Exception as exc:  # noqa: BLE001 — surface any leak honestly
                 results[idx] = {
                     "status": "error",
+                    "transport_ok": False,
                     "model": model,
                     "result": None,
                     "duration_ms": 0,

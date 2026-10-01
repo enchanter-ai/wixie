@@ -1,8 +1,8 @@
 {
   "name": "wixie-prompt-harden",
-  "display_name": "Prompt Harden",
+  "displayName": "Prompt Harden",
   "description": "Tests prompts against 12 adversarial attack patterns — injection, jailbreak, data extraction, encoding bypass, and more. Reports which attacks succeed and suggests specific defenses.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "enchanter-ai"
   },
@@ -15,6 +15,5 @@
   "skills": [
     "./skills/harden/"
   ],
-  "agents": "./agents/",
   "dependencies": []
 }

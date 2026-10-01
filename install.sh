@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Wixie installer. The 6 plugins are a coordinated pipeline; the `full`
-# meta-plugin pulls them all in via one dependency-resolution pass.
+# Wixie installer. The 6 plugins (plus deep-research, which /create invokes) are a
+# coordinated pipeline; the `full` meta-plugin pulls them all in via one
+# dependency-resolution pass.
 set -euo pipefail
 
 REPO="https://github.com/enchanter-ai/wixie"
@@ -35,8 +36,8 @@ cat <<'EOF'
 ─────────────────────────────────────────────────────────────────────────
   Wixie ships as a 6-plugin pipeline — crafter hands off to convergence,
   which emits tests.json that tester executes, and so on. The `full`
-  meta-plugin lists all six as dependencies so one install pulls in
-  the whole chain.
+  meta-plugin lists all six, plus deep-research (which /create invokes),
+  as dependencies so one install pulls in the whole chain.
 ─────────────────────────────────────────────────────────────────────────
 
   Finish in Claude Code with TWO commands:
@@ -44,10 +45,16 @@ cat <<'EOF'
     /plugin marketplace add enchanter-ai/wixie
     /plugin install full@wixie
 
-  That installs all 6 plugins via dependency resolution. To cherry-pick
+  That installs all 7 plugins via dependency resolution. To cherry-pick
   a single plugin instead, use e.g. `/plugin install prompt-harden@wixie`.
 
+  Each installed plugin carries the shared-conduct modules it references
+  under its own vendor/ directory (generated from the pinned vis release
+  in .vis-lock), so no vis checkout or bootstrap step is needed for it.
+  The repo-level CLAUDE.md contract applies inside a full checkout (run
+  ./scripts/bootstrap.sh there); see docs/installation.md.
+
   Verify with:   /plugin list
-  Expected:      full + 6 plugins installed under the wixie marketplace.
+  Expected:      full + 7 plugins installed under the wixie marketplace.
 
 EOF

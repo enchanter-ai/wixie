@@ -14,11 +14,13 @@ allowed-tools: Read
 
 # CIBER Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Governed by:
-- `@../../../vis/packages/web/conduct/citation-verification.md` § "Multi-aspect interrogation (CIBER)" — protocol, what emits, what failure modes it catches, paraphrase quality contract
-- `@../../../vis/packages/web/conduct/source-discipline.md` — untrusted-source contract, confidence tiers, dissemination_score
-- `@../../../vis/packages/web/conduct/research-pipeline.md` — query-diversity rule (paraphrases must be substantively different)
-- `@../../../vis/packages/core/conduct/tier-sizing.md` — Haiku tier — every step is a mechanical pattern, not semantic judgment
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/citation-verification.md` § "Multi-aspect interrogation (CIBER)" — protocol, what emits, what failure modes it catches, paraphrase quality contract
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/source-discipline.md` — untrusted-source contract, confidence tiers, dissemination_score
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/web/conduct/research-pipeline.md` — query-diversity rule (paraphrases must be substantively different)
+- `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/tier-sizing.md` — Haiku tier — every step is a mechanical pattern, not semantic judgment
 
 **Conceptual basis**: CIBER (Cross-aspect Inter-Behavior Evaluation of Reliability), arxiv 2503.07937. Implementation is ours and adapted to the deep-research corpus rather than to an LLM-output reliability harness.
 
@@ -143,4 +145,4 @@ Return ONLY this JSON object. No preamble. No markdown fences. No trailing comme
 | F02.2-temporal | Temporal scope-shift — source backs an *earlier* state of the same factual ground; date pre-dates the claim's effective date | `temporal_scope_shift` severity; demote confidence to `medium-contested` but do NOT flip `ciber_passed`; surface both positions and the timeline in `<constraints>` |
 | F25 | CIBER's own paraphrase set is synonym-only (low diversity) | Step 3 diversity guard catches; mark `reframing_quality: low`; record in `skipped` rather than emitting false-positive consistency passes |
 
-Log occurrences to `state/precedent-log.md` per `@../../../vis/packages/core/conduct/precedent.md` when severity is `negation_supported` (highest-value signal for E6 aggregation).
+Log occurrences to `state/precedent-log.md` per `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/precedent.md` when severity is `negation_supported` (highest-value signal for E6 aggregation).

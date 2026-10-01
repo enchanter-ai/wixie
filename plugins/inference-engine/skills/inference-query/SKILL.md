@@ -11,6 +11,10 @@ allowed-tools: Bash(python *) Read
 
 # Inference Query
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
+**State location (WIX-SEC-WS-001).** The installed plugin tree is read-only. The engine keeps its state in `${CLAUDE_PLUGIN_DATA}/state/` (passed as `--plugin-data`), seeded once from the shipped `state/` on first write; `WIXIE_INFERENCE_STATE` overrides it, and in a repo checkout without plugin data it uses `plugins/inference-engine/state/`. `state/...` paths below are relative to that resolved directory (`status` prints it as `state_dir`).
+
 Retrieve pattern records from `catalog.json` by code, tag, or `pattern_id`.
 
 ## Usage
@@ -22,10 +26,10 @@ The caller provides one search term. Exact match only at Phase 1. Fuzzy / BM25 r
 ### Step 1: Run the query
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py query <term>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" query <term>
 ```
 
-The engine returns a JSON array of matching patterns to stdout. Exit code `0` if any match, `1` if none.
+The engine returns a JSON array of matching patterns to stdout. Exit code `0` if any match, `1` if none. Exit `74` means `catalog.json` is corrupt: nothing is returned; run `/inference-reconcile`, which quarantines and rebuilds it.
 
 ### Step 2: Summarize for the caller
 
@@ -45,7 +49,7 @@ Parse the JSON and present a compact summary:
 If the caller's intent is to understand a pattern they're about to trip over, offer:
 
 - `/inference-brief <plugin>` to see the full briefing the target plugin is consuming.
-- Full JSON via a Read on `wixie/plugins/inference-engine/state/catalog.json`.
+- Full JSON via a Read on `catalog.json` in the `state_dir` that `python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" status` prints.
 
 ## Rules
 

@@ -6,31 +6,37 @@ Audience: Claude. Wixie engineers prompts — crafts, converges, tests, hardens,
 
 These apply to every skill in every plugin. Load once; do not re-derive.
 
-- @../vis/packages/core/conduct/discipline.md — coding conduct: think-first, simplicity, surgical edits, goal-driven loops
-- @../vis/packages/core/conduct/context.md — attention-budget hygiene, U-curve placement, checkpoint protocol
-- @../vis/packages/core/conduct/capability-fidelity.md — contracts survive capability gaps: recover, escalate, or abort; never silently substitute
-- @../vis/packages/core/conduct/verification.md — independent checks, baseline snapshots, dry-run for destructive ops
-- @../vis/packages/core/conduct/verdict-calibration.md — every verdict (DEPLOY/PASS/COMPLETE/VERIFIED) carries n, sampling method, and a calibration qualifier; vis-side abstraction over the wixie DEPLOY bar
-- @../vis/packages/core/conduct/doubt-engine.md — adversarial self-check before agreement; counter to F01 sycophancy; fires on user proposals AND your own prior framing
-- @../vis/packages/core/conduct/delegation.md — subagent contracts, tool whitelisting, parallel vs. serial rules
-- @../vis/packages/core/conduct/failure-modes.md — 14-code taxonomy for `learnings.md` so E6 can aggregate
-- @../vis/packages/core/conduct/tool-use.md — tool-choice hygiene, error payload contract, parallel-dispatch rules
-- @../vis/packages/skills/conduct/formatting.md — per-target format (XML/Markdown/minimal/few-shot), prefill + stop sequences
-- @../vis/packages/skills/conduct/skill-authoring.md — SKILL.md frontmatter discipline, discovery test
-- @../vis/packages/core/conduct/hooks.md — advisory-only hooks, injection over denial, fail-open
-- @../vis/packages/core/conduct/metacognition.md — periodic goal-restate; fires every K=8 tool-uses or on user meta-question
-- @../vis/packages/core/conduct/precedent.md — log self-observed failures to `state/precedent-log.md`; consult before risky steps
-- @../vis/packages/core/conduct/precedent-freshness.md — verify self-authored memory/precedent/briefings before relying on them: Class-A surfaces (path/function/flag) get a Glob/Grep existence check; Class-B snapshots get a git-log freshness check; Class-C feedback rules are trusted unless contradicted
-- @../vis/packages/core/conduct/prior-art-discovery.md — F28 counter: run the 5-target discovery pass (shared/scripts, packages/*/skills, state/proposals, slug-glob, signature-grep) before authoring a new tool/script/skill/module
-- @../vis/packages/core/conduct/reversibility-foresight.md — classify action reversibility (trivial/costly/impossible) before acting; confirmation scales with tier
-- @../vis/packages/core/conduct/substrate-consumption.md — read-side complement to precedent.md: consume briefing, MEMORY, learnings, and precedent before acting; counter to F24 substrate-blindness
-- @../vis/packages/core/conduct/sunk-cost-iteration.md — stop-and-re-ask after 2 INCONCLUSIVE/BLOCKED results on the same artifact; iteration is not an authorization to keep patching
-- @../vis/packages/core/conduct/tier-sizing.md — prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent
-- @../vis/packages/web/conduct/web-fetch.md — external URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only
-- @../vis/packages/web/conduct/research-pipeline.md — multi-phase web research discipline: 6-phase shape, work-budget floors, mandatory adversarial round, 15-min wall-clock floor
-- @../vis/packages/web/conduct/source-discipline.md — handling web-fetched evidence: untrusted-source quote wrapping, independence checks, τ, dissemination_score, source-type weighting
-- @../vis/packages/web/conduct/citation-verification.md — trace + re-fetch protocol; Wayback Machine fallback; 4-class support taxonomy (Supported / Partial / Unsupported / Uncertain); refetch_pass_rate thresholds
-- @../vis/packages/web/conduct/mcp-research-discipline.md — opt-in MCP integration for research fetchers: per-query MCP routing (Brave / Tavily / Zotero / Playwright), three security gates (manifest audit, version pin, least-privilege creds), monoculture check
+**Setup note:** the `.vis-cache/vis/` imports below (each prefixed with `@`) resolve from a
+Wixie-local materialized cache, not the `../vis` sibling checkout directly. Run
+`./scripts/bootstrap.sh` (or `.\scripts\bootstrap.ps1` on Windows) once after cloning — and
+again after bumping `.vis-versions` — before these imports resolve. See `scripts/bootstrap.sh`
+header and `.vis-lock` for the pinned-package architecture (WIX-INSTALL-002 / D8).
+
+- @.vis-cache/vis/packages/core/conduct/discipline.md — coding conduct: think-first, simplicity, surgical edits, goal-driven loops
+- @.vis-cache/vis/packages/core/conduct/context.md — attention-budget hygiene, U-curve placement, checkpoint protocol
+- @.vis-cache/vis/packages/core/conduct/capability-fidelity.md — contracts survive capability gaps: recover, escalate, or abort; never silently substitute
+- @.vis-cache/vis/packages/core/conduct/verification.md — independent checks, baseline snapshots, dry-run for destructive ops
+- @.vis-cache/vis/packages/core/conduct/verdict-calibration.md — every verdict (DEPLOY/PASS/COMPLETE/VERIFIED) carries n, sampling method, and a calibration qualifier; vis-side abstraction over the wixie DEPLOY bar
+- @.vis-cache/vis/packages/core/conduct/doubt-engine.md — adversarial self-check before agreement; counter to F01 sycophancy; fires on user proposals AND your own prior framing
+- @.vis-cache/vis/packages/core/conduct/delegation.md — subagent contracts, tool whitelisting, parallel vs. serial rules
+- @.vis-cache/vis/packages/core/conduct/failure-modes.md — 14-code taxonomy for `learnings.md` so E6 can aggregate
+- @.vis-cache/vis/packages/core/conduct/tool-use.md — tool-choice hygiene, error payload contract, parallel-dispatch rules
+- @.vis-cache/vis/packages/skills/conduct/formatting.md — per-target format (XML/Markdown/minimal/few-shot), prefill + stop sequences
+- @.vis-cache/vis/packages/skills/conduct/skill-authoring.md — SKILL.md frontmatter discipline, discovery test
+- @.vis-cache/vis/packages/core/conduct/hooks.md — advisory-only hooks, injection over denial, fail-open
+- @.vis-cache/vis/packages/core/conduct/metacognition.md — periodic goal-restate; fires every K=8 tool-uses or on user meta-question
+- @.vis-cache/vis/packages/core/conduct/precedent.md — log self-observed failures to `state/precedent-log.md`; consult before risky steps
+- @.vis-cache/vis/packages/core/conduct/precedent-freshness.md — verify self-authored memory/precedent/briefings before relying on them: Class-A surfaces (path/function/flag) get a Glob/Grep existence check; Class-B snapshots get a git-log freshness check; Class-C feedback rules are trusted unless contradicted
+- @.vis-cache/vis/packages/core/conduct/prior-art-discovery.md — F28 counter: run the 5-target discovery pass (shared/scripts, packages/*/skills, state/proposals, slug-glob, signature-grep) before authoring a new tool/script/skill/module
+- @.vis-cache/vis/packages/core/conduct/reversibility-foresight.md — classify action reversibility (trivial/costly/impossible) before acting; confirmation scales with tier
+- @.vis-cache/vis/packages/core/conduct/substrate-consumption.md — read-side complement to precedent.md: consume briefing, MEMORY, learnings, and precedent before acting; counter to F24 substrate-blindness
+- @.vis-cache/vis/packages/core/conduct/sunk-cost-iteration.md — stop-and-re-ask after 2 INCONCLUSIVE/BLOCKED results on the same artifact; iteration is not an authorization to keep patching
+- @.vis-cache/vis/packages/core/conduct/tier-sizing.md — prompt verbosity scales inversely with model tier; Haiku needs mechanical steps, Opus runs on intent
+- @.vis-cache/vis/packages/web/conduct/web-fetch.md — external URL handling: cache, dedup, budget; WebFetch is Haiku-tier-only
+- @.vis-cache/vis/packages/web/conduct/research-pipeline.md — multi-phase web research discipline: 6-phase shape, work-budget floors, mandatory adversarial round, 15-min wall-clock floor
+- @.vis-cache/vis/packages/web/conduct/source-discipline.md — handling web-fetched evidence: untrusted-source quote wrapping, independence checks, τ, dissemination_score, source-type weighting
+- @.vis-cache/vis/packages/web/conduct/citation-verification.md — trace + re-fetch protocol; Wayback Machine fallback; 4-class support taxonomy (Supported / Partial / Unsupported / Uncertain); refetch_pass_rate thresholds
+- @.vis-cache/vis/packages/web/conduct/mcp-research-discipline.md — opt-in MCP integration for research fetchers: per-query MCP routing (Brave / Tavily / Zotero / Playwright), three security gates (manifest audit, version pin, least-privilege creds), monoculture check
 - @shared/conduct/inference-substrate.md — cross-session evidence accumulation; emit to and read from the inference-engine substrate without corrupting its honest-numbers contract
 
 When a module conflicts with a plugin-local instruction, the plugin wins — but log the override.
@@ -83,7 +89,10 @@ E0 auto-fires inside `/create` (and `/refine`) when the topic depends on externa
 
 ```
 prompts/<name>/
-├── prompt.<ext>       production prompt, format matches target model
+├── prompt.<ext>       production prompt, format matches target model (= strip(master) when annotated)
+├── editable/
+│   └── prompt.<ext>   annotated master: the only file convergence may edit, and only inside
+│                      explicit "@wixie-editable/1" regions (never shown to a model)
 ├── metadata.json      model, tokens, cost, 5-axis scores, 8 assertions, version
 ├── tests.json         regression test cases (≥ 3, ≥ 1 edge-case)
 ├── report.pdf         dark-themed single-page audit (final only)
@@ -91,6 +100,8 @@ prompts/<name>/
 ```
 
 **Folder hygiene.** Intermediate HTML / diffs / scratch live in the plugin's `state/` dir. Only the final PDF stays in `prompts/<name>/`. The prompt folder is a handoff surface, not a work-in-progress.
+
+**Explicit editability (WIX-CONV-001).** `/converge` and `output-test.py` change only the bodies of regions a master (`editable/<shipped filename>`) explicitly marks; everything else is immutable data. A prompt without a master is scored, critiqued and given proposals (in `state/`), never rewritten. Markers are written only by `shared/scripts/prompt_regions.py annotate` from human-confirmed ranges; masters and shipped files are written together only by `prompt_regions.commit`. Protocol: [`shared/references/editable-regions.md`](shared/references/editable-regions.md).
 
 ## Agent tiers
 
@@ -108,4 +119,6 @@ Respect the tiering. Routing a Haiku validation task to Opus burns budget and br
 - **Scratch in prompts/.** Leaving HTML, diff, or iteration artifacts in the prompt folder. They belong in `state/`; only `report.pdf` ships.
 - **Unverified translation.** Handing back a translated prompt without a score comparison. Translation without verification is not translation.
 - **Autonomous image loops.** Iterating an image prompt without visual feedback. Text prompts converge on assertions; image prompts converge on developer ratings.
+- **Marker text typed by an agent, or shipped.** Only `prompt_regions.py annotate` writes `@wixie-editable/1` lines, and no shipped file (or model input) may contain them. Never glob into `editable/`.
+- **"Converged" on an unannotated prompt.** Without explicit regions convergence writes nothing; a DEPLOY there is "meets the heuristic bar, unmodified" (`mutation: "none"`).
 - **DEPLOY claim with stale metadata.** Verdict comes from the current convergence run's scores, not `metadata.json` from a prior session. Re-run self-eval if unsure.

@@ -14,6 +14,8 @@ allowed-tools: Read, Glob, Bash(date *)
 
 # Research Refresh
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Audit and optionally refresh stale briefs.
 
 ## Inputs
@@ -25,7 +27,7 @@ Audit and optionally refresh stale briefs.
 
 ### Step 1: Scan
 
-Glob `state/briefs/*/claims.json`. For each, read the `freshness` field. Compute age = today − freshness.
+Glob `${CLAUDE_PLUGIN_DATA}/briefs/*/claims.json` (the brief store; WIX-SEC-WS-001). For each, read the `freshness` field. Compute age = today − freshness.
 
 ### Step 2: Classify
 

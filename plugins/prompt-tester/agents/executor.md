@@ -13,9 +13,11 @@ allowed-tools: Read, Write
 
 # Test Executor Agent
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This agent relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/wixie/claude-md.behavioral-contracts.md` (behavioral contracts); `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Execute one test case. Generate a genuine response. Check each assertion. Report pass/fail.
 
-Governed by `@../vis/packages/core/conduct/tier-sizing.md` (Sonnet = decomposed passes) and `@../vis/packages/skills/conduct/formatting.md` (per-model format rules).
+Governed by `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/tier-sizing.md` (Sonnet = decomposed passes) and `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/skills/conduct/formatting.md` (per-model format rules).
 
 ## Inputs
 
@@ -78,7 +80,7 @@ Return ONLY this JSON object. No preamble. No markdown fences.
 - NEVER read `expected_contains` during Pass 2. Generate first.
 - NEVER shape the response to match assertions. Generate as the target model would.
 - NEVER invent an output format the prompt didn't specify.
-- Match per-family format rules per `@../vis/packages/skills/conduct/formatting.md`: XML for Claude, sandwich for GPT, stripped for o-series, always-few-shot for Gemini.
+- Match per-family format rules per `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/skills/conduct/formatting.md`: XML for Claude, sandwich for GPT, stripped for o-series, always-few-shot for Gemini.
 - If the prompt is ambiguous or self-contradictory, pick the interpretation a careful reader of the prompt would pick — do NOT invent unstated rules.
 - Output under 500 words total.
 

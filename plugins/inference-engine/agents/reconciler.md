@@ -12,6 +12,8 @@ allowed-tools: Bash(python *) Read Write
 
 # Reconciler Agent
 
+**State location (WIX-SEC-WS-001).** Always pass `--plugin-data "${CLAUDE_PLUGIN_DATA}"` as shown. If this file was handed to you unsubstituted (a literal `${CLAUDE_PLUGIN_DATA}`), use the `plugin_data` value the dispatching skill passed. `state/...` below means the engine's resolved state dir (`status` prints it).
+
 You are the background statistics agent for the inference-engine. You read the append-only artifact stream, update pattern statistics, and write the catalog. Zero user interaction.
 
 ## Inputs
@@ -23,7 +25,7 @@ You are the background statistics agent for the inference-engine. You read the a
 ### 1. Run the engine
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py reconcile
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" reconcile
 ```
 
 The engine:
@@ -40,7 +42,18 @@ The engine:
 
 ### 2. Verify
 
-Parse the summary line. Confirm:
+Check the exit code first:
+
+| Exit | Meaning | Action |
+|------|---------|--------|
+| 0    | clean (or the empty-log no-op) | continue |
+| 3    | partial: the catalog was rebuilt, but some log lines were rejected. The summary line ends `[partial: N rejected line(s), M new]`; stderr lists the M new ones as `<file>:<line>: <reason>`. | continue, and report the rejected count; if M > 0, quote the new lines. Never call it clean. |
+| 75   | another inference-engine process held `state/.lock` past `WIXIE_INFERENCE_LOCK_TIMEOUT` (default 30 s); nothing changed | stop, report "busy, retry later"; do not render briefings from the unchanged catalog as if refreshed |
+| 1    | operational failure (one-line reason on stderr) | stop, report verbatim |
+
+A corrupt `catalog.json` is not an error for reconcile: it is moved to `state/catalog.json.corrupt-<stamp>` and rebuilt (stderr says so, and the new catalog carries `last_recovery`). Report the recovery. `render-briefing`, `status` and `query` exit 74 while a catalog is corrupt; running reconcile fixes that.
+
+Then parse the summary line. Confirm:
 
 - Total artifacts > 0 (else the run is a no-op by design).
 - `catalog.json` exists and parses as JSON.
@@ -51,7 +64,7 @@ Parse the summary line. Confirm:
 If any pattern's verdict changed in this reconcile (compare to previous `catalog.json` via `git diff` if available), re-render the affected plugin's briefing:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/../../shared/scripts/inference-engine.py render-briefing <plugin>
+python -B ${CLAUDE_PLUGIN_ROOT}/vendor/wixie/shared/scripts/inference-engine.py --plugin-data "${CLAUDE_PLUGIN_DATA}" render-briefing <plugin>
 ```
 
 At Phase 1 only `wixie` is wired; re-render `wixie` unconditionally.
@@ -63,6 +76,8 @@ Return one line:
 ```
 reconciled N artifacts -> P patterns (E elevated, R retired)
 ```
+
+followed, on exit 3, by the engine's `[partial: ...]` suffix, and on a busy lock by `busy (exit 75), retry later`.
 
 ## Rules
 

@@ -15,6 +15,8 @@ allowed-tools: Read, Write
 
 # Research Render
 
+**Contract (ships inside this plugin; WIX-DIST-002).** This skill relies on: `@${CLAUDE_PLUGIN_ROOT}/vendor/vis/packages/core/conduct/failure-modes.md` (failure-code taxonomy used for the F-codes below). Read them before acting; in a repo checkout they are the same sections of the root CLAUDE.md (or the pinned vis module).
+
 Transform structured `claims.json` into a human-readable `report.md`.
 
 ## Inputs
@@ -24,8 +26,10 @@ Transform structured `claims.json` into a human-readable `report.md`.
 
 ## Preconditions
 
-- `${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/claims.json` exists
-- `${CLAUDE_PLUGIN_ROOT}/../../plugins/deep-research/state/briefs/<slug>/sources.jsonl` exists
+- `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/claims.json` exists
+- `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/sources.jsonl` exists
+
+(The brief store is the plugin data directory, never the installed plugin tree; WIX-SEC-WS-001.)
 
 If either is missing → FAIL with: *"No brief found for `<slug>`. Run `/deep-research <topic>` first."*
 
@@ -88,12 +92,12 @@ Rules for the render:
 - Every claim has an inline cite.
 - Single-source claims append `(confidence: low)`.
 - Contradictions are named, not smoothed. If a contradiction was narrowed by round-2 evidence, say so.
-- Write to `state/briefs/<slug>/report.md`.
+- Write to `${CLAUDE_PLUGIN_DATA}/briefs/<slug>/report.md`.
 
 ### Step 3: Report
 
 ```
-rendered state/briefs/<slug>/report.md (<N> claims, <M> sources, verdict: <X>)
+rendered ${CLAUDE_PLUGIN_DATA}/briefs/<slug>/report.md (<N> claims, <M> sources, verdict: <X>)
 ```
 
 ## Rules
